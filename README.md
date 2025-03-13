@@ -8,9 +8,9 @@
 ## Table of Contents
 
 - [What’s java-tron-nile-testnet?](#whats-java-tron-nile-testnet)
+- [Community](#community)
 - [Building the Source Code](#building-the-source)
 - [Running java-tron](#running-java-tron)
-- [Community](#community)
 - [Contribution](#contribution)
 - [Resources](#resources)
 - [Integrity Check](#integrity-check)
@@ -19,6 +19,13 @@
 # What's java-tron-nile-testnet?
 
 Java-tron-nile-testnet is a project for developers to quickly access the tron nile testnet and use the tron nile testnet.
+
+# Community
+
+[Nile Testnet status](https://nileex.io/status/getStatusPage) is Tron's Nile testnet official website. You can find resources for quick access to the Nile testnet.
+
+[Nile Testnet faucet](https://nileex.io/join/getJoinPage) is the faucet for the Nile Testnet. You can claim test coins on this page.
+
 
 # Building the source
 
@@ -77,12 +84,6 @@ Recommended:
              -XX:+UseCMSInitiatingOccupancyOnly  -XX:CMSInitiatingOccupancyFraction=70 \
              -jar FullNode.jar -c config-nile.conf >> start.log 2>&1 &
 ```
-
-# Community
-
-[Nile Testnet status](https://nileex.io/status/getStatusPage) is Tron's Nile testnet official website. You can find resources for quick access to the Nile testnet.
-
-[Nile Testnet faucet](https://nileex.io/join/getJoinPage) is the faucet for the Nile Testnet. You can claim test coins on this page.
 
 # Integrity Check
 
