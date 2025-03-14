@@ -36,7 +36,7 @@ Clone the repo and switch to the `master` branch
 ```bash
 $ git clone https://github.com/tronNileTestNet/java-tron-nile-testnet.git
 $ cd java-tron-nile-testnet
-$ git checkout -t origin/Nile
+$ git checkout -t origin/master
 ```
 
 then run the following command to build java-tron-nile-testnet, the `FullNode.jar` file can be found in `java-tron-nile-testnet/build/libs/` after build successfully.
