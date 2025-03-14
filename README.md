@@ -120,7 +120,7 @@ Signature verification
 If the signature verification is passed, the following will be returned:
 
   ```
-    gpg: Signature made Fri 29 Nov 2024 10:35:29 AM UTC using RSA key ID 1765E1EC
+    gpg: Signature made Fri 14 Mar 2025 09:03:09 AM UTC using RSA key ID 1765E1EC
     gpg: Good signature from "build_nileex (build_nileex)<build@nileex.io>"
     gpg: WARNING: This key is not certified with a trusted signature!
     gpg:          There is no indication that the signature belongs to the owner.
