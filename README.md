@@ -8,17 +8,24 @@
 ## Table of Contents
 
 - [What’s java-tron-nile-testnet?](#whats-java-tron-nile-testnet)
+- [Community](#community)
 - [Building the Source Code](#building-the-source)
 - [Running java-tron](#running-java-tron)
-- [Community](#community)
 - [Contribution](#contribution)
 - [Resources](#resources)
 - [Integrity Check](#integrity-check)
 - [License](#license)
 
-## What's java-tron-nile-testnet?
+# What's java-tron-nile-testnet?
 
 Java-tron-nile-testnet is a project for developers to quickly access the tron nile testnet and use the tron nile testnet.
+
+# Community
+
+[Nile Testnet status](https://nileex.io/status/getStatusPage) is Tron's Nile testnet official website. You can find resources for quick access to the Nile testnet.
+
+[Nile Testnet faucet](https://nileex.io/join/getJoinPage) is the faucet for the Nile Testnet. You can claim test coins on this page.
+
 
 # Building the source
 
@@ -29,7 +36,7 @@ Clone the repo and switch to the `master` branch
 ```bash
 $ git clone https://github.com/tronNileTestNet/java-tron-nile-testnet.git
 $ cd java-tron-nile-testnet
-$ git checkout -t origin/Nile
+$ git checkout -t origin/master
 ```
 
 then run the following command to build java-tron-nile-testnet, the `FullNode.jar` file can be found in `java-tron-nile-testnet/build/libs/` after build successfully.
@@ -78,38 +85,46 @@ Recommended:
              -jar FullNode.jar -c config-nile.conf >> start.log 2>&1 &
 ```
 
-# Community
-
-[Nile testnet status](https://nileex.io/status/getStatusPage) is Tron's Nile testnet official website. You can find resources for quick access to the Nile testnet.
-
-[nile test mesh faucet](https://nileex.io/join/getJoinPage) is the Telegram channel for java-tron community developers. If you want to contribute to java-tron, please join this channel.
-
 # Integrity Check
 
-- All jar files available in this release are signed via this GPG key::
+All jar files available in this release are signed via this GPG key::
   ```
   PUB: BBA2FC19D5F0B54AB1EE072BCA92A5501765E1EC
   UID: build@nileex.io
   KeyServer: hkps://keyserver.ubuntu.com
   ```
-- From the download listings below you should see links to the downloadable jar files as well as sig signature files. To verify the authenticity of any jar file, grab the jar and sig files with the same prefix name and then execute the verification process:
+From the download listings below you should see links to the downloadable jar files as well as sig signature files. To verify the authenticity of any jar file, grab the jar and sig files with the same prefix name and then execute the verification process:
 Install GPG
 
 Mac OS:
-- brew install gpg
-- On Debian, Ubuntu and other Linux distributions:
+  ```
+  brew install gpg
+  ```
 
-- sudo apt install gpg
-- Import Public Key
+On Debian, Ubuntu and other Linux distributions:
+  ```
+  sudo apt install gpg
+  ```
+ 
+Import Public Key
+  ```
+  gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys BBA2FC19D5F0B54AB1EE072BCA92A5501765E1EC
+  ```
 
-- gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys BBA2FC19D5F0B54AB1EE072BCA92A5501765E1EC
+
 Signature verification
+  ```
+  gpg --verify FullNode-Nile-4.8.0.jar.sig FullNode-Nile-4.8.0.jar
+  ```
 
-- gpg --verify FullNode-Nile-4.7.7.jar.sig FullNode-Nile-4.7.7.jar
-- If the signature verification is passed, the following will be returned:
-  - gpg: Signature made Fri 29 Nov 2024 10:35:29 AM UTC using RSA key ID 1765E1EC
-  - gpg: Good signature from "build_nileex (build_nileex)<build@nileex.io>"
-  - gpg: WARNING: This key is not certified with a trusted signature!
-  - gpg:          There is no indication that the signature belongs to the owner.
-  - Primary key fingerprint: BBA2 FC19 D5F0 B54A B1EE  072B CA92 A550 1765 E1EC
-#
+If the signature verification is passed, the following will be returned:
+
+  ```
+    gpg: Signature made Fri 29 Nov 2024 10:35:29 AM UTC using RSA key ID 1765E1EC
+    gpg: Good signature from "build_nileex (build_nileex)<build@nileex.io>"
+    gpg: WARNING: This key is not certified with a trusted signature!
+    gpg:          There is no indication that the signature belongs to the owner.
+    Primary key fingerprint: BBA2 FC19 D5F0 B54A B1EE  072B CA92 A550 1765 E1EC
+  ```
+
+
