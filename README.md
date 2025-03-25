@@ -1,13 +1,13 @@
 <h1 align="center">
   <br>
-  java-tron-nile-testnet
+  nile-testnet
   <br>
 </h1>
 
 
 ## Table of Contents
 
-- [What’s java-tron-nile-testnet?](#whats-java-tron-nile-testnet)
+- [What’s nile-testnet?](#whats-nile-testnet)
 - [Community](#community)
 - [Building the Source Code](#building-the-source)
 - [Running java-tron](#running-java-tron)
@@ -16,10 +16,10 @@
 - [Integrity Check](#integrity-check)
 - [License](#license)
 
-# What's java-tron-nile-testnet?
+# What's nile-testnet?
 
 
-Java-tron-nile-testnet is a project for developers to quickly access the tron nile testnet and use the tron nile testnet.
+nile-testnet is a project for developers to quickly access the tron nile testnet and use the tron nile testnet.
 
 # Community
 
@@ -35,22 +35,22 @@ Building java-tron requires `git` package and 64-bit version of `Oracle JDK 1.8`
 Clone the repo and switch to the `master` branch
 
 ```bash
-$ git clone https://github.com/tronNileTestNet/java-tron-nile-testnet.git
-$ cd java-tron-nile-testnet
+$ git clone https://github.com/tron-nile-testnet/nile-testnet.git
+$ cd nile-testnet
 $ git checkout -t origin/master
 ```
 
-then run the following command to build java-tron-nile-testnet, the `FullNode.jar` file can be found in `java-tron-nile-testnet/build/libs/` after build successfully.
+then run the following command to build nile-testnet, the `FullNode.jar` file can be found in `nile-testnet/build/libs/` after build successfully.
 
 ```bash
 $ ./gradlew clean build -x test
 ```
 
-# Running java-tron-nile-testnet
+# Running nile-testnet
 
 Running java-tron requires 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
 
-Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tronNileTestNet/java-tron-nile-testnet/tree/Nile/framework/src/main/resources/config-nile.conf).
+Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 
 ## Hardware Requirements
 
@@ -71,7 +71,7 @@ Recommended:
 
 - Full node has full historical data, it is the entry point into the TRON Nile test network , it can be used by other processes as a gateway into the TRON nile test network via HTTP and GRPC endpoints. You can interact with the TRON Nile test network through full node：transfer assets, deploy contracts, interact with contracts and so on.
 - `-c` parameter specifies a configuration file to run a full node:
-[nile_testnet_config.conf](https://github.com/tronNileTestNet/java-tron-nile-testnet/tree/Nile/framework/src/main/resources/config-nile.conf).
+[nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 - `-d` parameter specifies a nile database. [nile_database_resource](https://database.nileex.io/).
 
 ```bash
