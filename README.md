@@ -94,38 +94,6 @@ All jar files available in this release are signed via this GPG key::
   UID: build@nileex.io
   KeyServer: hkps://keyserver.ubuntu.com
   ```
-From the download listings below you should see links to the downloadable jar files as well as sig signature files. To verify the authenticity of any jar file, grab the jar and sig files with the same prefix name and then execute the verification process:
-Install GPG
 
-Mac OS:
-  ```
-  brew install gpg
-  ```
-
-On Debian, Ubuntu and other Linux distributions:
-  ```
-  sudo apt install gpg
-  ```
- 
-Import Public Key
-  ```
-  gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys BBA2FC19D5F0B54AB1EE072BCA92A5501765E1EC
-  ```
-
-
-Signature verification
-  ```
-  gpg --verify FullNode-Nile-4.8.0.jar.sig FullNode-Nile-4.8.0.jar
-  ```
-
-If the signature verification is passed, the following will be returned:
-
-  ```
-    gpg: Signature made Fri 14 Mar 2025 09:03:09 AM UTC using RSA key ID 1765E1EC
-    gpg: Good signature from "build_nileex (build_nileex)<build@nileex.io>"
-    gpg: WARNING: This key is not certified with a trusted signature!
-    gpg:          There is no indication that the signature belongs to the owner.
-    Primary key fingerprint: BBA2 FC19 D5F0 B54A B1EE  072B CA92 A550 1765 E1EC
-  ```
 
 
