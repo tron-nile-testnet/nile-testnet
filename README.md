@@ -1,13 +1,13 @@
 <h1 align="center">
   <br>
-  java-tron-nile-testnet
+  nile-testnet
   <br>
 </h1>
 
 
 ## Table of Contents
 
-- [What’s java-tron-nile-testnet?](#whats-java-tron-nile-testnet)
+- [What’s nile-testnet?](#whats-nile-testnet)
 - [Community](#community)
 - [Building the Source Code](#building-the-source)
 - [Running java-tron](#running-java-tron)
@@ -16,10 +16,10 @@
 - [Integrity Check](#integrity-check)
 - [License](#license)
 
-# What's java-tron-nile-testnet?
+# What's nile-testnet?
 
 
-Java-tron-nile-testnet is a project for developers to quickly access the tron nile testnet and use the tron nile testnet.
+nile-testnet is a project for developers to quickly access the tron nile testnet and use the tron nile testnet.
 
 # Community
 
@@ -35,18 +35,18 @@ Building java-tron requires `git` package and 64-bit version of `Oracle JDK 1.8`
 Clone the repo and switch to the `master` branch
 
 ```bash
-$ git clone https://github.com/tronNileTestNet/java-tron-nile-testnet.git
-$ cd java-tron-nile-testnet
+$ git clone https://github.com/tron-nile-testnet/nile-testnet.git
+$ cd nile-testnet
 $ git checkout -t origin/master
 ```
 
-then run the following command to build java-tron-nile-testnet, the `FullNode.jar` file can be found in `java-tron-nile-testnet/build/libs/` after build successfully.
+then run the following command to build nile-testnet, the `FullNode.jar` file can be found in `nile-testnet/build/libs/` after build successfully.
 
 ```bash
 $ ./gradlew clean build -x test
 ```
 
-# Running java-tron-nile-testnet
+# Running nile-testnet
 
 Running java-tron requires 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
 
