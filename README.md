@@ -50,7 +50,7 @@ $ ./gradlew clean build -x test
 
 Running java-tron requires 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
 
-Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tronNileTestNet/java-tron-nile-testnet/tree/Nile/framework/src/main/resources/config-nile.conf).
+Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 
 ## Hardware Requirements
 
@@ -71,7 +71,7 @@ Recommended:
 
 - Full node has full historical data, it is the entry point into the TRON Nile test network , it can be used by other processes as a gateway into the TRON nile test network via HTTP and GRPC endpoints. You can interact with the TRON Nile test network through full node：transfer assets, deploy contracts, interact with contracts and so on.
 - `-c` parameter specifies a configuration file to run a full node:
-[nile_testnet_config.conf](https://github.com/tronNileTestNet/java-tron-nile-testnet/tree/Nile/framework/src/main/resources/config-nile.conf).
+[nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 - `-d` parameter specifies a nile database. [nile_database_resource](https://database.nileex.io/).
 
 ```bash
