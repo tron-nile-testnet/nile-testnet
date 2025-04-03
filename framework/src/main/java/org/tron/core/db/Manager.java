@@ -46,12 +46,12 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.bouncycastle.util.encoders.Hex;
-import org.tron.common.cron.CronExpression;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.tron.api.GrpcAPI.TransactionInfoList;
 import org.tron.common.args.GenesisBlock;
 import org.tron.common.bloom.Bloom;
+import org.tron.common.cron.CronExpression;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.exit.ExitManager;
 import org.tron.common.logsfilter.EventPluginLoader;
@@ -931,20 +931,20 @@ public class Manager {
       throws AccountResourceInsufficientException {
     if (trx.getInstance().getSignatureCount() > 1) {
       long fee = getDynamicPropertiesStore().getMultiSignFee();
-      boolean disableMath = getDynamicPropertiesStore().disableJavaLangMath();
+      boolean disableJavaLangMath = getDynamicPropertiesStore().disableJavaLangMath();
       List<Contract> contracts = trx.getInstance().getRawData().getContractList();
       for (Contract contract : contracts) {
         byte[] address = TransactionCapsule.getOwner(contract);
         AccountCapsule accountCapsule = getAccountStore().get(address);
         try {
           if (accountCapsule != null) {
-            adjustBalance(getAccountStore(), accountCapsule, -fee, disableMath);
+            adjustBalance(getAccountStore(), accountCapsule, -fee, disableJavaLangMath);
 
             if (getDynamicPropertiesStore().supportBlackHoleOptimization()) {
               getDynamicPropertiesStore().burnTrx(fee);
             } else {
               adjustBalance(getAccountStore(), this.getAccountStore().getBlackhole(), +fee,
-                  disableMath);
+                  disableJavaLangMath);
             }
           }
         } catch (BalanceInsufficientException e) {
@@ -969,20 +969,20 @@ public class Manager {
     if (fee == 0) {
       return;
     }
-    boolean disableMath = getDynamicPropertiesStore().disableJavaLangMath();
+    boolean disableJavaLangMath = getDynamicPropertiesStore().disableJavaLangMath();
     List<Contract> contracts = trx.getInstance().getRawData().getContractList();
     for (Contract contract : contracts) {
       byte[] address = TransactionCapsule.getOwner(contract);
       AccountCapsule accountCapsule = getAccountStore().get(address);
       try {
         if (accountCapsule != null) {
-          adjustBalance(getAccountStore(), accountCapsule, -fee, disableMath);
+          adjustBalance(getAccountStore(), accountCapsule, -fee, disableJavaLangMath);
 
           if (getDynamicPropertiesStore().supportBlackHoleOptimization()) {
             getDynamicPropertiesStore().burnTrx(fee);
           } else {
             adjustBalance(getAccountStore(), this.getAccountStore().getBlackhole(), +fee,
-                disableMath);
+                disableJavaLangMath);
           }
         }
       } catch (BalanceInsufficientException e) {
