@@ -59,6 +59,8 @@ public class VMConfig {
 
   private static boolean ALLOW_TVM_BLOB = false;
 
+  private static boolean DISABLE_KZG_PRECOMPILE = false;
+
   private VMConfig() {
   }
 
@@ -166,6 +168,10 @@ public class VMConfig {
     ALLOW_TVM_BLOB = allow == 1;
   }
 
+  public static void initDisableKzgPrecompile(long disable) {
+    DISABLE_KZG_PRECOMPILE = disable == 1;
+  }
+
   public static boolean getEnergyLimitHardFork() {
     return CommonParameter.ENERGY_LIMIT_HARD_FORK;
   }
@@ -260,5 +266,9 @@ public class VMConfig {
 
   public static boolean allowTvmBlob() {
     return ALLOW_TVM_BLOB;
+  }
+
+  public static boolean disableKzgPrecompile() {
+    return DISABLE_KZG_PRECOMPILE;
   }
 }

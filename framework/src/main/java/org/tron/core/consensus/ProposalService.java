@@ -384,6 +384,10 @@ public class ProposalService extends ProposalUtil {
           manager.getDynamicPropertiesStore().saveAllowTvmBlob(entry.getValue());
           break;
         }
+        case DISABLE_KZG_PRECOMPILE: {
+          manager.getDynamicPropertiesStore().saveDisableKzgPrecompile(entry.getValue());
+          break;
+        }
         default:
           find = false;
           break;

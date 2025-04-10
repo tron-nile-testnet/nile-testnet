@@ -838,6 +838,17 @@ public class ProposalUtil {
         }
         break;
       }
+      case DISABLE_KZG_PRECOMPILE: {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_0)) {
+          throw new ContractValidateException(
+              "Bad chain parameter id [DISABLE_KZG_PRECOMPILE]");
+        }
+        if (value != 1 && value != 0) {
+          throw new ContractValidateException(
+              "This value[DISABLE_KZG_PRECOMPILE] is only allowed to be 1 or 0");
+        }
+        break;
+      }
       default:
         break;
     }
@@ -920,7 +931,9 @@ public class ProposalUtil {
     ALLOW_TVM_CANCUN(83), // 0, 1
     ALLOW_STRICT_MATH(87), // 0, 1
     CONSENSUS_LOGIC_OPTIMIZATION(88), // 0, 1
-    ALLOW_TVM_BLOB(89); // 0, 1
+    ALLOW_TVM_BLOB(89), // 0, 1
+
+    DISABLE_KZG_PRECOMPILE(100001); // 0, 1
 
     private long code;
 

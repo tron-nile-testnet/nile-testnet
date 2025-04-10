@@ -286,7 +286,8 @@ public class PrecompiledContracts {
     if (VMConfig.allowTvmCompatibleEvm() && address.equals(blake2FAddr)) {
       return blake2F;
     }
-    if (VMConfig.allowTvmBlob() && address.equals(kzgPointEvaluationAddr)) {
+    if (!VMConfig.disableKzgPrecompile()
+        && VMConfig.allowTvmBlob() && address.equals(kzgPointEvaluationAddr)) {
       return kzgPointEvaluation;
     }
 

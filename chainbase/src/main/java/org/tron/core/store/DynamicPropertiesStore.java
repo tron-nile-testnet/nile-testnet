@@ -232,6 +232,8 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
 
   private static final byte[] ALLOW_TVM_BLOB = "ALLOW_TVM_BLOB".getBytes();
 
+  private static final byte[] DISABLE_KZG_PRECOMPILE = "DISABLE_KZG_PRECOMPILE".getBytes();
+
   @Autowired
   private DynamicPropertiesStore(@Value("properties") String dbName) {
     super(dbName);
@@ -2944,6 +2946,17 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
         .map(BytesCapsule::getData)
         .map(ByteArray::toLong)
         .orElse(CommonParameter.getInstance().getAllowTvmBlob());
+  }
+
+  public void saveDisableKzgPrecompile(long disableKzgPrecompile) {
+    this.put(DISABLE_KZG_PRECOMPILE, new BytesCapsule(ByteArray.fromLong(disableKzgPrecompile)));
+  }
+
+  public long getDisableKzgPrecompile() {
+    return Optional.ofNullable(getUnchecked(DISABLE_KZG_PRECOMPILE))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(CommonParameter.getInstance().getDisableKzgPrecompile());
   }
 
   private static class DynamicResourceProperties {

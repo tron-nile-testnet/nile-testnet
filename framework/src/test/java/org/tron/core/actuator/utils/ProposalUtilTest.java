@@ -439,6 +439,8 @@ public class ProposalUtilTest extends BaseTest {
 
     testAllowTvmBlobProposal();
 
+    testDisableKzgPrecompileProposal();
+
     forkUtils.getManager().getDynamicPropertiesStore()
         .statsByVersion(ForkBlockVersionEnum.ENERGY_LIMIT.getValue(), stats);
     forkUtils.reset();
@@ -655,6 +657,56 @@ public class ProposalUtilTest extends BaseTest {
       Assert.assertEquals(
           "[ALLOW_TVM_BLOB] has been valid, no need to propose again",
           e.getMessage());
+    }
+
+  }
+
+  private void testDisableKzgPrecompileProposal() {
+    byte[] stats = new byte[27];
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_0.getValue(), stats);
+    try {
+      ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+          ProposalType.DISABLE_KZG_PRECOMPILE.getCode(), 1);
+      Assert.fail();
+    } catch (ContractValidateException e) {
+      Assert.assertEquals(
+          "Bad chain parameter id [DISABLE_KZG_PRECOMPILE]",
+          e.getMessage());
+    }
+
+    long maintenanceTimeInterval = forkUtils.getManager().getDynamicPropertiesStore()
+        .getMaintenanceTimeInterval();
+
+    long hardForkTime =
+        ((ForkBlockVersionEnum.VERSION_4_8_0.getHardForkTime() - 1) / maintenanceTimeInterval + 1)
+            * maintenanceTimeInterval;
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .saveLatestBlockHeaderTimestamp(hardForkTime + 1);
+
+    stats = new byte[27];
+    Arrays.fill(stats, (byte) 1);
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_0.getValue(), stats);
+
+    // Should fail because the proposal value is invalid
+    try {
+      ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+          ProposalType.DISABLE_KZG_PRECOMPILE.getCode(), 2);
+      Assert.fail();
+    } catch (ContractValidateException e) {
+      Assert.assertEquals(
+          "This value[DISABLE_KZG_PRECOMPILE] is only allowed to be 1 or 0",
+          e.getMessage());
+    }
+
+    try {
+      long value = 1;
+      ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+          ProposalType.DISABLE_KZG_PRECOMPILE.getCode(), value);
+      dynamicPropertiesStore.saveDisableKzgPrecompile(value);
+      Assert.assertEquals(value, dynamicPropertiesStore.getDisableKzgPrecompile());
+    } catch (ContractValidateException e) {
     }
 
   }
