@@ -27,6 +27,8 @@ nile-testnet is a project for developers to quickly access the tron nile testnet
 
 [Nile Testnet faucet](https://nileex.io/join/getJoinPage) is the faucet for the Nile Testnet. You can claim test coins on this page.
 
+[Nile Testnet proposal](https://github.com/tron-nile-testnet/nile-proposal) You can view the nile proposal discussions and plans.
+
 
 # Building the Source Code
 
