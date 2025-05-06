@@ -29,7 +29,7 @@ nile-testnet is a project for developers to quickly access the tron nile testnet
 
 [Nile Testnet proposal status](https://nile.tronscan.org/#/sr/committee) You can view the nile proposals opening situation.
 
-[Nile Testnet proposal plans](https://github.com/tron-nile-testnet/nile-proposal) You can view the nile proposal discussions and plans.
+[Nile Testnet proposal plans](https://github.com/tron-nile-testnet/nile-proposal) You can view the nile proposals discussions and plans.
 
 
 # Building the Source Code
