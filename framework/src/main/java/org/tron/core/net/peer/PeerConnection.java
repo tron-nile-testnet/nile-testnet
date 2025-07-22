@@ -59,10 +59,6 @@ public class PeerConnection {
 
   private static List<InetSocketAddress> relayNodes = Args.getInstance().getFastForwardNodes();
 
-  private static final double SYNC_BLOCK_CHAIN_RATE = 3.0;
-  private static final double FETCH_INV_DATA_RATE = 3.0;
-  private static final double P2P_DISCONNECT_RATE = 1.0;
-
   @Getter
   private PeerStatistics peerStatistics = new PeerStatistics();
 
@@ -175,9 +171,12 @@ public class PeerConnection {
     }
     this.nodeStatistics = TronStatsManager.getNodeStatistics(channel.getInetAddress());
     lastInteractiveTime = System.currentTimeMillis();
-    p2pRateLimiter.register(SYNC_BLOCK_CHAIN.asByte(), SYNC_BLOCK_CHAIN_RATE);
-    p2pRateLimiter.register(FETCH_INV_DATA.asByte(), FETCH_INV_DATA_RATE);
-    p2pRateLimiter.register(P2P_DISCONNECT.asByte(), P2P_DISCONNECT_RATE);
+    p2pRateLimiter.register(SYNC_BLOCK_CHAIN.asByte(),
+        Args.getInstance().getRateLimiterSyncBlockChain());
+    p2pRateLimiter.register(FETCH_INV_DATA.asByte(),
+        Args.getInstance().getRateLimiterFetchInvData());
+    p2pRateLimiter.register(P2P_DISCONNECT.asByte(),
+        Args.getInstance().getRateLimiterDisconnect());
   }
 
   public void setBlockBothHave(BlockId blockId) {

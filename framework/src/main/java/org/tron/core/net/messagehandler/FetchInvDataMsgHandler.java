@@ -157,7 +157,7 @@ public class FetchInvDataMsgHandler implements TronMsgHandler {
           throw new P2pException(TypeEnum.BAD_MESSAGE, "no need sync");
         }
         if (!peer.getP2pRateLimiter().tryAcquire(fetchInvDataMsg.getType().asByte())) {
-          throw new P2pException(TypeEnum.BAD_MESSAGE, fetchInvDataMsg.getType()
+          throw new P2pException(TypeEnum.RATE_LIMIT_EXCEEDED, fetchInvDataMsg.getType()
               + " message exceeds the rate limit");
         }
         if (fetchInvDataMsg.getHashList().size() > NetConstants.MAX_BLOCK_FETCH_PER_PEER) {

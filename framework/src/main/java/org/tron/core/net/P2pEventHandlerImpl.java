@@ -261,6 +261,7 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
           code = Protocol.ReasonCode.NO_SUCH_MESSAGE;
           break;
         case BAD_MESSAGE:
+        case RATE_LIMIT_EXCEEDED:
           code = Protocol.ReasonCode.BAD_PROTOCOL;
           break;
         case SYNC_FAILED:

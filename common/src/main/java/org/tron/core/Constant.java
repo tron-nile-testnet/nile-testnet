@@ -318,6 +318,9 @@ public class Constant {
 
   public static final String RATE_LIMITER_HTTP = "rate.limiter.http";
   public static final String RATE_LIMITER_RPC = "rate.limiter.rpc";
+  public static final String RATE_LIMITER_P2P_SYNC_BLOCK_CHAIN = "rate.limiter.p2p.syncBlockChain";
+  public static final String RATE_LIMITER_P2P_FETCH_INV_DATA = "rate.limiter.p2p.fetchInvData";
+  public static final String RATE_LIMITER_P2P_DISCONNECT = "rate.limiter.p2p.disconnect";
 
   public static final String SEED_NODE_IP_LIST = "seed.node.ip.list";
   public static final String NODE_METRICS_ENABLE = "node.metricsEnable";
