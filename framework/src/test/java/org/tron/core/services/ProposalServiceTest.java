@@ -1,9 +1,9 @@
 package org.tron.core.services;
 
-import static org.tron.core.Constant.MAX_PROPOSAL_VOTING_WINDOW;
+import static org.tron.core.Constant.MAX_PROPOSAL_EXPIRE_TIME;
 import static org.tron.core.utils.ProposalUtil.ProposalType.CONSENSUS_LOGIC_OPTIMIZATION;
 import static org.tron.core.utils.ProposalUtil.ProposalType.ENERGY_FEE;
-import static org.tron.core.utils.ProposalUtil.ProposalType.PROPOSAL_VOTING_WINDOW;
+import static org.tron.core.utils.ProposalUtil.ProposalType.PROPOSAL_EXPIRE_TIME;
 import static org.tron.core.utils.ProposalUtil.ProposalType.TRANSACTION_FEE;
 import static org.tron.core.utils.ProposalUtil.ProposalType.WITNESS_127_PAY_PER_BLOCK;
 
@@ -135,20 +135,20 @@ public class ProposalServiceTest extends BaseTest {
   }
 
   @Test
-  public void testProposalVotingWindow() {
-    long defaultWindow = dbManager.getDynamicPropertiesStore().getProposalVotingWindow();
+  public void testProposalExpireTime() {
+    long defaultWindow = dbManager.getDynamicPropertiesStore().getProposalExpireTime();
     long proposalExpireTime = CommonParameter.getInstance().getProposalExpireTime();
-    Assert.assertEquals(proposalExpireTime, defaultWindow * 3000);
+    Assert.assertEquals(proposalExpireTime, defaultWindow);
 
-    Proposal proposal = Proposal.newBuilder().putParameters(PROPOSAL_VOTING_WINDOW.getCode(),
-        MAX_PROPOSAL_VOTING_WINDOW).build();
+    Proposal proposal = Proposal.newBuilder().putParameters(PROPOSAL_EXPIRE_TIME.getCode(),
+        31536000000L).build();
     ProposalCapsule proposalCapsule = new ProposalCapsule(proposal);
     proposalCapsule.setExpirationTime(1627279200000L);
     boolean result = ProposalService.process(dbManager, proposalCapsule);
     Assert.assertTrue(result);
 
-    long window = dbManager.getDynamicPropertiesStore().getProposalVotingWindow();
-    Assert.assertEquals(MAX_PROPOSAL_VOTING_WINDOW, window);
+    long window = dbManager.getDynamicPropertiesStore().getProposalExpireTime();
+    Assert.assertEquals(MAX_PROPOSAL_EXPIRE_TIME - 3000, window);
   }
 
 }

@@ -3,7 +3,6 @@ package org.tron.core.actuator;
 import static org.tron.core.actuator.ActuatorConstant.ACCOUNT_EXCEPTION_STR;
 import static org.tron.core.actuator.ActuatorConstant.NOT_EXIST_STR;
 import static org.tron.core.actuator.ActuatorConstant.WITNESS_EXCEPTION_STR;
-import static org.tron.core.config.Parameter.ChainConstant.BLOCK_PRODUCED_INTERVAL;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -53,8 +52,7 @@ public class ProposalCreateActuator extends AbstractActuator {
 
       long currentMaintenanceTime =
           chainBaseManager.getDynamicPropertiesStore().getNextMaintenanceTime();
-      long now3 = now + chainBaseManager.getDynamicPropertiesStore().getProposalVotingWindow()
-          * BLOCK_PRODUCED_INTERVAL;
+      long now3 = now + chainBaseManager.getDynamicPropertiesStore().getProposalExpireTime();
       long round = (now3 - currentMaintenanceTime) / maintenanceTimeInterval;
       long expirationTime =
           currentMaintenanceTime + (round + 1) * maintenanceTimeInterval;

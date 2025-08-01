@@ -384,8 +384,8 @@ public class ProposalService extends ProposalUtil {
           manager.getDynamicPropertiesStore().saveAllowTvmBlob(entry.getValue());
           break;
         }
-        case PROPOSAL_VOTING_WINDOW: {
-          manager.getDynamicPropertiesStore().saveProposalVotingWindow(entry.getValue());
+        case PROPOSAL_EXPIRE_TIME: {
+          manager.getDynamicPropertiesStore().saveProposalExpireTime(entry.getValue());
           break;
         }
         default:

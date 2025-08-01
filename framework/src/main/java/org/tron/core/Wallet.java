@@ -1388,8 +1388,8 @@ public class Wallet {
         .build());
 
     builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
-        .setKey("getProposalVotingWindow")
-        .setValue(dbManager.getDynamicPropertiesStore().getProposalVotingWindow())
+        .setKey("getProposalExpireTime")
+        .setValue(dbManager.getDynamicPropertiesStore().getProposalExpireTime())
         .build());
 
     return builder.build();
