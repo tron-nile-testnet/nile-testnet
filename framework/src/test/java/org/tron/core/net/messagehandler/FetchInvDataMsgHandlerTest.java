@@ -126,7 +126,7 @@ public class FetchInvDataMsgHandlerTest {
     try {
       fetchInvDataMsgHandler.processMessage(peer, msg);
     } catch (Exception e) {
-      Assert.assertEquals("fetch too more blocks, size:101", e.getMessage());
+      Assert.assertEquals("fetch too many blocks, size:101", e.getMessage());
     }
     try {
       fetchInvDataMsgHandler.processMessage(peer, msg);
