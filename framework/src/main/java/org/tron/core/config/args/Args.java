@@ -4,8 +4,11 @@ import static java.lang.System.exit;
 import static org.tron.common.math.Maths.max;
 import static org.tron.common.math.Maths.min;
 import static org.tron.core.Constant.ADD_PRE_FIX_BYTE_MAINNET;
+import static org.tron.core.Constant.DEFAULT_PROPOSAL_EXPIRE_TIME;
 import static org.tron.core.Constant.DYNAMIC_ENERGY_INCREASE_FACTOR_RANGE;
 import static org.tron.core.Constant.DYNAMIC_ENERGY_MAX_FACTOR_RANGE;
+import static org.tron.core.Constant.MAX_PROPOSAL_EXPIRE_TIME;
+import static org.tron.core.Constant.MIN_PROPOSAL_EXPIRE_TIME;
 import static org.tron.core.config.Parameter.ChainConstant.BLOCK_PRODUCE_TIMEOUT_PERCENT;
 import static org.tron.core.config.Parameter.ChainConstant.MAX_ACTIVE_WITNESS_NUM;
 
@@ -815,9 +818,7 @@ public class Args extends CommonParameter {
         config.hasPath(Constant.BLOCK_MAINTENANCE_TIME_INTERVAL) ? config
             .getInt(Constant.BLOCK_MAINTENANCE_TIME_INTERVAL) : 21600000L;
 
-    PARAMETER.proposalExpireTime =
-        config.hasPath(Constant.BLOCK_PROPOSAL_EXPIRE_TIME) ? config
-            .getInt(Constant.BLOCK_PROPOSAL_EXPIRE_TIME) : 259200000L;
+    PARAMETER.proposalExpireTime = getProposalExpirationTime(config);
 
     PARAMETER.checkFrozenTime =
         config.hasPath(Constant.BLOCK_CHECK_FROZEN_TIME) ? config
@@ -1298,6 +1299,26 @@ public class Args extends CommonParameter {
             .getInt(Constant.COMMITTEE_ALLOW_TVM_BLOB) : 0;
 
     logConfig();
+  }
+
+  private static long getProposalExpirationTime(final Config config) {
+    if (config.hasPath(Constant.COMMITTEE_PROPOSAL_EXPIRE_TIME)) {
+      throw new IllegalArgumentException("It is not allowed to configure "
+          + "commit.proposalExpireTime in config.conf, please set the value in "
+          + "block.proposalExpireTime.");
+    }
+    if (config.hasPath(Constant.BLOCK_PROPOSAL_EXPIRE_TIME)) {
+      long proposalExpireTime = config.getLong(Constant.BLOCK_PROPOSAL_EXPIRE_TIME);
+      if (proposalExpireTime <= MIN_PROPOSAL_EXPIRE_TIME
+          || proposalExpireTime >= MAX_PROPOSAL_EXPIRE_TIME) {
+        throw new IllegalArgumentException("The value[block.proposalExpireTime] is only allowed to "
+            + "be greater than " + MIN_PROPOSAL_EXPIRE_TIME + " and less than "
+            + MAX_PROPOSAL_EXPIRE_TIME + "!");
+      }
+      return proposalExpireTime;
+    } else {
+      return DEFAULT_PROPOSAL_EXPIRE_TIME;
+    }
   }
 
   private static List<Witness> getWitnessesFromConfig(final com.typesafe.config.Config config) {
