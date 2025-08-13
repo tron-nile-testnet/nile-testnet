@@ -1,5 +1,9 @@
 package org.tron.core.net.peer;
 
+import static org.tron.core.net.message.MessageTypes.FETCH_INV_DATA;
+import static org.tron.core.net.message.MessageTypes.P2P_DISCONNECT;
+import static org.tron.core.net.message.MessageTypes.SYNC_BLOCK_CHAIN;
+
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.ByteString;
@@ -32,6 +36,7 @@ import org.tron.core.config.Parameter.NetConstants;
 import org.tron.core.config.args.Args;
 import org.tron.core.metrics.MetricsKey;
 import org.tron.core.metrics.MetricsUtil;
+import org.tron.core.net.P2pRateLimiter;
 import org.tron.core.net.TronNetDelegate;
 import org.tron.core.net.message.adv.InventoryMessage;
 import org.tron.core.net.message.adv.TransactionsMessage;
@@ -156,6 +161,8 @@ public class PeerConnection {
   @Setter
   @Getter
   private volatile boolean needSyncFromUs = true;
+  @Getter
+  private P2pRateLimiter p2pRateLimiter = new P2pRateLimiter();
 
   public void setChannel(Channel channel) {
     this.channel = channel;
@@ -164,6 +171,12 @@ public class PeerConnection {
     }
     this.nodeStatistics = TronStatsManager.getNodeStatistics(channel.getInetAddress());
     lastInteractiveTime = System.currentTimeMillis();
+    p2pRateLimiter.register(SYNC_BLOCK_CHAIN.asByte(),
+        Args.getInstance().getRateLimiterSyncBlockChain());
+    p2pRateLimiter.register(FETCH_INV_DATA.asByte(),
+        Args.getInstance().getRateLimiterFetchInvData());
+    p2pRateLimiter.register(P2P_DISCONNECT.asByte(),
+        Args.getInstance().getRateLimiterDisconnect());
   }
 
   public void setBlockBothHave(BlockId blockId) {

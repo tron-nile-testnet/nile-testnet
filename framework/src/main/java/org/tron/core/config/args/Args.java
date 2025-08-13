@@ -238,6 +238,9 @@ public class Args extends CommonParameter {
     PARAMETER.rateLimiterGlobalQps = 50000;
     PARAMETER.rateLimiterGlobalIpQps = 10000;
     PARAMETER.rateLimiterGlobalApiQps = 1000;
+    PARAMETER.rateLimiterSyncBlockChain = 3.0;
+    PARAMETER.rateLimiterFetchInvData = 3.0;
+    PARAMETER.rateLimiterDisconnect = 1.0;
     PARAMETER.p2pDisable = false;
     PARAMETER.dynamicConfigEnable = false;
     PARAMETER.dynamicConfigCheckInterval = 600;
@@ -1048,6 +1051,18 @@ public class Args extends CommonParameter {
         .getInt(Constant.RATE_LIMITER_GLOBAL_API_QPS) : 1000;
 
     PARAMETER.rateLimiterInitialization = getRateLimiterFromConfig(config);
+
+    PARAMETER.rateLimiterSyncBlockChain =
+        config.hasPath(Constant.RATE_LIMITER_P2P_SYNC_BLOCK_CHAIN) ? config
+            .getDouble(Constant.RATE_LIMITER_P2P_SYNC_BLOCK_CHAIN) : 3.0;
+
+    PARAMETER.rateLimiterFetchInvData =
+        config.hasPath(Constant.RATE_LIMITER_P2P_FETCH_INV_DATA) ? config
+            .getDouble(Constant.RATE_LIMITER_P2P_FETCH_INV_DATA) : 3.0;
+
+    PARAMETER.rateLimiterDisconnect =
+        config.hasPath(Constant.RATE_LIMITER_P2P_DISCONNECT) ? config
+            .getDouble(Constant.RATE_LIMITER_P2P_DISCONNECT) : 1.0;
 
     PARAMETER.changedDelegation =
         config.hasPath(Constant.COMMITTEE_CHANGED_DELEGATION) ? config

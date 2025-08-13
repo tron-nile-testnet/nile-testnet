@@ -429,6 +429,15 @@ public class CommonParameter {
   @Getter
   public int rateLimiterGlobalApiQps;
   @Getter
+  @Setter
+  public double rateLimiterSyncBlockChain;
+  @Getter
+  @Setter
+  public double rateLimiterFetchInvData;
+  @Getter
+  @Setter
+  public double rateLimiterDisconnect;
+  @Getter
   public DbBackupConfig dbBackupConfig;
   @Getter
   public RocksDbSettings rocksDBCustomSettings;

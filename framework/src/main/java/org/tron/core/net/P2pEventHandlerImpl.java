@@ -178,9 +178,11 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
           handshakeService.processHelloMessage(peer, (HelloMessage) msg);
           break;
         case P2P_DISCONNECT:
-          peer.getChannel().close();
-          peer.getNodeStatistics()
-                  .nodeDisconnectedRemote(((DisconnectMessage)msg).getReason());
+          if (peer.getP2pRateLimiter().tryAcquire(type.asByte())) {
+            peer.getChannel().close();
+            peer.getNodeStatistics()
+                .nodeDisconnectedRemote(((DisconnectMessage)msg).getReason());
+          }
           break;
         case SYNC_BLOCK_CHAIN:
           syncBlockChainMsgHandler.processMessage(peer, msg);
@@ -260,6 +262,7 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
           code = Protocol.ReasonCode.NO_SUCH_MESSAGE;
           break;
         case BAD_MESSAGE:
+        case RATE_LIMIT_EXCEEDED:
           code = Protocol.ReasonCode.BAD_PROTOCOL;
           break;
         case SYNC_FAILED:
