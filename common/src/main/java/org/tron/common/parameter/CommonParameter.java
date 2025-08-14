@@ -391,7 +391,7 @@ public class CommonParameter {
   // full node used this parameter to close shielded transaction
   @Getter
   @Setter
-  public boolean fullNodeAllowShieldedTransactionArgs;
+  public boolean allowShieldedTransactionApi;
   @Getter
   @Setter
   public long blockNumForEnergyLimit;
