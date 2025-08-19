@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import com.google.protobuf.ByteString;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -217,6 +218,34 @@ public class RelayServiceTest extends BaseTest {
     } catch (Exception e) {
       logger.info("", e);
       assert false;
+    }
+  }
+
+  @Test
+  public void testNullWitnessAddress() {
+    try {
+      Class<?> clazz = service.getClass();
+
+      Field keySizeField = clazz.getDeclaredField("keySize");
+      keySizeField.setAccessible(true);
+      keySizeField.set(service, 0);
+
+      Field witnessAddressField = clazz.getDeclaredField("witnessAddress");
+      witnessAddressField.setAccessible(true);
+      witnessAddressField.set(service, null);
+
+      Method isActiveWitnessMethod = clazz.getDeclaredMethod("isActiveWitness");
+      isActiveWitnessMethod.setAccessible(true);
+
+      Boolean result = (Boolean) isActiveWitnessMethod.invoke(service);
+      Assert.assertNotEquals(Boolean.TRUE, result);
+
+      witnessAddressField.set(service, ByteString.copyFrom(new byte[21]));
+      result = (Boolean) isActiveWitnessMethod.invoke(service);
+      Assert.assertNotEquals(Boolean.TRUE, result);
+    } catch (NoSuchMethodException | NoSuchFieldException
+             | IllegalAccessException | InvocationTargetException e) {
+      Assert.fail("Reflection invocation failed: " + e.getMessage());
     }
   }
 }
