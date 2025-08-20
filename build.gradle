@@ -118,6 +118,14 @@ subprojects {
         // https://docs.gradle.org/current/dsl/org.gradle.api.tasks.testing.Test.html#org.gradle.api.tasks.testing.Test:environment
         environment 'CI', 'true'
     }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+            }
+        }
+    }
 }
 
 task copyToParent(type: Copy) {
