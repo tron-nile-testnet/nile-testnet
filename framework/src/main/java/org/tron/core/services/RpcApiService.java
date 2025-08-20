@@ -89,6 +89,7 @@ import org.tron.core.exception.BadItemException;
 import org.tron.core.exception.ContractExeException;
 import org.tron.core.exception.ContractValidateException;
 import org.tron.core.exception.ItemNotFoundException;
+import org.tron.core.exception.MaintenanceUnavailableException;
 import org.tron.core.exception.NonUniqueObjectException;
 import org.tron.core.exception.StoreException;
 import org.tron.core.exception.VMIllegalException;
@@ -379,6 +380,18 @@ public class RpcApiService extends RpcService {
     @Override
     public void listWitnesses(EmptyMessage request, StreamObserver<WitnessList> responseObserver) {
       responseObserver.onNext(wallet.getWitnessList());
+      responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getPaginatedNowWitnessList(PaginatedMessage request,
+        StreamObserver<WitnessList> responseObserver) {
+      try {
+        responseObserver.onNext(
+            wallet.getPaginatedNowWitnessList(request.getOffset(), request.getLimit()));
+      } catch (MaintenanceUnavailableException e) {
+        responseObserver.onError(getRunTimeException(e));
+      }
       responseObserver.onCompleted();
     }
 
@@ -1842,6 +1855,18 @@ public class RpcApiService extends RpcService {
     public void listWitnesses(EmptyMessage request,
         StreamObserver<WitnessList> responseObserver) {
       responseObserver.onNext(wallet.getWitnessList());
+      responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getPaginatedNowWitnessList(PaginatedMessage request,
+        StreamObserver<WitnessList> responseObserver) {
+      try {
+        responseObserver.onNext(
+            wallet.getPaginatedNowWitnessList(request.getOffset(), request.getLimit()));
+      } catch (MaintenanceUnavailableException e) {
+        responseObserver.onError(getRunTimeException(e));
+      }
       responseObserver.onCompleted();
     }
 
