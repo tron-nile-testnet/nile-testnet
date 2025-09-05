@@ -75,7 +75,6 @@ public class LiteFnQueryGrpcInterceptorTest {
             .usePlaintext()
             .build();
     context = new TronApplicationContext(DefaultConfig.class);
-    context.registerShutdownHook();
     blockingStubFull = WalletGrpc.newBlockingStub(channelFull);
     blockingStubSolidity = WalletSolidityGrpc.newBlockingStub(channelSolidity);
     blockingStubpBFT = WalletSolidityGrpc.newBlockingStub(channelpBFT);
@@ -90,13 +89,13 @@ public class LiteFnQueryGrpcInterceptorTest {
   @AfterClass
   public static void destroy() throws InterruptedException {
     if (channelFull != null) {
-      channelFull.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+      channelFull.shutdownNow();
     }
     if (channelSolidity != null) {
-      channelSolidity.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+      channelSolidity.shutdownNow();
     }
     if (channelpBFT != null) {
-      channelpBFT.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+      channelpBFT.shutdownNow();
     }
     context.close();
     Args.clearParam();
