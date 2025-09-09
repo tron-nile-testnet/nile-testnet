@@ -15,10 +15,8 @@ import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.iq80.leveldb.WriteOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.tron.common.parameter.CommonParameter;
-import org.tron.common.storage.OptionsPicker;
 import org.tron.common.storage.leveldb.LevelDbDataSourceImpl;
 import org.tron.common.storage.metric.DbStatService;
 import org.tron.common.storage.rocksdb.RocksDbDataSourceImpl;
@@ -38,7 +36,7 @@ import org.tron.core.exception.ItemNotFoundException;
 
 
 @Slf4j(topic = "DB")
-public abstract class TronStoreWithRevoking<T extends ProtoCapsule> extends OptionsPicker implements ITronChainBase<T> {
+public abstract class TronStoreWithRevoking<T extends ProtoCapsule> implements ITronChainBase<T> {
 
   @Getter // only for unit test
   protected IRevokingDB revokingDB;
@@ -58,18 +56,12 @@ public abstract class TronStoreWithRevoking<T extends ProtoCapsule> extends Opti
     String dbEngine = CommonParameter.getInstance().getStorage().getDbEngine();
     if ("LEVELDB".equals(dbEngine.toUpperCase())) {
       this.db =  new LevelDB(
-          new LevelDbDataSourceImpl(StorageUtils.getOutputDirectoryByDbName(dbName),
-              dbName,
-              getOptionsByDbNameForLevelDB(dbName),
-              new WriteOptions().sync(CommonParameter.getInstance()
-                  .getStorage().isDbSync())));
+          new LevelDbDataSourceImpl(StorageUtils.getOutputDirectoryByDbName(dbName), dbName));
     } else if ("ROCKSDB".equals(dbEngine.toUpperCase())) {
       String parentPath = Paths
           .get(StorageUtils.getOutputDirectoryByDbName(dbName), CommonParameter
               .getInstance().getStorage().getDbDirectory()).toString();
-      this.db =  new RocksDB(
-          new RocksDbDataSourceImpl(parentPath,
-              dbName, getOptionsByDbNameForRocksDB(dbName)));
+      this.db =  new RocksDB(new RocksDbDataSourceImpl(parentPath, dbName));
     } else {
       throw new RuntimeException(String.format("db engine %s is error", dbEngine));
     }

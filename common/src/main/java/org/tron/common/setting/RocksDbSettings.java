@@ -1,15 +1,20 @@
 package org.tron.common.setting;
 
+import static org.tron.core.Constant.ROCKSDB;
+
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.ComparatorOptions;
+import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
+import org.rocksdb.Logger;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
+import org.slf4j.LoggerFactory;
 import org.tron.common.utils.MarketOrderPriceComparatorForRocksDB;
 import org.tron.core.Constant;
 
@@ -53,6 +58,8 @@ public class RocksDbSettings {
       "GITHUB_ACTIONS",
       "GITLAB_CI"
   };
+
+  private static final org.slf4j.Logger rocksDbLogger = LoggerFactory.getLogger(ROCKSDB);
 
   private RocksDbSettings() {
 
@@ -161,6 +168,12 @@ public class RocksDbSettings {
 
     Options options = new Options();
 
+    options.setLogger(new Logger(options) {
+      @Override
+      protected void log(InfoLogLevel infoLogLevel, String logMsg) {
+        rocksDbLogger.info("{} {}", dbName, logMsg);
+      }
+    });
     // most of these options are suggested by https://github.com/facebook/rocksdb/wiki/Set-Up-Options
 
     // general options
@@ -196,6 +209,7 @@ public class RocksDbSettings {
     }
 
     if (isRunningInCI()) {
+      options.optimizeForSmallDb();
       // Disable fallocate calls  to avoid issues with disk space
       options.setAllowFAllocate(false);
       // Set WAL size limits to avoid excessive disk

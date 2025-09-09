@@ -112,7 +112,6 @@ public class LevelDbDataSourceImplTest {
     dataSourceTest.resetDb();
     String key1 = PublicMethod.getRandomPrivateKey();
     byte[] key = key1.getBytes();
-    dataSourceTest.initDB();
     String value1 = "50000";
     byte[] value = value1.getBytes();
 
@@ -155,8 +154,6 @@ public class LevelDbDataSourceImplTest {
   public void testupdateByBatchInner() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_updateByBatch");
-    dataSource.initDB();
-    dataSource.resetDb();
     String key1 = PublicMethod.getRandomPrivateKey();
     String value1 = "50000";
     String key2 =  PublicMethod.getRandomPrivateKey();
@@ -195,7 +192,6 @@ public class LevelDbDataSourceImplTest {
   public void testdeleteData() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_delete");
-    dataSource.initDB();
     String key1 = PublicMethod.getRandomPrivateKey();
     byte[] key = key1.getBytes();
     dataSource.deleteData(key);
@@ -209,8 +205,6 @@ public class LevelDbDataSourceImplTest {
   public void testallKeys() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_find_key");
-    dataSource.initDB();
-    dataSource.resetDb();
 
     String key1 = PublicMethod.getRandomPrivateKey();
     byte[] key = key1.getBytes();
@@ -233,7 +227,6 @@ public class LevelDbDataSourceImplTest {
 
   @Test(timeout = 1000)
   public void testLockReleased() {
-    dataSourceTest.initDB();
     // normal close
     dataSourceTest.closeDB();
     // closing already closed db.
@@ -248,8 +241,6 @@ public class LevelDbDataSourceImplTest {
   public void allKeysTest() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_allKeysTest_key");
-    dataSource.initDB();
-    dataSource.resetDb();
 
     byte[] key = "0000000987b10fbb7f17110757321".getBytes();
     byte[] value = "50000".getBytes();
@@ -262,7 +253,6 @@ public class LevelDbDataSourceImplTest {
       logger.info(ByteArray.toStr(keyOne));
     });
     assertEquals(2, dataSource.allKeys().size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -289,25 +279,9 @@ public class LevelDbDataSourceImplTest {
   }
 
   @Test
-  public void seekTest() {
-    LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
-        Args.getInstance().getOutputDirectory(), "test_seek_key");
-    dataSource.initDB();
-    dataSource.resetDb();
-
-    putSomeKeyValue(dataSource);
-    Assert.assertTrue(true);
-    dataSource.resetDb();
-    dataSource.closeDB();
-  }
-
-  @Test
   public void getValuesNext() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getValuesNext_key");
-    dataSource.initDB();
-    dataSource.resetDb();
-
     putSomeKeyValue(dataSource);
     Set<byte[]> seekKeyLimitNext = dataSource.getValuesNext("0000000300".getBytes(), 2);
     HashSet<String> hashSet = Sets.newHashSet(ByteArray.toStr(value3), ByteArray.toStr(value4));
@@ -322,7 +296,6 @@ public class LevelDbDataSourceImplTest {
   public void testGetTotal() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getTotal_key");
-    dataSource.initDB();
     dataSource.resetDb();
 
     Map<byte[], byte[]> dataMapset = Maps.newHashMap();
@@ -339,8 +312,6 @@ public class LevelDbDataSourceImplTest {
   public void getKeysNext() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getKeysNext_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
 
     int limit = 2;
@@ -350,8 +321,6 @@ public class LevelDbDataSourceImplTest {
     for (int i = 0; i < limit; i++) {
       Assert.assertArrayEquals(list.get(i), seekKeyLimitNext.get(i));
     }
-
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -359,9 +328,6 @@ public class LevelDbDataSourceImplTest {
   public void prefixQueryTest() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_prefixQuery");
-    dataSource.initDB();
-    dataSource.resetDb();
-
     putSomeKeyValue(dataSource);
     // put a kv that will not be queried.
     byte[] key7 = "0000001".getBytes();
@@ -387,16 +353,14 @@ public class LevelDbDataSourceImplTest {
     Assert.assertEquals(list.size(), result.size());
     list.forEach(entry -> Assert.assertTrue(result.contains(entry)));
 
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
   @Test
   public void initDbTest() {
     makeExceptionDb("test_initDb");
-    LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
-        Args.getInstance().getOutputDirectory(), "test_initDb");
-    TronError thrown = assertThrows(TronError.class, dataSource::initDB);
+    TronError thrown = assertThrows(TronError.class, () -> new LevelDbDataSourceImpl(
+        Args.getInstance().getOutputDirectory(), "test_initDb"));
     assertEquals(TronError.ErrCode.LEVELDB_INIT, thrown.getErrCode());
   }
 
@@ -412,15 +376,12 @@ public class LevelDbDataSourceImplTest {
 
     LevelDbDataSourceImpl dataSource;
     dataSource = new LevelDbDataSourceImpl(dir, "test_engine");
-    dataSource.initDB();
     dataSource.closeDB();
 
-    System.gc();
     PropUtil.writeProperty(enginePath, "ENGINE", "ROCKSDB");
     Assert.assertEquals("ROCKSDB", PropUtil.readProperty(enginePath, "ENGINE"));
     try {
-      dataSource = new LevelDbDataSourceImpl(dir, "test_engine");
-      dataSource.initDB();
+      new LevelDbDataSourceImpl(dir, "test_engine");
     } catch (TronError e) {
       Assert.assertEquals("Cannot open ROCKSDB database with LEVELDB engine.", e.getMessage());
     }
@@ -433,20 +394,16 @@ public class LevelDbDataSourceImplTest {
         .get(StorageUtils.getOutputDirectoryByDbName(name), CommonParameter
             .getInstance().getStorage().getDbDirectory()).toString();
     RocksDbDataSourceImpl rocksDb = new RocksDbDataSourceImpl(output, name);
-    rocksDb.initDB();
     rocksDb.putData(key1, value1);
     rocksDb.closeDB();
-    LevelDbDataSourceImpl levelDB =
-        new LevelDbDataSourceImpl(StorageUtils.getOutputDirectoryByDbName(name), name);
     exception.expectMessage("Cannot open ROCKSDB database with LEVELDB engine.");
-    levelDB.initDB();
+    new LevelDbDataSourceImpl(StorageUtils.getOutputDirectoryByDbName(name), name);
   }
 
   @Test
   public void testNewInstance() {
     dataSourceTest.closeDB();
     LevelDbDataSourceImpl newInst = dataSourceTest.newInstance();
-    newInst.initDB();
     assertFalse(newInst.flush());
     newInst.closeDB();
     LevelDbDataSourceImpl empty = new LevelDbDataSourceImpl();
@@ -456,7 +413,6 @@ public class LevelDbDataSourceImplTest {
     LevelDbDataSourceImpl newInst2 = new LevelDbDataSourceImpl(
         StorageUtils.getOutputDirectoryByDbName(name),
         name);
-    newInst2.initDB();
     newInst2.closeDB();
   }
 
@@ -464,8 +420,6 @@ public class LevelDbDataSourceImplTest {
   public void testGetNext() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getNext_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
     // case: normal
     Map<byte[], byte[]> seekKvLimitNext = dataSource.getNext("0000000300".getBytes(), 2);
@@ -483,7 +437,6 @@ public class LevelDbDataSourceImplTest {
     // case: limit<=0
     seekKvLimitNext = dataSource.getNext("0000000300".getBytes(), 0);
     Assert.assertEquals(0, seekKvLimitNext.size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -491,8 +444,6 @@ public class LevelDbDataSourceImplTest {
   public void testGetlatestValues() {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getlatestValues_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
     // case: normal
     Set<byte[]> seekKeyLimitNext = dataSource.getlatestValues(2);
@@ -503,14 +454,12 @@ public class LevelDbDataSourceImplTest {
     // case: limit<=0
     seekKeyLimitNext = dataSource.getlatestValues(0);
     assertEquals(0, seekKeyLimitNext.size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
   private void makeExceptionDb(String dbName) {
     LevelDbDataSourceImpl dataSource = new LevelDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_initDb");
-    dataSource.initDB();
     dataSource.closeDB();
     FileUtil.saveData(dataSource.getDbPath().toString() + "/CURRENT",
         "...", Boolean.FALSE);

@@ -41,8 +41,6 @@ public interface DbSourceInter<V> extends BatchSourceInter<byte[], V>,
 
   void setDBName(String name);
 
-  void initDB();
-
   boolean isAlive();
 
   void closeDB();

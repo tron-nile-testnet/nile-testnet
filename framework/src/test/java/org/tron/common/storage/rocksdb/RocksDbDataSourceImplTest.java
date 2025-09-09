@@ -88,7 +88,6 @@ public class RocksDbDataSourceImplTest {
     dataSourceTest.resetDb();
     String key1 = PublicMethod.getRandomPrivateKey();
     byte[] key = key1.getBytes();
-    dataSourceTest.initDB();
     String value1 = "50000";
     byte[] value = value1.getBytes();
 
@@ -130,8 +129,6 @@ public class RocksDbDataSourceImplTest {
   public void testupdateByBatchInner() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_updateByBatch");
-    dataSource.initDB();
-    dataSource.resetDb();
     String key1 = PublicMethod.getRandomPrivateKey();
     String value1 = "50000";
     String key2 = PublicMethod.getRandomPrivateKey();
@@ -170,7 +167,6 @@ public class RocksDbDataSourceImplTest {
   public void testdeleteData() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_delete");
-    dataSource.initDB();
     String key1 = PublicMethod.getRandomPrivateKey();
     byte[] key = key1.getBytes();
     dataSource.deleteData(key);
@@ -184,8 +180,6 @@ public class RocksDbDataSourceImplTest {
   public void testallKeys() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_find_key");
-    dataSource.initDB();
-    dataSource.resetDb();
 
     String key1 = PublicMethod.getRandomPrivateKey();
     byte[] key = key1.getBytes();
@@ -202,13 +196,11 @@ public class RocksDbDataSourceImplTest {
 
     dataSource.putData(key2, value2);
     assertEquals(2, dataSource.allKeys().size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
   @Test(timeout = 1000)
   public void testLockReleased() {
-    dataSourceTest.initDB();
     // normal close
     dataSourceTest.closeDB();
     // closing already closed db.
@@ -223,8 +215,6 @@ public class RocksDbDataSourceImplTest {
   public void allKeysTest() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_allKeysTest_key");
-    dataSource.initDB();
-    dataSource.resetDb();
 
     byte[] key = "0000000987b10fbb7f17110757321".getBytes();
     byte[] value = "50000".getBytes();
@@ -237,7 +227,6 @@ public class RocksDbDataSourceImplTest {
       logger.info(ByteArray.toStr(keyOne));
     });
     assertEquals(2, dataSource.allKeys().size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -264,30 +253,14 @@ public class RocksDbDataSourceImplTest {
   }
 
   @Test
-  public void seekTest() {
-    RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
-        Args.getInstance().getOutputDirectory(), "test_seek_key");
-    dataSource.initDB();
-    dataSource.resetDb();
-
-    putSomeKeyValue(dataSource);
-    Assert.assertTrue(true);
-    dataSource.resetDb();
-    dataSource.closeDB();
-  }
-
-  @Test
   public void getValuesNext() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getValuesNext_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
     Set<byte[]> seekKeyLimitNext = dataSource.getValuesNext("0000000300".getBytes(), 2);
     HashSet<String> hashSet = Sets.newHashSet(ByteArray.toStr(value3), ByteArray.toStr(value4));
     seekKeyLimitNext.forEach(
         value -> Assert.assertTrue("getValuesNext", hashSet.contains(ByteArray.toStr(value))));
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -303,21 +276,17 @@ public class RocksDbDataSourceImplTest {
 
     RocksDbDataSourceImpl dataSource;
     dataSource = new RocksDbDataSourceImpl(dir, "test_engine");
-    dataSource.initDB();
     Assert.assertNotNull(dataSource.getDatabase());
     dataSource.closeDB();
 
-    dataSource = null;
-    System.gc();
     PropUtil.writeProperty(enginePath, "ENGINE", "LEVELDB");
     Assert.assertEquals("LEVELDB", PropUtil.readProperty(enginePath, "ENGINE"));
-    dataSource = new RocksDbDataSourceImpl(dir, "test_engine");
+
     try {
-      dataSource.initDB();
+      new RocksDbDataSourceImpl(dir, "test_engine");
     } catch (TronError e) {
       Assert.assertEquals("Cannot open LEVELDB database with ROCKSDB engine.", e.getMessage());
     }
-    Assert.assertNull(dataSource.getDatabase());
     PropUtil.writeProperty(enginePath, "ENGINE", "ROCKSDB");
   }
 
@@ -325,8 +294,6 @@ public class RocksDbDataSourceImplTest {
   public void testGetNext() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getNext_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
     // case: normal
     Map<byte[], byte[]> seekKvLimitNext = dataSource.getNext("0000000300".getBytes(), 2);
@@ -344,7 +311,6 @@ public class RocksDbDataSourceImplTest {
     // case: limit<=0
     seekKvLimitNext = dataSource.getNext("0000000300".getBytes(), 0);
     Assert.assertEquals(0, seekKvLimitNext.size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -352,8 +318,6 @@ public class RocksDbDataSourceImplTest {
   public void testGetlatestValues() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getlatestValues_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
     // case: normal
     Set<byte[]> seekKeyLimitNext = dataSource.getlatestValues(2);
@@ -364,7 +328,6 @@ public class RocksDbDataSourceImplTest {
     // case: limit<=0
     seekKeyLimitNext = dataSource.getlatestValues(0);
     assertEquals(0, seekKeyLimitNext.size());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -372,8 +335,6 @@ public class RocksDbDataSourceImplTest {
   public void getKeysNext() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getKeysNext_key");
-    dataSource.initDB();
-    dataSource.resetDb();
     putSomeKeyValue(dataSource);
 
     int limit = 2;
@@ -383,8 +344,6 @@ public class RocksDbDataSourceImplTest {
     for (int i = 0; i < limit; i++) {
       Assert.assertArrayEquals(list.get(i), seekKeyLimitNext.get(i));
     }
-
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
@@ -392,8 +351,6 @@ public class RocksDbDataSourceImplTest {
   public void prefixQueryTest() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_prefixQuery");
-    dataSource.initDB();
-    dataSource.resetDb();
 
     putSomeKeyValue(dataSource);
     // put a kv that will not be queried.
@@ -420,16 +377,14 @@ public class RocksDbDataSourceImplTest {
     Assert.assertEquals(list.size(), result.size());
     list.forEach(entry -> Assert.assertTrue(result.contains(entry)));
 
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
   @Test
   public void initDbTest() {
     makeExceptionDb("test_initDb");
-    RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
-        Args.getInstance().getOutputDirectory(), "test_initDb");
-    TronError thrown = assertThrows(TronError.class, dataSource::initDB);
+    TronError thrown = assertThrows(TronError.class, () -> new RocksDbDataSourceImpl(
+        Args.getInstance().getOutputDirectory(), "test_initDb"));
     assertEquals(TronError.ErrCode.ROCKSDB_INIT, thrown.getErrCode());
   }
 
@@ -441,12 +396,10 @@ public class RocksDbDataSourceImplTest {
             .getInstance().getStorage().getDbDirectory()).toString();
     LevelDbDataSourceImpl levelDb = new LevelDbDataSourceImpl(
         StorageUtils.getOutputDirectoryByDbName(name), name);
-    levelDb.initDB();
     levelDb.putData(key1, value1);
     levelDb.closeDB();
-    RocksDbDataSourceImpl rocksDb = new RocksDbDataSourceImpl(output, name);
     expectedException.expectMessage("Cannot open LEVELDB database with ROCKSDB engine.");
-    rocksDb.initDB();
+    new RocksDbDataSourceImpl(output, name);
   }
 
   @Test
@@ -457,26 +410,23 @@ public class RocksDbDataSourceImplTest {
             .getInstance().getStorage().getDbDirectory()).toString();
     LevelDbDataSourceImpl levelDb = new LevelDbDataSourceImpl(
         StorageUtils.getOutputDirectoryByDbName(name), name);
-    levelDb.initDB();
     levelDb.putData(key1, value1);
     levelDb.closeDB();
     // delete engine.properties file to simulate the case that db.engine is not set.
-    File engineFile = Paths
-        .get(output, name, "engine.properties").toFile();
+    File engineFile = Paths.get(output, name, "engine.properties").toFile();
     if (engineFile.exists()) {
       engineFile.delete();
     }
     Assert.assertFalse(engineFile.exists());
-    RocksDbDataSourceImpl rocksDb = new RocksDbDataSourceImpl(output, name);
+
     expectedException.expectMessage("Cannot open LEVELDB database with ROCKSDB engine.");
-    rocksDb.initDB();
+    new RocksDbDataSourceImpl(output, name);
   }
 
   @Test
   public void testNewInstance() {
     dataSourceTest.closeDB();
     RocksDbDataSourceImpl newInst = dataSourceTest.newInstance();
-    newInst.initDB();
     assertFalse(newInst.flush());
     newInst.closeDB();
     RocksDbDataSourceImpl empty = new RocksDbDataSourceImpl();
@@ -486,7 +436,6 @@ public class RocksDbDataSourceImplTest {
         .get(StorageUtils.getOutputDirectoryByDbName("newInst2"), CommonParameter
             .getInstance().getStorage().getDbDirectory()).toString();
     RocksDbDataSourceImpl newInst2 = new RocksDbDataSourceImpl(output, "newInst2");
-    newInst2.initDB();
     newInst2.closeDB();
   }
 
@@ -494,7 +443,6 @@ public class RocksDbDataSourceImplTest {
   public void backupAndDelete() throws RocksDBException {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "backupAndDelete");
-    dataSource.initDB();
     putSomeKeyValue(dataSource);
     Path dir = Paths.get(Args.getInstance().getOutputDirectory(), "backup");
     String path = dir + File.separator;
@@ -511,8 +459,6 @@ public class RocksDbDataSourceImplTest {
   public void testGetTotal() {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_getTotal_key");
-    dataSource.initDB();
-    dataSource.resetDb();
 
     Map<byte[], byte[]> dataMapset = Maps.newHashMap();
     dataMapset.put(key1, value1);
@@ -520,14 +466,12 @@ public class RocksDbDataSourceImplTest {
     dataMapset.put(key3, value3);
     dataMapset.forEach(dataSource::putData);
     Assert.assertEquals(dataMapset.size(), dataSource.getTotal());
-    dataSource.resetDb();
     dataSource.closeDB();
   }
 
   private void makeExceptionDb(String dbName) {
     RocksDbDataSourceImpl dataSource = new RocksDbDataSourceImpl(
         Args.getInstance().getOutputDirectory(), "test_initDb");
-    dataSource.initDB();
     dataSource.closeDB();
     FileUtil.saveData(dataSource.getDbPath().toString() + "/CURRENT",
         "...", Boolean.FALSE);

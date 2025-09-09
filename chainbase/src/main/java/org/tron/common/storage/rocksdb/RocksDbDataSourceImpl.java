@@ -22,8 +22,6 @@ import java.util.stream.Collectors;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.Checkpoint;
-import org.rocksdb.InfoLogLevel;
-import org.rocksdb.Logger;
 import org.rocksdb.Options;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
@@ -32,7 +30,6 @@ import org.rocksdb.RocksIterator;
 import org.rocksdb.Status;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
-import org.slf4j.LoggerFactory;
 import org.tron.common.error.TronDBException;
 import org.tron.common.setting.RocksDbSettings;
 import org.tron.common.storage.WriteOptionsWrapper;
@@ -52,24 +49,14 @@ public class RocksDbDataSourceImpl extends DbStat implements DbSourceInter<byte[
 
   private String dataBaseName;
   private RocksDB database;
-  private Options options;
   private volatile boolean alive;
   private String parentPath;
   private ReadWriteLock resetDbLock = new ReentrantReadWriteLock();
-  private static final org.slf4j.Logger rocksDbLogger = LoggerFactory.getLogger(ROCKSDB);
 
-  public RocksDbDataSourceImpl(String parentPath, String name, Options options) {
-    this.dataBaseName = name;
-    this.parentPath = parentPath;
-    this.options = options;
-    initDB();
-  }
-
-  @VisibleForTesting
   public RocksDbDataSourceImpl(String parentPath, String name) {
-    this.parentPath = parentPath;
     this.dataBaseName = name;
-    this.options = RocksDbSettings.getOptionsByDbName(name);
+    this.parentPath = parentPath;
+    initDB();
   }
 
   public Path getDbPath() {
@@ -183,7 +170,7 @@ public class RocksDbDataSourceImpl extends DbStat implements DbSourceInter<byte[
     this.dataBaseName = name;
   }
 
-  public void initDB() {
+  private void initDB() {
     resetDbLock.writeLock().lock();
     try {
       if (isAlive()) {
@@ -192,14 +179,8 @@ public class RocksDbDataSourceImpl extends DbStat implements DbSourceInter<byte[
       if (dataBaseName == null) {
         throw new IllegalArgumentException("No name set to the dbStore");
       }
-      options.setLogger(new Logger(options) {
-        @Override
-        protected void log(InfoLogLevel infoLogLevel, String logMsg) {
-          rocksDbLogger.info("{} {}", dataBaseName, logMsg);
-        }
-      });
 
-      try {
+      try (Options options = RocksDbSettings.getOptionsByDbName(dataBaseName)) {
         logger.debug("Opening database {}.", dataBaseName);
         final Path dbPath = getDbPath();
 
@@ -281,6 +262,24 @@ public class RocksDbDataSourceImpl extends DbStat implements DbSourceInter<byte[
     return false;
   }
 
+  /**
+   * Returns an iterator over the database.
+   *
+   * <p><b>CRITICAL:</b> The returned iterator holds native resources and <b>MUST</b> be closed
+   * after use to prevent memory leaks. It is strongly recommended to use a try-with-resources
+   * statement.
+   *
+   * <p>Example of correct usage:
+   * <pre>{@code
+   * try (DBIterator iterator = db.iterator()) {
+   *   while (iterator.hasNext()) {
+   *     // ... process entry
+   *   }
+   * }
+   * }</pre>
+   *
+   * @return a new database iterator that must be closed.
+   */
   @Override
   public org.tron.core.db.common.iterator.DBIterator iterator() {
     return new RockStoreIterator(getRocksIterator());
@@ -415,14 +414,15 @@ public class RocksDbDataSourceImpl extends DbStat implements DbSourceInter<byte[
 
   public void backup(String dir) throws RocksDBException {
     throwIfNotAlive();
-    Checkpoint cp = Checkpoint.create(database);
-    cp.createCheckpoint(dir + this.getDBName());
+    try (Checkpoint cp = Checkpoint.create(database)) {
+      cp.createCheckpoint(dir + this.getDBName());
+    }
   }
 
   private RocksIterator getRocksIterator() {
-    try ( ReadOptions readOptions = new ReadOptions().setFillCache(false)) {
+    try (ReadOptions readOptions = new ReadOptions().setFillCache(false)) {
       throwIfNotAlive();
-      return  database.newIterator(readOptions);
+      return database.newIterator(readOptions);
     }
   }
 
@@ -432,8 +432,7 @@ public class RocksDbDataSourceImpl extends DbStat implements DbSourceInter<byte[
 
   @Override
   public RocksDbDataSourceImpl newInstance() {
-    return new RocksDbDataSourceImpl(parentPath, dataBaseName,
-        this.options);
+    return new RocksDbDataSourceImpl(parentPath, dataBaseName);
   }
 
 

@@ -1,15 +1,19 @@
 package org.tron.common.utils;
 
 import static org.tron.common.parameter.CommonParameter.ENERGY_LIMIT_HARD_FORK;
+import static org.tron.core.db.common.DbSourceInter.LEVELDB;
 
 import java.io.File;
 import org.apache.commons.lang3.StringUtils;
 import org.iq80.leveldb.Options;
+import org.slf4j.LoggerFactory;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.core.Constant;
 
 
 public class StorageUtils {
+
+  private static final org.slf4j.Logger levelDbLogger = LoggerFactory.getLogger(LEVELDB);
 
   public static boolean getEnergyLimitHardFork() {
     return ENERGY_LIMIT_HARD_FORK;
@@ -62,6 +66,7 @@ public class StorageUtils {
     if (Constant.MARKET_PAIR_PRICE_TO_ORDER.equals(dbName)) {
       options.comparator(new MarketOrderPriceComparatorForLevelDB());
     }
+    options.logger(message -> levelDbLogger.info("{} {}", dbName, message));
     return options;
   }
 }

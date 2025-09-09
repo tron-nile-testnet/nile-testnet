@@ -8,10 +8,8 @@ import java.util.Map.Entry;
 import javax.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.iq80.leveldb.WriteOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.tron.common.parameter.CommonParameter;
-import org.tron.common.storage.OptionsPicker;
 import org.tron.common.storage.WriteOptionsWrapper;
 import org.tron.common.storage.leveldb.LevelDbDataSourceImpl;
 import org.tron.common.storage.metric.DbStatService;
@@ -24,7 +22,7 @@ import org.tron.core.exception.BadItemException;
 import org.tron.core.exception.ItemNotFoundException;
 
 @Slf4j(topic = "DB")
-public abstract class TronDatabase<T> extends OptionsPicker implements ITronChainBase<T> {
+public abstract class TronDatabase<T> implements ITronChainBase<T> {
 
   protected DbSourceInter<byte[]> dbSource;
   @Getter
@@ -40,21 +38,13 @@ public abstract class TronDatabase<T> extends OptionsPicker implements ITronChai
 
     if ("LEVELDB".equals(CommonParameter.getInstance().getStorage()
         .getDbEngine().toUpperCase())) {
-      dbSource =
-          new LevelDbDataSourceImpl(StorageUtils.getOutputDirectoryByDbName(dbName),
-              dbName,
-              getOptionsByDbNameForLevelDB(dbName),
-              new WriteOptions().sync(CommonParameter.getInstance()
-                  .getStorage().isDbSync()));
+      dbSource = new LevelDbDataSourceImpl(StorageUtils.getOutputDirectoryByDbName(dbName), dbName);
     } else if ("ROCKSDB".equals(CommonParameter.getInstance()
         .getStorage().getDbEngine().toUpperCase())) {
       String parentName = Paths.get(StorageUtils.getOutputDirectoryByDbName(dbName),
           CommonParameter.getInstance().getStorage().getDbDirectory()).toString();
-      dbSource =
-          new RocksDbDataSourceImpl(parentName, dbName, getOptionsByDbNameForRocksDB(dbName));
+      dbSource = new RocksDbDataSourceImpl(parentName, dbName);
     }
-
-    dbSource.initDB();
   }
 
   @PostConstruct
