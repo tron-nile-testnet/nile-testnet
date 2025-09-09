@@ -21,6 +21,7 @@ import org.tron.common.application.Application;
 import org.tron.common.application.ApplicationFactory;
 import org.tron.common.application.TronApplicationContext;
 import org.tron.common.utils.PublicMethod;
+import org.tron.common.utils.TimeoutInterceptor;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.Constant;
 import org.tron.core.config.DefaultConfig;
@@ -51,7 +52,7 @@ public class LiteFnQueryGrpcInterceptorTest {
    */
   @BeforeClass
   public static void init() throws IOException {
-    Args.setParam(new String[]{"-d", temporaryFolder.newFolder().toString()}, Constant.TEST_CONF);
+    Args.setParam(new String[] {"-d", temporaryFolder.newFolder().toString()}, Constant.TEST_CONF);
     Args.getInstance().setRpcEnable(true);
     Args.getInstance().setRpcPort(PublicMethod.chooseRandomPort());
     Args.getInstance().setRpcSolidityEnable(true);
@@ -60,20 +61,23 @@ public class LiteFnQueryGrpcInterceptorTest {
     Args.getInstance().setRpcOnPBFTPort(PublicMethod.chooseRandomPort());
     Args.getInstance().setP2pDisable(true);
     String fullnode = String.format("%s:%d", Constant.LOCAL_HOST,
-            Args.getInstance().getRpcPort());
+        Args.getInstance().getRpcPort());
     String solidityNode = String.format("%s:%d", Constant.LOCAL_HOST,
-            Args.getInstance().getRpcOnSolidityPort());
+        Args.getInstance().getRpcOnSolidityPort());
     String pBFTNode = String.format("%s:%d", Constant.LOCAL_HOST,
         Args.getInstance().getRpcOnPBFTPort());
     channelFull = ManagedChannelBuilder.forTarget(fullnode)
-            .usePlaintext()
-            .build();
+        .usePlaintext()
+        .intercept(new TimeoutInterceptor(5000))
+        .build();
     channelSolidity = ManagedChannelBuilder.forTarget(solidityNode)
         .usePlaintext()
+        .intercept(new TimeoutInterceptor(5000))
         .build();
     channelpBFT = ManagedChannelBuilder.forTarget(pBFTNode)
-            .usePlaintext()
-            .build();
+        .usePlaintext()
+        .intercept(new TimeoutInterceptor(5000))
+        .build();
     context = new TronApplicationContext(DefaultConfig.class);
     blockingStubFull = WalletGrpc.newBlockingStub(channelFull);
     blockingStubSolidity = WalletSolidityGrpc.newBlockingStub(channelSolidity);
