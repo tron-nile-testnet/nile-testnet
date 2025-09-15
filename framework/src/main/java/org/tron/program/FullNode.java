@@ -30,7 +30,7 @@ public class FullNode {
       SolidityNode.start();
       return;
     }
-    if (parameter.isKeystore()) {
+    if (parameter.isKeystoreFactory()) {
       KeystoreFactory.start();
       return;
     }

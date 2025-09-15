@@ -211,8 +211,8 @@ public class CommonParameter {
   //If you are running KeystoreFactory, this flag is set to true
   @Getter
   @Setter
-  @Parameter(names = {"--keystore"}, description = "running KeystoreFactory")
-  public boolean keystore = false;
+  @Parameter(names = {"--keystore-factory"}, description = "running KeystoreFactory")
+  public boolean keystoreFactory = false;
 
   @Getter
   @Setter
