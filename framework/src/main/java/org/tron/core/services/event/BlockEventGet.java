@@ -57,10 +57,16 @@ public class BlockEventGet {
     BlockCapsule block = manager.getChainBaseManager().getBlockByNum(blockNum);
     block.getTransactions().forEach(t -> t.setBlockNum(block.getNum()));
     long solidNum = manager.getDynamicPropertiesStore().getLatestSolidifiedBlockNum();
+    long headNum = manager.getHeadBlockNum();
+    // solve the single SR concurrency problem
+    if (solidNum >= headNum && headNum > 0) {
+      solidNum = headNum - 1;
+    }
     BlockEvent blockEvent = new BlockEvent();
     blockEvent.setBlockId(block.getBlockId());
     blockEvent.setParentId(block.getParentBlockId());
     blockEvent.setSolidId(manager.getChainBaseManager().getBlockIdByNum(solidNum));
+
     if (instance.isBlockLogTriggerEnable()) {
       blockEvent.setBlockLogTriggerCapsule(getBlockLogTrigger(block, solidNum));
     }
@@ -88,18 +94,13 @@ public class BlockEventGet {
   }
 
   public SmartContractTrigger getContractTrigger(BlockCapsule block, long solidNum) {
-    TransactionRetCapsule result;
-    try {
-      result = manager.getChainBaseManager().getTransactionRetStore()
-        .getTransactionInfoByBlockNum(ByteArray.fromLong(block.getNum()));
-    } catch (BadItemException e) {
-      throw new RuntimeException(e);
-    }
+
+    GrpcAPI.TransactionInfoList list = manager.getTransactionInfoByBlockNum(block.getNum());
 
     SmartContractTrigger contractTrigger = new SmartContractTrigger();
     for (int i = 0; i < block.getTransactions().size(); i++) {
       Protocol.Transaction tx = block.getInstance().getTransactions(i);
-      Protocol.TransactionInfo txInfo = result.getInstance().getTransactioninfo(i);
+      Protocol.TransactionInfo txInfo = list.getTransactionInfo(i);
 
       List<ContractTrigger> triggers = parseLogs(tx, txInfo);
       for (ContractTrigger trigger : triggers) {
