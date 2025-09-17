@@ -174,6 +174,7 @@ import org.tron.core.db.EnergyProcessor;
 import org.tron.core.db.Manager;
 import org.tron.core.db.TransactionContext;
 import org.tron.core.db2.core.Chainbase;
+import org.tron.core.db2.core.Chainbase.Cursor;
 import org.tron.core.exception.AccountResourceInsufficientException;
 import org.tron.core.exception.BadItemException;
 import org.tron.core.exception.ContractExeException;
@@ -784,8 +785,11 @@ public class Wallet {
       In the maintenance period, the VoteStores will be cleared.
       To avoid the race condition of VoteStores deleted but Witness vote counts not updated,
       return retry error.
+      Only apply to requests that rely on the latest block,
+      which means the normal fullnode requests with HEAD cursor.
     */
-    if (chainBaseManager.getDynamicPropertiesStore().getStateFlag() == 1) {
+    boolean isMaintenance = chainBaseManager.getDynamicPropertiesStore().getStateFlag() == 1;
+    if (isMaintenance && !Args.getInstance().isSolidityNode() && getCursor() == Cursor.HEAD) {
       String message =
           "Service temporarily unavailable during maintenance period. Please try again later.";
       throw new MaintenanceUnavailableException(message);
