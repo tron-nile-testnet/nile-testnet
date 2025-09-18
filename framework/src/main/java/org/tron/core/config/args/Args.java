@@ -347,7 +347,7 @@ public class Args extends CommonParameter {
 
   private static Map<String, String[]> getOptionGroup() {
     String[] tronOption = new String[] {"version", "help", "shellConfFileName", "logbackPath",
-        "eventSubscribe", "solidityNode", "keystore"};
+        "eventSubscribe", "solidityNode", "keystoreFactory"};
     String[] dbOption = new String[] {"outputDirectory"};
     String[] witnessOption = new String[] {"witness", "privateKey"};
     String[] vmOption = new String[] {"debug"};
