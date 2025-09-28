@@ -12,6 +12,7 @@ import static org.tron.core.Constant.MAX_PROPOSAL_EXPIRE_TIME;
 import static org.tron.core.Constant.MIN_PROPOSAL_EXPIRE_TIME;
 import static org.tron.core.config.Parameter.ChainConstant.BLOCK_PRODUCE_TIMEOUT_PERCENT;
 import static org.tron.core.config.Parameter.ChainConstant.MAX_ACTIVE_WITNESS_NUM;
+import static org.tron.core.exception.TronError.ErrCode.PARAMETER_INIT;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterDescription;
@@ -1288,17 +1289,16 @@ public class Args extends CommonParameter {
 
   private static long getProposalExpirationTime(final Config config) {
     if (config.hasPath(Constant.COMMITTEE_PROPOSAL_EXPIRE_TIME)) {
-      throw new IllegalArgumentException("It is not allowed to configure "
-          + "commit.proposalExpireTime in config.conf, please set the value in "
-          + "block.proposalExpireTime.");
+      throw new TronError("It is not allowed to configure committee.proposalExpireTime in "
+          + "config.conf, please set the value in block.proposalExpireTime.", PARAMETER_INIT);
     }
     if (config.hasPath(Constant.BLOCK_PROPOSAL_EXPIRE_TIME)) {
       long proposalExpireTime = config.getLong(Constant.BLOCK_PROPOSAL_EXPIRE_TIME);
       if (proposalExpireTime <= MIN_PROPOSAL_EXPIRE_TIME
           || proposalExpireTime >= MAX_PROPOSAL_EXPIRE_TIME) {
-        throw new IllegalArgumentException("The value[block.proposalExpireTime] is only allowed to "
+        throw new TronError("The value[block.proposalExpireTime] is only allowed to "
             + "be greater than " + MIN_PROPOSAL_EXPIRE_TIME + " and less than "
-            + MAX_PROPOSAL_EXPIRE_TIME + "!");
+            + MAX_PROPOSAL_EXPIRE_TIME + "!", PARAMETER_INIT);
       }
       return proposalExpireTime;
     } else {
