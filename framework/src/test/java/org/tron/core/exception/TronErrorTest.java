@@ -8,6 +8,9 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.util.ContextInitializer;
+import ch.qos.logback.core.joran.spi.JoranException;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigObject;
@@ -27,6 +30,7 @@ import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.slf4j.LoggerFactory;
 import org.tron.common.arch.Arch;
 import org.tron.common.log.LogService;
 import org.tron.common.parameter.RateLimiterInitialization;
@@ -37,6 +41,7 @@ import org.tron.core.config.args.Args;
 import org.tron.core.services.http.GetBlockServlet;
 import org.tron.core.services.http.RateLimiterServlet;
 import org.tron.core.zen.ZksnarkInitService;
+
 
 @RunWith(MockitoJUnitRunner.class)
 public class TronErrorTest {
@@ -85,10 +90,22 @@ public class TronErrorTest {
 
   @Test
   public void LogLoadTest() throws IOException {
-    LogService.load("non-existent.xml");
-    Path path = temporaryFolder.newFile("logback.xml").toPath();
-    TronError thrown = assertThrows(TronError.class, () -> LogService.load(path.toString()));
-    assertEquals(TronError.ErrCode.LOG_LOAD, thrown.getErrCode());
+    LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+
+    try {
+      LogService.load("non-existent.xml");
+      Path path = temporaryFolder.newFile("logback.xml").toPath();
+      TronError thrown = assertThrows(TronError.class, () -> LogService.load(path.toString()));
+      assertEquals(TronError.ErrCode.LOG_LOAD, thrown.getErrCode());
+    } finally {
+      try {
+        context.reset();
+        ContextInitializer ci = new ContextInitializer(context);
+        ci.autoConfig();
+      } catch (JoranException e) {
+        Assert.fail(e.getMessage());
+      }
+    }
   }
 
   @Test
