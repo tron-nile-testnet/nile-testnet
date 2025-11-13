@@ -34,8 +34,20 @@ nile-testnet is a project for developers to quickly access the tron nile testnet
 
 # Building the Source Code
 
-Building java-tron requires `git` package and 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
+Building java-tron requires `git` package
 
+## Operating systems
+Make sure you operate on `Linux` or `MacOS` operating systems, other operating systems are not supported yet.
+
+## Architecture
+
+### x86_64
+64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet.
+
+### ARM64
+64-bit version of `JDK 17` to be installed, other JDK versions are not supported yet.
+
+## Build
 Clone the repo and switch to the `master` branch
 
 ```bash
@@ -48,13 +60,29 @@ then run the following command to build nile-testnet, the `FullNode.jar` file ca
 
 ```bash
 $ ./gradlew clean build -x test
+ # To fix DependencyVerificationException: Dependency verification failed for configuration ':xxx' x artifacts failed verification
+$ ./gradlew clean --refresh-dependencies --write-verification-metadata sha256
+
 ```
 
 # Running nile-testnet
 
-Running java-tron requires 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
+## Operating systems
+Make sure you operate on `Linux` or `MacOS` operating systems, other operating systems are not supported yet.
+
 
 Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
+
+## Architecture
+
+### X86_64
+Requires 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet.
+
+### ARM64
+Requires 64-bit version of `JDK 17` to be installed, other JDK versions are not supported yet.
+
+
+
 
 ## Hardware Requirements
 
@@ -78,6 +106,7 @@ Recommended:
 [nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 - `-d` parameter specifies a nile database. [nile_database_resource](https://database.nileex.io/).
 
+### x86_64 JDK 1.8
 ```bash
  $ nohup java -Xms9G -Xmx9G -XX:ReservedCodeCacheSize=256m \
              -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m \
@@ -89,6 +118,19 @@ Recommended:
              -XX:+UseCMSInitiatingOccupancyOnly  -XX:CMSInitiatingOccupancyFraction=70 \
              -jar FullNode.jar -c config-nile.conf >> start.log 2>&1 &
 ```
+### ARM64 JDK 17
+```bash
+$ nohup java -Xms9G -Xmx9G -XX:+UseZGC \
+             -Xlog:gc,gc+heap:file=gc.log:time,tags,level:filecount=10,filesize=100M \
+             -XX:ReservedCodeCacheSize=256m \
+             -XX:+UseCodeCacheFlushing \
+             -XX:MetaspaceSize=256m \
+             -XX:MaxMetaspaceSize=512m \
+             -XX:MaxDirectMemorySize=1g \
+             -XX:+HeapDumpOnOutOfMemoryError \
+             -jar FullNode.jar -c config-nile.conf >> start.log 2>&1 &
+```
+
 
 # Integrity Check
 
