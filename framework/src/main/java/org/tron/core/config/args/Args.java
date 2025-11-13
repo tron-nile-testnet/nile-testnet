@@ -1779,24 +1779,6 @@ public class Args extends CommonParameter {
   }
 
 
-  public static void setFullNodeAllowShieldedTransaction(boolean fullNodeAllowShieldedTransaction) {
-    PARAMETER.fullNodeAllowShieldedTransactionArgs = fullNodeAllowShieldedTransaction;
-  }
-
-  private static void witnessAddressCheck(Config config) {
-    if (config.hasPath(Constant.LOCAL_WITNESS_ACCOUNT_ADDRESS)) {
-      byte[] bytes = Commons
-          .decodeFromBase58Check(config.getString(Constant.LOCAL_WITNESS_ACCOUNT_ADDRESS));
-      if (bytes != null) {
-        localWitnesses.setWitnessAccountAddress(bytes);
-        logger.debug("Got localWitnessAccountAddress from config.conf");
-      } else {
-        logger.warn(IGNORE_WRONG_WITNESS_ADDRESS_FORMAT);
-      }
-    }
-  }
-
-
   /**
    * get output directory.
    */
