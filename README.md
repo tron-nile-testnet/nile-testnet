@@ -31,8 +31,6 @@ nile-testnet is a project for developers to quickly access the tron nile testnet
 
 # Building the Source Code
 
-Building java-tron requires `git` package and 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
-
 Clone the repo and switch to the `master` branch
 
 ```bash
@@ -118,3 +116,4 @@ All jar files available in this release are signed via this GPG key::
   UID: build@nileex.io
   KeyServer: hkps://keyserver.ubuntu.com
   ```
+
