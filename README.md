@@ -118,9 +118,3 @@ All jar files available in this release are signed via this GPG key::
   UID: build@nileex.io
   KeyServer: hkps://keyserver.ubuntu.com
   ```
-
-# License
-
-java-tron is released under the [LGPLv3 license](https://github.com/tronprotocol/java-tron/blob/master/LICENSE).
-
-
