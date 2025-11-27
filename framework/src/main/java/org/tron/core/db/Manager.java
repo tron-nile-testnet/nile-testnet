@@ -48,6 +48,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.bouncycastle.util.encoders.Hex;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.tron.api.GrpcAPI;
 import org.tron.api.GrpcAPI.TransactionInfoList;
 import org.tron.common.args.GenesisBlock;
 import org.tron.common.bloom.Bloom;
@@ -163,6 +164,7 @@ import org.tron.core.store.VotesStore;
 import org.tron.core.store.WitnessScheduleStore;
 import org.tron.core.store.WitnessStore;
 import org.tron.core.utils.TransactionRegister;
+import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.AccountType;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Transaction;
@@ -868,9 +870,9 @@ public class Manager {
       TooBigTransactionException, TransactionExpirationException,
       ReceiptCheckErrException, VMIllegalException, TooBigTransactionResultException {
 
-    if (isShieldedTransaction(trx.getInstance()) && !Args.getInstance()
-        .isFullNodeAllowShieldedTransactionArgs()) {
-      return true;
+    if (isShieldedTransaction(trx.getInstance()) && !chainBaseManager.getDynamicPropertiesStore()
+        .supportShieldedTransaction()) {
+      return false;
     }
 
     pushTransactionQueue.add(trx);
@@ -1857,12 +1859,10 @@ public class Manager {
 
     chainBaseManager.getBalanceTraceStore().resetCurrentBlockTrace();
 
-    if (CommonParameter.getInstance().isJsonRpcFilterEnabled()) {
-      Bloom blockBloom = chainBaseManager.getSectionBloomStore()
-          .initBlockSection(transactionRetCapsule);
-      chainBaseManager.getSectionBloomStore().write(block.getNum());
-      block.setBloom(blockBloom);
-    }
+    Bloom blockBloom = chainBaseManager.getSectionBloomStore()
+        .initBlockSection(transactionRetCapsule);
+    chainBaseManager.getSectionBloomStore().write(block.getNum());
+    block.setBloom(blockBloom);
   }
 
   private void payReward(BlockCapsule block) {
@@ -2159,25 +2159,7 @@ public class Manager {
     // need to set eth compatible data from transactionInfoList
     if (EventPluginLoader.getInstance().isTransactionLogTriggerEthCompatible()
           && newBlock.getNum() != 0) {
-      TransactionInfoList transactionInfoList = TransactionInfoList.newBuilder().build();
-      TransactionInfoList.Builder transactionInfoListBuilder = TransactionInfoList.newBuilder();
-
-      try {
-        TransactionRetCapsule result = chainBaseManager.getTransactionRetStore()
-            .getTransactionInfoByBlockNum(ByteArray.fromLong(newBlock.getNum()));
-
-        if (!Objects.isNull(result) && !Objects.isNull(result.getInstance())) {
-          result.getInstance().getTransactioninfoList().forEach(
-              transactionInfoListBuilder::addTransactionInfo
-          );
-
-          transactionInfoList = transactionInfoListBuilder.build();
-        }
-      } catch (BadItemException e) {
-        logger.error("PostBlockTrigger getTransactionInfoList blockNum = {}, error is {}.",
-            newBlock.getNum(), e.getMessage());
-      }
-
+      TransactionInfoList transactionInfoList = getTransactionInfoByBlockNum(newBlock.getNum());
       if (transactionCapsuleList.size() == transactionInfoList.getTransactionInfoCount()) {
         long cumulativeEnergyUsed = 0;
         long cumulativeLogCount = 0;
@@ -2235,21 +2217,8 @@ public class Manager {
       boolean removed) {
     if (!blockCapsule.getTransactions().isEmpty()) {
       long blockNumber = blockCapsule.getNum();
-      List<TransactionInfo> transactionInfoList = new ArrayList<>();
-
-      try {
-        TransactionRetCapsule result = chainBaseManager.getTransactionRetStore()
-            .getTransactionInfoByBlockNum(ByteArray.fromLong(blockNumber));
-
-        if (!Objects.isNull(result) && !Objects.isNull(result.getInstance())) {
-          transactionInfoList.addAll(result.getInstance().getTransactioninfoList());
-        }
-      } catch (BadItemException e) {
-        logger.error("ProcessLogsFilter getTransactionInfoList blockNum = {}, error is {}.",
-            blockNumber, e.getMessage());
-        return;
-      }
-
+      List<TransactionInfo> transactionInfoList
+              = getTransactionInfoByBlockNum(blockNumber).getTransactionInfoList();
       LogsFilterCapsule logsFilterCapsule = new LogsFilterCapsule(blockNumber,
           blockCapsule.getBlockId().toString(), blockCapsule.getBloom(), transactionInfoList,
           solidified, removed);
@@ -2488,6 +2457,40 @@ public class Manager {
 
   private boolean isBlockWaitingLock() {
     return blockWaitLock.get() > NO_BLOCK_WAITING_LOCK;
+  }
+
+  public TransactionInfoList getTransactionInfoByBlockNum(long blockNum) {
+    TransactionInfoList.Builder transactionInfoList = TransactionInfoList.newBuilder();
+
+    try {
+      TransactionRetCapsule result = getTransactionRetStore()
+              .getTransactionInfoByBlockNum(ByteArray.fromLong(blockNum));
+
+      if (!Objects.isNull(result) && !Objects.isNull(result.getInstance())) {
+        result.getInstance().getTransactioninfoList().forEach(
+            transactionInfo -> transactionInfoList.addTransactionInfo(transactionInfo)
+        );
+      } else {
+        Protocol.Block block = chainBaseManager.getBlockByNum(blockNum).getInstance();
+
+        if (block != null) {
+          List<Transaction> listTransaction = block.getTransactionsList();
+          for (Transaction transaction : listTransaction) {
+            TransactionInfoCapsule transactionInfoCapsule = getTransactionHistoryStore()
+                    .get(Sha256Hash.hash(CommonParameter.getInstance()
+                            .isECKeyCryptoEngine(), transaction.getRawData().toByteArray()));
+
+            if (transactionInfoCapsule != null) {
+              transactionInfoList.addTransactionInfo(transactionInfoCapsule.getInstance());
+            }
+          }
+        }
+      }
+    } catch (BadItemException | ItemNotFoundException e) {
+      logger.warn(e.getMessage());
+    }
+
+    return transactionInfoList.build();
   }
 
   public void close() {

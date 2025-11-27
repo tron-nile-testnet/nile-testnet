@@ -9,12 +9,9 @@
 
 - [What’s nile-testnet?](#whats-nile-testnet)
 - [Community](#community)
-- [Building the Source Code](#building-the-source)
-- [Running java-tron](#running-java-tron)
-- [Contribution](#contribution)
-- [Resources](#resources)
+- [Building the Source Code](#building-the-source-code)
+- [Running nile-testnet](#running-nile-testnet)
 - [Integrity Check](#integrity-check)
-- [License](#license)
 
 # What's nile-testnet?
 
@@ -34,8 +31,6 @@ nile-testnet is a project for developers to quickly access the tron nile testnet
 
 # Building the Source Code
 
-Building java-tron requires `git` package and 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
-
 Clone the repo and switch to the `master` branch
 
 ```bash
@@ -52,7 +47,16 @@ $ ./gradlew clean build -x test
 
 # Running nile-testnet
 
-Running java-tron requires 64-bit version of `Oracle JDK 1.8` to be installed, other JDK versions are not supported yet. Make sure you operate on `Linux` and `MacOS` operating systems.
+## Operating systems
+Make sure you operate on `Linux` or `MacOS` operating systems, other operating systems are not supported yet.
+
+## Architecture
+
+### X86_64
+Requires 64-bit version of `Oracle JDK 8` to be installed, other JDK versions are not supported yet.
+
+### ARM64
+Requires 64-bit version of `JDK 17` to be installed, other JDK versions are not supported yet.
 
 Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 
@@ -73,22 +77,36 @@ Recommended:
 
 ## Running a full node for nile testnet
 
-- Full node has full historical data, it is the entry point into the TRON Nile test network , it can be used by other processes as a gateway into the TRON nile test network via HTTP and GRPC endpoints. You can interact with the TRON Nile test network through full node：transfer assets, deploy contracts, interact with contracts and so on.
-- `-c` parameter specifies a configuration file to run a full node:
-[nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
-- `-d` parameter specifies a nile database. [nile_database_resource](https://database.nileex.io/).
+Full node has full historical data, it is the entry point into the TRON network, it can be used by other processes as a gateway into the TRON network via HTTP and GRPC endpoints. You can interact with the TRON network through full node：transfer assets, deploy contracts, interact with contracts and so on. `-c` parameter specifies a configuration file to run a full node:
 
+### x86_64 (JDK 8)
 ```bash
- $ nohup java -Xms9G -Xmx9G -XX:ReservedCodeCacheSize=256m \
+$ nohup java -Xms9G -Xmx12G -XX:ReservedCodeCacheSize=256m \
              -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m \
              -XX:MaxDirectMemorySize=1G -XX:+PrintGCDetails \
              -XX:+PrintGCDateStamps  -Xloggc:gc.log \
-             -XX:+UseConcMarkSweepGC -XX:NewRatio=2 \
+             -XX:+UseConcMarkSweepGC -XX:NewRatio=3 \
              -XX:+CMSScavengeBeforeRemark -XX:+ParallelRefProcEnabled \
              -XX:+HeapDumpOnOutOfMemoryError \
              -XX:+UseCMSInitiatingOccupancyOnly  -XX:CMSInitiatingOccupancyFraction=70 \
              -jar FullNode.jar -c config-nile.conf >> start.log 2>&1 &
 ```
+### ARM64 (JDK 17)
+```bash
+$ nohup java -Xmx9G -XX:+UseZGC \
+             -Xlog:gc,gc+heap:file=gc.log:time,tags,level:filecount=10,filesize=100M \
+             -XX:ReservedCodeCacheSize=256m \
+             -XX:+UseCodeCacheFlushing \
+             -XX:MetaspaceSize=256m \
+             -XX:MaxMetaspaceSize=512m \
+             -XX:MaxDirectMemorySize=1g \
+             -XX:+HeapDumpOnOutOfMemoryError \
+             -jar FullNode.jar -c config-nile.conf >> start.log 2>&1 &
+```
+
+> **Memory Tuning**
+> - For 16 GB RAM servers: JDK 8 use `-Xms9G -Xmx12G`; JDK 17 use `-Xmx9G`.
+> - For servers with ≥32 GB RAM, suggest setting the maximum heap size (`-Xmx`) to 40 % of total RAM.
 
 # Integrity Check
 
@@ -98,6 +116,4 @@ All jar files available in this release are signed via this GPG key::
   UID: build@nileex.io
   KeyServer: hkps://keyserver.ubuntu.com
   ```
-
-
 
