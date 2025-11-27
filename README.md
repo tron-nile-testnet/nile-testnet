@@ -9,12 +9,9 @@
 
 - [What’s nile-testnet?](#whats-nile-testnet)
 - [Community](#community)
-- [Building the Source Code](#building-the-source)
-- [Running java-tron](#running-java-tron)
-- [Contribution](#contribution)
-- [Resources](#resources)
+- [Building the Source Code](#building-the-source-code)
+- [Running nile-testnet](#running-nile-testnet)
 - [Integrity Check](#integrity-check)
-- [License](#license)
 
 # What's nile-testnet?
 
@@ -125,4 +122,5 @@ All jar files available in this release are signed via this GPG key::
 # License
 
 java-tron is released under the [LGPLv3 license](https://github.com/tronprotocol/java-tron/blob/master/LICENSE).
+
 
