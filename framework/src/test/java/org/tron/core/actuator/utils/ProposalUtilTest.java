@@ -1,5 +1,8 @@
 package org.tron.core.actuator.utils;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.tron.common.BaseTest;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.ForkController;
@@ -438,8 +442,27 @@ public class ProposalUtilTest extends BaseTest {
     testAllowTvmCancunProposal();
 
     testAllowTvmBlobProposal();
+    ThrowingRunnable r0 = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 0);
+    ThrowingRunnable r1 = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 1);
+    ContractValidateException thrown = assertThrows(ContractValidateException.class, r1);
+    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
 
+    forkUtils.getManager().getDynamicPropertiesStore().statsByVersion(
+        ForkBlockVersionEnum.VERSION_4_1.getValue(), stats);
+    try {
+      r1.run();
+    } catch (Throwable e) {
+      Assert.fail(e.getMessage());
+    }
+    thrown = assertThrows(ContractValidateException.class, r0);
+    assertEquals("This value[ALLOW_MARKET_TRANSACTION] is only allowed to be 1",
+        thrown.getMessage());
     testAllowTvmSelfdestructRestrictionProposal();
+
+    thrown = assertThrows(ContractValidateException.class, r1);
+    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
 
     forkUtils.getManager().getDynamicPropertiesStore()
         .statsByVersion(ForkBlockVersionEnum.ENERGY_LIMIT.getValue(), stats);
@@ -710,7 +733,6 @@ public class ProposalUtilTest extends BaseTest {
           "[ALLOW_TVM_SELFDESTRUCT_RESTRICTION] has been valid, no need to propose again",
           e.getMessage());
     }
-
   }
 
   @Test
