@@ -719,19 +719,17 @@ public class ProposalUtilTest extends BaseTest {
   }
 
   private void testAllowMarketTransaction() {
-    byte[] stats = new byte[27];
-    Arrays.fill(stats, (byte) 1);
-
     ThrowingRunnable off = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
         ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 0);
     ThrowingRunnable open = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
         ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 1);
+    String err = "Bad chain parameter id [ALLOW_MARKET_TRANSACTION]";
 
     ContractValidateException thrown = assertThrows(ContractValidateException.class, open);
-    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
+    assertEquals(err, thrown.getMessage());
 
-    forkUtils.getManager().getDynamicPropertiesStore()
-        .statsByVersion(ForkBlockVersionEnum.VERSION_4_1.getValue(), stats);
+    activateFork(ForkBlockVersionEnum.VERSION_4_1);
+
     try {
       open.run();
     } catch (Throwable e) {
@@ -742,13 +740,27 @@ public class ProposalUtilTest extends BaseTest {
     assertEquals("This value[ALLOW_MARKET_TRANSACTION] is only allowed to be 1",
         thrown.getMessage());
 
-    forkUtils.getManager().getDynamicPropertiesStore()
-        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_1.getValue(), stats);
+    activateFork(ForkBlockVersionEnum.VERSION_4_8_1);
 
     thrown = assertThrows(ContractValidateException.class, open);
-    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
+    assertEquals(err, thrown.getMessage());
+
     thrown = assertThrows(ContractValidateException.class, off);
-    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
+    assertEquals(err, thrown.getMessage());
+  }
+
+  private void activateFork(ForkBlockVersionEnum forkVersion) {
+    byte[] stats = new byte[27];
+    Arrays.fill(stats, (byte) 1);
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(forkVersion.getValue(), stats);
+
+    long maintenanceTimeInterval = forkUtils.getManager().getDynamicPropertiesStore()
+        .getMaintenanceTimeInterval();
+    long hardForkTime = ((forkVersion.getHardForkTime() - 1) / maintenanceTimeInterval + 1)
+            * maintenanceTimeInterval;
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .saveLatestBlockHeaderTimestamp(hardForkTime + 1);
   }
 
   @Test
