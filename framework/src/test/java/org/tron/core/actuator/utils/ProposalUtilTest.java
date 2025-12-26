@@ -442,27 +442,10 @@ public class ProposalUtilTest extends BaseTest {
     testAllowTvmCancunProposal();
 
     testAllowTvmBlobProposal();
-    ThrowingRunnable r0 = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
-        ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 0);
-    ThrowingRunnable r1 = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
-        ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 1);
-    ContractValidateException thrown = assertThrows(ContractValidateException.class, r1);
-    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
 
-    forkUtils.getManager().getDynamicPropertiesStore().statsByVersion(
-        ForkBlockVersionEnum.VERSION_4_1.getValue(), stats);
-    try {
-      r1.run();
-    } catch (Throwable e) {
-      Assert.fail(e.getMessage());
-    }
-    thrown = assertThrows(ContractValidateException.class, r0);
-    assertEquals("This value[ALLOW_MARKET_TRANSACTION] is only allowed to be 1",
-        thrown.getMessage());
+    testAllowMarketTransaction();
+
     testAllowTvmSelfdestructRestrictionProposal();
-
-    thrown = assertThrows(ContractValidateException.class, r1);
-    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
 
     forkUtils.getManager().getDynamicPropertiesStore()
         .statsByVersion(ForkBlockVersionEnum.ENERGY_LIMIT.getValue(), stats);
@@ -733,6 +716,39 @@ public class ProposalUtilTest extends BaseTest {
           "[ALLOW_TVM_SELFDESTRUCT_RESTRICTION] has been valid, no need to propose again",
           e.getMessage());
     }
+  }
+
+  private void testAllowMarketTransaction() {
+    byte[] stats = new byte[27];
+    Arrays.fill(stats, (byte) 1);
+
+    ThrowingRunnable off = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 0);
+    ThrowingRunnable open = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        ProposalType.ALLOW_MARKET_TRANSACTION.getCode(), 1);
+
+    ContractValidateException thrown = assertThrows(ContractValidateException.class, open);
+    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
+
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_1.getValue(), stats);
+    try {
+      open.run();
+    } catch (Throwable e) {
+      Assert.fail(e.getMessage());
+    }
+
+    thrown = assertThrows(ContractValidateException.class, off);
+    assertEquals("This value[ALLOW_MARKET_TRANSACTION] is only allowed to be 1",
+        thrown.getMessage());
+
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_1.getValue(), stats);
+
+    thrown = assertThrows(ContractValidateException.class, open);
+    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
+    thrown = assertThrows(ContractValidateException.class, off);
+    assertEquals("Bad chain parameter id [ALLOW_MARKET_TRANSACTION]", thrown.getMessage());
   }
 
   @Test
