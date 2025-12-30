@@ -217,11 +217,11 @@ public class ProposalService extends ProposalUtil {
           break;
         }
         case ALLOW_MARKET_TRANSACTION: {
-          if (manager.getDynamicPropertiesStore().getAllowMarketTransaction() == 0) {
-            manager.getDynamicPropertiesStore().saveAllowMarketTransaction(entry.getValue());
+         // if (manager.getDynamicPropertiesStore().getAllowMarketTransaction() == 0) {
+            manager.getDynamicPropertiesStore().saveAllowMarketTransaction(0);
             manager.getDynamicPropertiesStore().addSystemContractAndSetPermission(52);
             manager.getDynamicPropertiesStore().addSystemContractAndSetPermission(53);
-          }
+         // }
           break;
         }
         case MARKET_SELL_FEE: {
