@@ -21,6 +21,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -1194,6 +1195,28 @@ public class Manager {
 
   }
 
+  private boolean isSameSig(TransactionCapsule tx1, TransactionCapsule tx2) {
+    if (tx1 == null || tx2 == null) {
+      return false;
+    }
+
+    if (tx1.getInstance().getSignatureCount() != tx2.getInstance().getSignatureCount()) {
+      return false;
+    }
+
+    boolean flag = true;
+    for (int i = 0; i < tx1.getInstance().getSignatureCount(); i++) {
+      ByteString sig1 = tx1.getInstance().getSignature(i);
+      ByteString sig2 = tx2.getInstance().getSignature(i);
+      if (!sig1.equals(sig2)) {
+        flag = false;
+        break;
+      }
+    }
+
+    return flag;
+  }
+
   public List<TransactionCapsule> getVerifyTxs(BlockCapsule block) {
 
     if (pendingTransactions.size() == 0) {
@@ -1201,7 +1224,7 @@ public class Manager {
     }
 
     List<TransactionCapsule> txs = new ArrayList<>();
-    Set<String> txIds = new HashSet<>();
+    Map<String, TransactionCapsule> txMap = new HashMap<>();
     Set<String> multiAddresses = new HashSet<>();
 
     pendingTransactions.forEach(capsule -> {
@@ -1210,14 +1233,14 @@ public class Manager {
         String address = Hex.toHexString(capsule.getOwnerAddress());
         multiAddresses.add(address);
       } else {
-        txIds.add(txId);
+        txMap.put(txId, capsule);
       }
     });
 
     block.getTransactions().forEach(capsule -> {
       String address = Hex.toHexString(capsule.getOwnerAddress());
       String txId = Hex.toHexString(capsule.getTransactionId().getBytes());
-      if (multiAddresses.contains(address) || !txIds.contains(txId)) {
+      if (multiAddresses.contains(address) || !isSameSig(capsule, txMap.get(txId))) {
         txs.add(capsule);
       } else {
         capsule.setVerified(true);
