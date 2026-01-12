@@ -888,7 +888,7 @@ public class ManagerTest extends BlockGenerate {
         .addSignature(ByteString.copyFrom("b".getBytes())).build();
     Assert.assertEquals(new TransactionCapsule(t1Bak).getTransactionId(),
         new TransactionCapsule(t2Bak).getTransactionId());
-
+    dbManager.getPendingTransactions().add(new TransactionCapsule(t2Bak));
     txs = dbManager.getVerifyTxs(capsule);
     Assert.assertEquals(txs.size(), 1);
   }
