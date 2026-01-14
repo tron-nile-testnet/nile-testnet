@@ -27,8 +27,8 @@ public class Parameter {
     VERSION_4_7_5(30, 1596780000000L, 80),
     VERSION_4_7_7(31, 1596780000000L, 80),
     VERSION_4_8_0(32, 1596780000000L, 80),
-    VERSION_4_8_0_1(33, 1596780000000L, 70),
-    VERSION_4_8_1(34, 1596780000000L, 80);
+    VERSION_4_8_1(33, 1596780000000L, 80);//The hard fork activation order on Nile is 4.8.0 → 4.8.1 → 4.8.0.1
+    VERSION_4_8_0_1(34, 1596780000000L, 70),//The hard fork activation order on Nile is 4.8.0 → 4.8.1 → 4.8.0.1    
     // if add a version, modify BLOCK_VERSION simultaneously
 
     @Getter
