@@ -58,6 +58,7 @@ Requires 64-bit version of `Oracle JDK 8` to be installed, other JDK versions ar
 ### ARM64
 Requires 64-bit version of `JDK 17` to be installed, other JDK versions are not supported yet.
 
+## Config File
 Get the nile testnet configuration file: [nile_testnet_config.conf](https://github.com/tron-nile-testnet/nile-testnet/blob/master/framework/src/main/resources/config-nile.conf).
 
 ## Hardware Requirements
