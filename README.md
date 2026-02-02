@@ -13,6 +13,7 @@
 - [Running nile-testnet](#running-nile-testnet)
 - [Integrity Check](#integrity-check)
 
+
 # What's nile-testnet?
 
 
@@ -49,6 +50,11 @@ $ ./gradlew clean build -x test
 
 ## Operating systems
 Make sure you operate on `Linux` or `MacOS` operating systems, other operating systems are not supported yet.
+
+
+```bash
+java -jar ./build/libs/FullNode.jar -c config-nile.conf
+```
 
 ## Architecture
 
