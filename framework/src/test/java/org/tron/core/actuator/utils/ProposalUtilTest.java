@@ -50,7 +50,7 @@ public class ProposalUtilTest extends BaseTest {
   public static void init() {
     Args.setParam(new String[]{"--output-directory", dbPath()}, Constant.TEST_CONF);
   }
-
+  
   @Test
   public void validProposalTypeCheck() throws ContractValidateException {
 
