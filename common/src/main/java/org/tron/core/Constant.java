@@ -424,4 +424,6 @@ public class Constant {
 
   public static final String COMMITTEE_PROPOSAL_EXPIRE_TIME = "committee.proposalExpireTime";
 
+  public static final String COMMITTEE_ALLOW_TVM_OSAKA = "committee.allowTvmOsaka";
+
 }
