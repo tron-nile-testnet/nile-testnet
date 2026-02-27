@@ -25,7 +25,7 @@ public class DelegationServiceTest extends BaseTest {
   @BeforeClass
   public static void init() {
     Args.setParam(new String[] {"--output-directory", dbPath(), "--debug"},
-        Constant.TESTNET_CONF);
+        Constant.NET_CONF);
   }
 
   private void testPay(int cycle) {

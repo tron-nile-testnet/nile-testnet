@@ -31,6 +31,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.LoggerFactory;
+import org.tron.common.TestConstants;
 import org.tron.common.arch.Arch;
 import org.tron.common.log.LogService;
 import org.tron.common.parameter.RateLimiterInitialization;
@@ -111,14 +112,14 @@ public class TronErrorTest {
   @Test
   public void witnessInitTest() {
     TronError thrown = assertThrows(TronError.class, () -> {
-      Args.setParam(new String[]{"--witness"}, Constant.TEST_CONF);
+      Args.setParam(new String[]{"--witness"}, TestConstants.TEST_CONF);
     });
     assertEquals(TronError.ErrCode.WITNESS_INIT, thrown.getErrCode());
   }
 
   @Test
   public void rateLimiterServletInitTest() {
-    Args.setParam(new String[]{}, Constant.TEST_CONF);
+    Args.setParam(new String[]{}, TestConstants.TEST_CONF);
     RateLimiterInitialization rateLimiter = new RateLimiterInitialization();
     Args.getInstance().setRateLimiterInitialization(rateLimiter);
     Map<String, String> item = new HashMap<>();
@@ -178,7 +179,7 @@ public class TronErrorTest {
 
       if (expectThrow) {
         TronError err = assertThrows(
-            TronError.class, () -> Args.setParam(new String[]{}, Constant.TEST_CONF));
+            TronError.class, () -> Args.setParam(new String[]{}, TestConstants.TEST_CONF));
 
         String expectedJavaVersion = isX86 ? "1.8" : "17";
         String expectedMessage = String.format(

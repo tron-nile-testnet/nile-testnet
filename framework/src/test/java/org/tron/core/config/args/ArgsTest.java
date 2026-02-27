@@ -31,6 +31,7 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.tron.common.TestConstants;
 import org.tron.common.args.GenesisBlock;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
@@ -57,8 +58,8 @@ public class ArgsTest {
 
   @Test
   public void get() {
-    Args.setParam(new String[] {"-c", Constant.TEST_CONF, "--keystore-factory"},
-        Constant.TESTNET_CONF);
+    Args.setParam(new String[] {"-c", TestConstants.TEST_CONF, "--keystore-factory"},
+        Constant.NET_CONF);
 
     CommonParameter parameter = Args.getInstance();
 
@@ -135,13 +136,13 @@ public class ArgsTest {
   @Test
   public void testIpFromLibP2p()
       throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-    Args.setParam(new String[] {}, Constant.TEST_CONF);
+    Args.setParam(new String[] {}, TestConstants.TEST_CONF);
     CommonParameter parameter = Args.getInstance();
 
     String configuredExternalIp = parameter.getNodeExternalIp();
     Assert.assertEquals("46.168.1.1", configuredExternalIp);
 
-    Config config = Configuration.getByFileName(null, Constant.TEST_CONF);
+    Config config = Configuration.getByFileName(null, TestConstants.TEST_CONF);
     Config config3 = config.withoutPath(Constant.NODE_DISCOVERY_EXTERNAL_IP);
 
     CommonParameter.getInstance().setNodeExternalIp(null);
@@ -156,7 +157,7 @@ public class ArgsTest {
   @Test
   public void testOldRewardOpt() {
     thrown.expect(IllegalArgumentException.class);
-    Args.setParam(new String[] {"-c", "args-test.conf"}, Constant.TESTNET_CONF);
+    Args.setParam(new String[] {"-c", "args-test.conf"}, Constant.NET_CONF);
   }
 
   @Test

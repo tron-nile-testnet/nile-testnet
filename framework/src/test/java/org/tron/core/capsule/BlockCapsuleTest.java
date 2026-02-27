@@ -12,6 +12,7 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.tron.common.TestConstants;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.LocalWitnesses;
 import org.tron.common.utils.PublicMethod;
@@ -41,7 +42,7 @@ public class BlockCapsuleTest {
   @BeforeClass
   public static void init() throws IOException {
     Args.setParam(new String[]{"-d", temporaryFolder.newFolder().toString()},
-        Constant.TEST_CONF);
+        TestConstants.TEST_CONF);
   }
 
   @AfterClass
