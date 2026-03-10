@@ -25,7 +25,7 @@ Here are some guidelines to get started quickly and easily:
 
 ## Reporting An Issue
 
-If you have any question about java-tron, please search [existing issues](https://github.com/tronprotocol/java-tron/issues?q=is%3Aissue%20state%3Aclosed%20OR%20state%3Aopen) to avoid duplicates. Your questions might already be under discussion or part of our roadmap. Checking first helps us streamline efforts and focus on new contributions.
+If you have any question about java-tron, please search [existing issues](https://github.com/tronprotocol/java-tron/issues?q=is%3Aissue%20state%3Aclosed%20OR%20state%3Aopen) first to avoid duplicates. Your questions might already be under discussion or part of our roadmap. Checking first helps us streamline efforts and focus on new contributions.
 
 ### Ask a question
 Feel free to ask any java-tron related question to solve your doubt. Please click **Ask a question** in GitHub Issues, using [Ask a question](.github/ISSUE_TEMPLATE/ask-a-question.md) template.
@@ -117,7 +117,7 @@ If you want to contribute code to java-tron, please follow the following steps.
 
 * Submit a pull request
 
-  Submit a pull request (PR) from your repository to `tronprotocol/java-tron`.
+  Submit a pull request (PR) from your fork repository to `tronprotocol/java-tron`.
   Please be sure to click on the link in the red box shown below. Select the base branch for tronprotocol and the compare branch for your fork repository.
   ![image](https://raw.githubusercontent.com/tronprotocol/documentation-en/master/images/javatron_pr.png)
 
