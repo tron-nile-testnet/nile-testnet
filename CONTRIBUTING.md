@@ -118,7 +118,7 @@ If you want to contribute code to java-tron, please follow the following steps.
 * Submit a pull request
 
   Submit a pull request (PR) from your fork repository to `tronprotocol/java-tron`.
-  Please be sure to click on the link in the red box shown below. Select the base branch for tronprotocol and the compare branch for your fork repository.
+  Please be sure to click on the link in the red box shown below. Select the base branch for `tronprotocol/java-tron` and the compare branch for your fork repository.
   ![image](https://raw.githubusercontent.com/tronprotocol/documentation-en/master/images/javatron_pr.png)
 
 
