@@ -1,7 +1,6 @@
 package org.tron.core.config.args;
 
 import static java.lang.System.exit;
-import static org.fusesource.jansi.Ansi.ansi;
 import static org.tron.common.math.Maths.max;
 import static org.tron.common.math.Maths.min;
 import static org.tron.core.Constant.ADD_PRE_FIX_BYTE_MAINNET;
@@ -16,6 +15,7 @@ import static org.tron.core.exception.TronError.ErrCode.PARAMETER_INIT;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterDescription;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigObject;
@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -45,9 +46,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.fusesource.jansi.AnsiConsole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.tron.common.arch.Arch;
@@ -85,6 +84,9 @@ import org.tron.program.Version;
 public class Args extends CommonParameter {
 
   @Getter
+  private static String configFilePath = "";
+
+  @Getter
   @Setter
   private static LocalWitnesses localWitnesses = new LocalWitnesses();
 
@@ -99,334 +101,50 @@ public class Args extends CommonParameter {
       solidityContractEventTriggerMap = new ConcurrentHashMap<>();
 
 
-  public static void clearParam() {
-    PARAMETER.shellConfFileName = "";
-    PARAMETER.configFilePath = "";
-    PARAMETER.outputDirectory = "output-directory";
-    PARAMETER.help = false;
-    PARAMETER.witness = false;
-    PARAMETER.seedNodes = new ArrayList<>();
-    PARAMETER.privateKey = "";
-    PARAMETER.witnessAddress = "";
-    PARAMETER.storageDbDirectory = "";
-    PARAMETER.storageIndexDirectory = "";
-    PARAMETER.storageIndexSwitch = "";
-
-    // FIXME: PARAMETER.storage maybe null ?
-    if (PARAMETER.storage != null) {
-      // WARNING: WILL DELETE DB STORAGE PATHS
-      PARAMETER.storage.deleteAllStoragePaths();
-      PARAMETER.storage = null;
-    }
-
-    PARAMETER.overlay = null;
-    PARAMETER.seedNode = null;
-    PARAMETER.genesisBlock = null;
-    PARAMETER.chainId = null;
-    localWitnesses = null;
-    PARAMETER.needSyncCheck = false;
-    PARAMETER.nodeDiscoveryEnable = false;
-    PARAMETER.nodeDiscoveryPersist = false;
-    PARAMETER.nodeEffectiveCheckEnable = false;
-    PARAMETER.nodeConnectionTimeout = 2000;
-    PARAMETER.activeNodes = new ArrayList<>();
-    PARAMETER.passiveNodes = new ArrayList<>();
-    PARAMETER.fastForwardNodes = new ArrayList<>();
-    PARAMETER.maxFastForwardNum = 4;
-    PARAMETER.nodeChannelReadTimeout = 0;
-    PARAMETER.maxConnections = 30;
-    PARAMETER.minConnections = 8;
-    PARAMETER.minActiveConnections = 3;
-    PARAMETER.maxConnectionsWithSameIp = 2;
-    PARAMETER.maxTps = 1000;
-    PARAMETER.minParticipationRate = 0;
-    PARAMETER.nodeListenPort = 0;
-    PARAMETER.nodeLanIp = "";
-    PARAMETER.nodeExternalIp = "";
-    PARAMETER.nodeP2pVersion = 0;
-    PARAMETER.nodeEnableIpv6 = false;
-    PARAMETER.dnsTreeUrls = new ArrayList<>();
-    PARAMETER.dnsPublishConfig = null;
-    PARAMETER.syncFetchBatchNum = 2000;
-    PARAMETER.rpcPort = 0;
-    PARAMETER.rpcOnSolidityPort = 0;
-    PARAMETER.rpcOnPBFTPort = 0;
-    PARAMETER.fullNodeHttpPort = 0;
-    PARAMETER.solidityHttpPort = 0;
-    PARAMETER.pBFTHttpPort = 0;
-    PARAMETER.pBFTExpireNum = 20;
-    PARAMETER.jsonRpcHttpFullNodePort = 0;
-    PARAMETER.jsonRpcHttpSolidityPort = 0;
-    PARAMETER.jsonRpcHttpPBFTPort = 0;
-    PARAMETER.maintenanceTimeInterval = 0;
-    PARAMETER.proposalExpireTime = 0;
-    PARAMETER.checkFrozenTime = 1;
-    PARAMETER.allowCreationOfContracts = 0;
-    PARAMETER.allowAdaptiveEnergy = 0;
-    PARAMETER.allowTvmTransferTrc10 = 0;
-    PARAMETER.allowTvmConstantinople = 0;
-    PARAMETER.allowDelegateResource = 0;
-    PARAMETER.allowSameTokenName = 0;
-    PARAMETER.allowTvmSolidity059 = 0;
-    PARAMETER.forbidTransferToContract = 0;
-    PARAMETER.tcpNettyWorkThreadNum = 0;
-    PARAMETER.udpNettyWorkThreadNum = 0;
-    PARAMETER.solidityNode = false;
-    PARAMETER.keystoreFactory = false;
-    PARAMETER.trustNodeAddr = "";
-    PARAMETER.walletExtensionApi = false;
-    PARAMETER.estimateEnergy = false;
-    PARAMETER.estimateEnergyMaxRetry = 3;
-    PARAMETER.receiveTcpMinDataLength = 2048;
-    PARAMETER.isOpenFullTcpDisconnect = false;
-    PARAMETER.nodeDetectEnable = false;
-    PARAMETER.inactiveThreshold = 600;
-    PARAMETER.supportConstant = false;
-    PARAMETER.debug = false;
-    PARAMETER.minTimeRatio = 0.0;
-    PARAMETER.maxTimeRatio = 5.0;
-    PARAMETER.longRunningTime = 10;
-    // PARAMETER.allowShieldedTransaction = 0;
-    PARAMETER.maxHttpConnectNumber = 50;
-    PARAMETER.allowMultiSign = 0;
-    PARAMETER.trxExpirationTimeInMilliseconds = 0;
-    PARAMETER.allowShieldedTransactionApi = true;
-    PARAMETER.zenTokenId = "000000";
-    PARAMETER.allowProtoFilterNum = 0;
-    PARAMETER.allowAccountStateRoot = 0;
-    PARAMETER.validContractProtoThreadNum = 1;
-    PARAMETER.shieldedTransInPendingMaxCounts = 10;
-    PARAMETER.changedDelegation = 0;
-    PARAMETER.rpcEnable = true;
-    PARAMETER.rpcSolidityEnable = true;
-    PARAMETER.rpcPBFTEnable = true;
-    PARAMETER.fullNodeHttpEnable = true;
-    PARAMETER.solidityNodeHttpEnable = true;
-    PARAMETER.pBFTHttpEnable = true;
-    PARAMETER.jsonRpcHttpFullNodeEnable = false;
-    PARAMETER.jsonRpcHttpSolidityNodeEnable = false;
-    PARAMETER.jsonRpcHttpPBFTNodeEnable = false;
-    PARAMETER.jsonRpcMaxBlockRange = 5000;
-    PARAMETER.jsonRpcMaxSubTopics = 1000;
-    PARAMETER.jsonRpcMaxBlockFilterNum = 50000;
-    PARAMETER.nodeMetricsEnable = false;
-    PARAMETER.metricsStorageEnable = false;
-    PARAMETER.metricsPrometheusEnable = false;
-    PARAMETER.agreeNodeCount = MAX_ACTIVE_WITNESS_NUM * 2 / 3 + 1;
-    PARAMETER.allowPBFT = 0;
-    PARAMETER.allowShieldedTRC20Transaction = 0;
-    PARAMETER.allowMarketTransaction = 0;
-    PARAMETER.allowTransactionFeePool = 0;
-    PARAMETER.allowBlackHoleOptimization = 0;
-    PARAMETER.allowNewResourceModel = 0;
-    PARAMETER.allowTvmIstanbul = 0;
-    PARAMETER.allowTvmFreeze = 0;
-    PARAMETER.allowTvmVote = 0;
-    PARAMETER.allowTvmLondon = 0;
-    PARAMETER.allowTvmCompatibleEvm = 0;
-    PARAMETER.historyBalanceLookup = false;
-    PARAMETER.openPrintLog = true;
-    PARAMETER.openTransactionSort = false;
-    PARAMETER.allowAccountAssetOptimization = 0;
-    PARAMETER.allowAssetOptimization = 0;
-    PARAMETER.disabledApiList = Collections.emptyList();
-    PARAMETER.shutdownBlockTime = null;
-    PARAMETER.shutdownBlockHeight = -1;
-    PARAMETER.shutdownBlockCount = -1;
-    PARAMETER.blockCacheTimeout = 60;
-    PARAMETER.allowNewRewardAlgorithm = 0;
-    PARAMETER.allowNewReward = 0;
-    PARAMETER.memoFee = 0;
-    PARAMETER.rateLimiterGlobalQps = 50000;
-    PARAMETER.rateLimiterGlobalIpQps = 10000;
-    PARAMETER.rateLimiterGlobalApiQps = 1000;
-    PARAMETER.rateLimiterSyncBlockChain = 3.0;
-    PARAMETER.rateLimiterFetchInvData = 3.0;
-    PARAMETER.rateLimiterDisconnect = 1.0;
-    PARAMETER.p2pDisable = false;
-    PARAMETER.dynamicConfigEnable = false;
-    PARAMETER.dynamicConfigCheckInterval = 600;
-    PARAMETER.allowTvmShangHai = 0;
-    PARAMETER.unsolidifiedBlockCheck = false;
-    PARAMETER.maxUnsolidifiedBlocks = 54;
-    PARAMETER.allowOldRewardOpt = 0;
-    PARAMETER.allowEnergyAdjustment = 0;
-    PARAMETER.allowStrictMath = 0;
-    PARAMETER.consensusLogicOptimization = 0;
-    PARAMETER.allowTvmCancun = 0;
-    PARAMETER.allowTvmBlob = 0;
-    PARAMETER.rpcMaxRstStream = 0;
-    PARAMETER.rpcSecondsPerWindow = 0;
-  }
-
-  /**
-   * print Version.
-   */
-  private static void printVersion() {
-    Properties properties = new Properties();
-    boolean noGitProperties = true;
-    try {
-      InputStream in = Thread.currentThread()
-          .getContextClassLoader().getResourceAsStream("git.properties");
-      if (in != null) {
-        noGitProperties = false;
-        properties.load(in);
-      }
-    } catch (IOException e) {
-      logger.error(e.getMessage());
-    }
-    JCommander jCommander = new JCommander();
-    jCommander.getConsole().println("OS : " + System.getProperty("os.name"));
-    jCommander.getConsole().println("JVM : " + System.getProperty("java.vendor") + " "
-        + System.getProperty("java.version") + " " + System.getProperty("os.arch"));
-    if (!noGitProperties) {
-      jCommander.getConsole().println("Git : " + properties.getProperty("git.commit.id"));
-    }
-    jCommander.getConsole().println("Version : " + Version.getVersion());
-    jCommander.getConsole().println("Code : " + Version.VERSION_CODE);
-  }
-
-  public static void printHelp(JCommander jCommander) {
-    List<ParameterDescription> parameterDescriptionList = jCommander.getParameters();
-    Map<String, ParameterDescription> stringParameterDescriptionMap = new HashMap<>();
-    for (ParameterDescription parameterDescription : parameterDescriptionList) {
-      String parameterName = parameterDescription.getParameterized().getName();
-      stringParameterDescriptionMap.put(parameterName, parameterDescription);
-    }
-
-    StringBuilder helpStr = new StringBuilder();
-    helpStr.append("Name:\n\tFullNode - the java-tron command line interface\n");
-    String programName = Strings.isNullOrEmpty(jCommander.getProgramName()) ? "FullNode.jar" :
-        jCommander.getProgramName();
-    helpStr.append(String.format("%nUsage: java -jar %s [options] [seedNode <seedNode> ...]%n",
-        programName));
-    helpStr.append(String.format("%nVERSION: %n%s-%s%n", Version.getVersion(),
-        getCommitIdAbbrev()));
-
-    Map<String, String[]> groupOptionListMap = Args.getOptionGroup();
-    for (Map.Entry<String, String[]> entry : groupOptionListMap.entrySet()) {
-      String group = entry.getKey();
-      helpStr.append(String.format("%n%s OPTIONS:%n", group.toUpperCase()));
-      int optionMaxLength = Arrays.stream(entry.getValue()).mapToInt(p -> {
-        ParameterDescription tmpParameterDescription = stringParameterDescriptionMap.get(p);
-        if (tmpParameterDescription == null) {
-          return 1;
-        }
-        return tmpParameterDescription.getNames().length();
-      }).max().orElse(1);
-
-      for (String option : groupOptionListMap.get(group)) {
-        ParameterDescription parameterDescription = stringParameterDescriptionMap.get(option);
-        if (parameterDescription == null) {
-          logger.warn("Miss option:{}", option);
-          continue;
-        }
-        String tmpOptionDesc = String.format("%s\t\t\t%s%n",
-            Strings.padEnd(parameterDescription.getNames(), optionMaxLength, ' '),
-            upperFirst(parameterDescription.getDescription()));
-        helpStr.append(tmpOptionDesc);
-      }
-    }
-    jCommander.getConsole().println(helpStr.toString());
-  }
-
-  public static String upperFirst(String name) {
-    if (name.length() <= 1) {
-      return name;
-    }
-    name = name.substring(0, 1).toUpperCase() + name.substring(1);
-    return name;
-  }
-
-  private static String getCommitIdAbbrev() {
-    Properties properties = new Properties();
-    try {
-      InputStream in = Thread.currentThread()
-          .getContextClassLoader().getResourceAsStream("git.properties");
-      properties.load(in);
-    } catch (Exception e) {
-      logger.warn("Load resource failed,git.properties {}", e.getMessage());
-    }
-    return properties.getProperty("git.commit.id.abbrev");
-  }
-
-  private static Map<String, String[]> getOptionGroup() {
-    String[] tronOption = new String[] {"version", "help", "shellConfFileName", "logbackPath",
-        "eventSubscribe", "solidityNode", "keystoreFactory"};
-    String[] dbOption = new String[] {"outputDirectory"};
-    String[] witnessOption = new String[] {"witness", "privateKey"};
-    String[] vmOption = new String[] {"debug"};
-
-    Map<String, String[]> optionGroupMap = new LinkedHashMap<>();
-    optionGroupMap.put("tron", tronOption);
-    optionGroupMap.put("db", dbOption);
-    optionGroupMap.put("witness", witnessOption);
-    optionGroupMap.put("virtual machine", vmOption);
-
-    for (String[] optionList : optionGroupMap.values()) {
-      for (String option : optionList) {
-        try {
-          CommonParameter.class.getField(option);
-        } catch (NoSuchFieldException e) {
-          logger.warn("NoSuchFieldException:{},{}", option, e.getMessage());
-        }
-      }
-    }
-    return optionGroupMap;
-  }
-
   /**
    * set parameters.
    */
   public static void setParam(final String[] args, final String confFileName) {
-    try {
-      Arch.throwIfUnsupportedJavaVersion();
-    } catch (UnsupportedOperationException e) {
-      AnsiConsole.systemInstall();
-      // To avoid confusion caused by silent execution when using -h or -v flags,
-      // errors are explicitly logged to the console in this context.
-      // Console output is not required for errors in other scenarios.
-      System.out.println(ansi().fgRed().a(e.getMessage()).reset());
-      AnsiConsole.systemUninstall();
-      throw new TronError(e, TronError.ErrCode.JDK_VERSION);
-    }
-    JCommander.newBuilder().addObject(PARAMETER).build().parse(args);
-    if (PARAMETER.version) {
+    // 1. Parse CLI args into a separate object
+    CLIParameter cmd = new CLIParameter();
+    JCommander jc = JCommander.newBuilder().addObject(cmd).build();
+    jc.parse(args);
+
+    if (cmd.version) {
       printVersion();
       exit(0);
     }
-
-    if (PARAMETER.isHelp()) {
-      JCommander jCommander = JCommander.newBuilder().addObject(Args.PARAMETER).build();
-      jCommander.parse(args);
-      Args.printHelp(jCommander);
+    if (cmd.help) {
+      Args.printHelp(jc);
       exit(0);
     }
 
-    PARAMETER.setConfigFilePath(
-        StringUtils.isNoneBlank(PARAMETER.shellConfFileName)
-            ? PARAMETER.shellConfFileName : confFileName);
-    Config config = Configuration.getByFileName(PARAMETER.shellConfFileName, confFileName);
-    setParam(config);
+    // Resolve config file path
+    configFilePath = StringUtils.isNoneBlank(cmd.shellConfFileName)
+        ? cmd.shellConfFileName : confFileName;
+    Config config = Configuration.getByFileName(configFilePath);
+
+    // 2. Config overrides defaults
+    applyConfigParams(config);
+
+    // 3. CLI overrides Config (highest priority)
+    applyCLIParams(cmd, jc);
+
+    // 4. Init witness (depends on CLI witness flag)
+    initLocalWitnesses(config, cmd);
   }
 
   /**
-   * set parameters.
+   * Apply parameters from config file.
    */
-  public static void setParam(final Config config) {
+  public static void applyConfigParams(
+      final Config config) {
 
     Wallet.setAddressPreFixByte(ADD_PRE_FIX_BYTE_MAINNET);
     Wallet.setAddressPreFixString(Constant.ADD_PRE_FIX_STRING_MAINNET);
 
     PARAMETER.cryptoEngine = config.hasPath(ConfigKey.CRYPTO_ENGINE) ? config
         .getString(ConfigKey.CRYPTO_ENGINE) : Constant.ECKey_ENGINE;
-
-    localWitnesses = new WitnessInitializer(config).initLocalWitnesses();
-    if (PARAMETER.isWitness()
-        && CollectionUtils.isEmpty(localWitnesses.getPrivateKeys())) {
-      throw new TronError("This is a witness node, but localWitnesses is null",
-          TronError.ErrCode.WITNESS_INIT);
-    }
 
     if (config.hasPath(ConfigKey.VM_SUPPORT_CONSTANT)) {
       PARAMETER.supportConstant = config.getBoolean(ConfigKey.VM_SUPPORT_CONSTANT);
@@ -509,37 +227,14 @@ public class Args extends CommonParameter {
 
     PARAMETER.storage = new Storage();
 
-    PARAMETER.storage.setDbEngine(Optional.ofNullable(PARAMETER.storageDbEngine)
-        .filter(StringUtils::isNotEmpty)
-        .orElse(Storage.getDbEngineFromConfig(config)));
-
-    PARAMETER.storage.setDbSync(Optional.ofNullable(PARAMETER.storageDbSynchronous)
-        .filter(StringUtils::isNotEmpty)
-        .map(Boolean::valueOf)
-        .orElse(Storage.getDbVersionSyncFromConfig(config)));
-
-    PARAMETER.storage.setContractParseSwitch(Optional.ofNullable(PARAMETER.contractParseEnable)
-        .filter(StringUtils::isNotEmpty)
-        .map(Boolean::valueOf)
-        .orElse(Storage.getContractParseSwitchFromConfig(config)));
-
-    PARAMETER.storage.setDbDirectory(Optional.ofNullable(PARAMETER.storageDbDirectory)
-        .filter(StringUtils::isNotEmpty)
-        .orElse(Storage.getDbDirectoryFromConfig(config)));
-
-    PARAMETER.storage.setIndexDirectory(Optional.ofNullable(PARAMETER.storageIndexDirectory)
-        .filter(StringUtils::isNotEmpty)
-        .orElse(Storage.getIndexDirectoryFromConfig(config)));
-
-    PARAMETER.storage.setIndexSwitch(Optional.ofNullable(PARAMETER.storageIndexSwitch)
-        .filter(StringUtils::isNotEmpty)
-        .orElse(Storage.getIndexSwitchFromConfig(config)));
-
-    PARAMETER.storage
-        .setTransactionHistorySwitch(
-            Optional.ofNullable(PARAMETER.storageTransactionHistorySwitch)
-                .filter(StringUtils::isNotEmpty)
-                .orElse(Storage.getTransactionHistorySwitchFromConfig(config)));
+    PARAMETER.storage.setDbEngine(Storage.getDbEngineFromConfig(config));
+    PARAMETER.storage.setDbSync(Storage.getDbVersionSyncFromConfig(config));
+    PARAMETER.storage.setContractParseSwitch(Storage.getContractParseSwitchFromConfig(config));
+    PARAMETER.storage.setDbDirectory(Storage.getDbDirectoryFromConfig(config));
+    PARAMETER.storage.setIndexDirectory(Storage.getIndexDirectoryFromConfig(config));
+    PARAMETER.storage.setIndexSwitch(Storage.getIndexSwitchFromConfig(config));
+    PARAMETER.storage.setTransactionHistorySwitch(
+        Storage.getTransactionHistorySwitchFromConfig(config));
 
     PARAMETER.storage
         .setCheckpointVersion(Storage.getCheckpointVersionFromConfig(config));
@@ -558,7 +253,8 @@ public class Args extends CommonParameter {
     PARAMETER.storage.setDbRoots(config);
 
     PARAMETER.seedNode = new SeedNode();
-    PARAMETER.seedNode.setAddressList(loadSeeds(config));
+    PARAMETER.seedNode.setAddressList(
+        getInetSocketAddress(config, ConfigKey.SEED_NODE_IP_LIST, false));
 
     if (config.hasPath(ConfigKey.GENESIS_BLOCK)) {
       PARAMETER.genesisBlock = new GenesisBlock();
@@ -1292,6 +988,166 @@ public class Args extends CommonParameter {
     logConfig();
   }
 
+  /**
+   * Apply CLI parameters that were explicitly passed.
+   * Only assigned parameters override Config values.
+   */
+  private static void applyCLIParams(CLIParameter cmd, JCommander jc) {
+    Set<String> assigned = jc.getParameters().stream()
+        .filter(ParameterDescription::isAssigned)
+        .map(ParameterDescription::getLongestName)
+        .collect(Collectors.toSet());
+
+    if (assigned.contains("--output-directory")) {
+      PARAMETER.outputDirectory = cmd.outputDirectory;
+    }
+    if (assigned.contains("--witness")) {
+      PARAMETER.witness = cmd.witness;
+    }
+    if (assigned.contains("--support-constant")) {
+      PARAMETER.supportConstant = cmd.supportConstant;
+    }
+    if (assigned.contains("--max-energy-limit-for-constant")) {
+      PARAMETER.maxEnergyLimitForConstant = cmd.maxEnergyLimitForConstant;
+    }
+    if (assigned.contains("--lru-cache-size")) {
+      PARAMETER.lruCacheSize = cmd.lruCacheSize;
+    }
+    if (assigned.contains("--debug")) {
+      PARAMETER.debug = cmd.debug;
+    }
+    if (assigned.contains("--min-time-ratio")) {
+      PARAMETER.minTimeRatio = cmd.minTimeRatio;
+    }
+    if (assigned.contains("--max-time-ratio")) {
+      PARAMETER.maxTimeRatio = cmd.maxTimeRatio;
+    }
+    if (assigned.contains("--save-internaltx")) {
+      PARAMETER.saveInternalTx = cmd.saveInternalTx;
+    }
+    if (assigned.contains("--save-featured-internaltx")) {
+      PARAMETER.saveFeaturedInternalTx = cmd.saveFeaturedInternalTx;
+    }
+    if (assigned.contains("--save-cancel-all-unfreeze-v2-details")) {
+      PARAMETER.saveCancelAllUnfreezeV2Details = cmd.saveCancelAllUnfreezeV2Details;
+    }
+    if (assigned.contains("--long-running-time")) {
+      PARAMETER.longRunningTime = cmd.longRunningTime;
+    }
+    if (assigned.contains("--max-connect-number")) {
+      PARAMETER.maxHttpConnectNumber = cmd.maxHttpConnectNumber;
+    }
+    if (assigned.contains("--storage-db-directory")) {
+      PARAMETER.storage.setDbDirectory(cmd.storageDbDirectory);
+    }
+    if (assigned.contains("--storage-db-engine")) {
+      PARAMETER.storage.setDbEngine(cmd.storageDbEngine);
+    }
+    if (assigned.contains("--storage-db-synchronous")) {
+      PARAMETER.storage.setDbSync(Boolean.valueOf(cmd.storageDbSynchronous));
+    }
+    if (assigned.contains("--contract-parse-enable")) {
+      PARAMETER.storage.setContractParseSwitch(Boolean.valueOf(cmd.contractParseEnable));
+    }
+    if (assigned.contains("--storage-index-directory")) {
+      PARAMETER.storage.setIndexDirectory(cmd.storageIndexDirectory);
+    }
+    if (assigned.contains("--storage-index-switch")) {
+      PARAMETER.storage.setIndexSwitch(cmd.storageIndexSwitch);
+    }
+    if (assigned.contains("--storage-transactionHistory-switch")) {
+      PARAMETER.storage.setTransactionHistorySwitch(cmd.storageTransactionHistorySwitch);
+    }
+    if (assigned.contains("--fast-forward")) {
+      PARAMETER.fastForward = cmd.fastForward;
+    }
+    if (assigned.contains("--solidity")) {
+      PARAMETER.solidityNode = cmd.solidityNode;
+    }
+    if (assigned.contains("--keystore-factory")) {
+      PARAMETER.keystoreFactory = cmd.keystoreFactory;
+    }
+    if (assigned.contains("--rpc-thread")) {
+      PARAMETER.rpcThreadNum = cmd.rpcThreadNum;
+    }
+    if (assigned.contains("--solidity-thread")) {
+      PARAMETER.solidityThreads = cmd.solidityThreads;
+    }
+    if (assigned.contains("--validate-sign-thread")) {
+      PARAMETER.validateSignThreadNum = cmd.validateSignThreadNum;
+    }
+    if (assigned.contains("--trust-node")) {
+      PARAMETER.trustNodeAddr = cmd.trustNodeAddr;
+    }
+    if (assigned.contains("--es")) {
+      PARAMETER.eventSubscribe = cmd.eventSubscribe;
+    }
+    if (assigned.contains("--p2p-disable")) {
+      PARAMETER.p2pDisable = cmd.p2pDisable;
+    }
+    if (assigned.contains("--history-balance-lookup")) {
+      PARAMETER.historyBalanceLookup = cmd.historyBalanceLookup;
+    }
+    if (assigned.contains("--log-config")) {
+      PARAMETER.logbackPath = cmd.logbackPath;
+    }
+    if (!cmd.seedNodes.isEmpty()) {
+      List<InetSocketAddress> seeds = new ArrayList<>();
+      for (String s : cmd.seedNodes) {
+        seeds.add(NetUtil.parseInetSocketAddress(s));
+      }
+      PARAMETER.seedNode.setAddressList(seeds);
+    }
+  }
+
+  private static void initLocalWitnesses(Config config, CLIParameter cmd) {
+    // not a witness node, skip
+    if (!PARAMETER.isWitness()) {
+      localWitnesses = new LocalWitnesses();
+      return;
+    }
+
+    // path 1: CLI --private-key
+    if (StringUtils.isNotBlank(cmd.privateKey)) {
+      localWitnesses = WitnessInitializer.initFromCLIPrivateKey(
+          cmd.privateKey, cmd.witnessAddress);
+      return;
+    }
+
+    String witnessAddr = config.hasPath(ConfigKey.LOCAL_WITNESS_ACCOUNT_ADDRESS)
+        ? config.getString(ConfigKey.LOCAL_WITNESS_ACCOUNT_ADDRESS) : null;
+
+    // path 2: config localwitness (private key list)
+    if (config.hasPath(ConfigKey.LOCAL_WITNESS)) {
+      List<String> keys = config.getStringList(ConfigKey.LOCAL_WITNESS);
+      if (!keys.isEmpty()) {
+        localWitnesses = WitnessInitializer.initFromCFGPrivateKey(keys, witnessAddr);
+        return;
+      }
+    }
+
+    // path 3: config localwitnesskeystore + password
+    if (config.hasPath(ConfigKey.LOCAL_WITNESS_KEYSTORE)) {
+      List<String> keystores = config.getStringList(ConfigKey.LOCAL_WITNESS_KEYSTORE);
+      if (!keystores.isEmpty()) {
+        localWitnesses = WitnessInitializer.initFromKeystore(
+            keystores, cmd.password, witnessAddr);
+        return;
+      }
+    }
+
+    // no private key source configured
+    throw new TronError("This is a witness node, but localWitnesses is null",
+        TronError.ErrCode.WITNESS_INIT);
+  }
+
+  @VisibleForTesting
+  public static void clearParam() {
+    CommonParameter.reset();
+    configFilePath = "";
+    localWitnesses = null;
+  }
+
   private static long getProposalExpirationTime(final Config config) {
     if (config.hasPath(ConfigKey.COMMITTEE_PROPOSAL_EXPIRE_TIME)) {
       throw new TronError("It is not allowed to configure committee.proposalExpireTime in "
@@ -1468,19 +1324,6 @@ public class Args extends CommonParameter {
     return eventPluginConfig;
   }
 
-  private static List<InetSocketAddress> loadSeeds(final com.typesafe.config.Config config) {
-    List<InetSocketAddress> inetSocketAddressList = new ArrayList<>();
-    if (PARAMETER.seedNodes != null && !PARAMETER.seedNodes.isEmpty()) {
-      for (String s : PARAMETER.seedNodes) {
-        InetSocketAddress inetSocketAddress = NetUtil.parseInetSocketAddress(s);
-        inetSocketAddressList.add(inetSocketAddress);
-      }
-    } else {
-      inetSocketAddressList = getInetSocketAddress(config, ConfigKey.SEED_NODE_IP_LIST, false);
-    }
-
-    return inetSocketAddressList;
-  }
 
   public static PublishConfig loadDnsPublishConfig(final com.typesafe.config.Config config) {
     PublishConfig publishConfig = new PublishConfig();
@@ -1792,6 +1635,125 @@ public class Args extends CommonParameter {
       return this.outputDirectory + File.separator;
     }
     return this.outputDirectory;
+  }
+
+  // ── CLI help / version utilities ─────────────────
+
+  private static void printVersion() {
+    Properties properties = new Properties();
+    boolean noGitProperties = true;
+    try {
+      InputStream in = Thread.currentThread()
+          .getContextClassLoader().getResourceAsStream("git.properties");
+      if (in != null) {
+        noGitProperties = false;
+        properties.load(in);
+      }
+    } catch (IOException e) {
+      logger.error(e.getMessage());
+    }
+    JCommander jCommander = new JCommander();
+    jCommander.getConsole().println("OS : " + System.getProperty("os.name"));
+    jCommander.getConsole().println("JVM : " + System.getProperty("java.vendor") + " "
+        + System.getProperty("java.version") + " " + System.getProperty("os.arch"));
+    if (!noGitProperties) {
+      jCommander.getConsole().println("Git : " + properties.getProperty("git.commit.id"));
+    }
+    jCommander.getConsole().println("Version : " + Version.getVersion());
+    jCommander.getConsole().println("Code : " + Version.VERSION_CODE);
+  }
+
+  public static void printHelp(JCommander jCommander) {
+    List<ParameterDescription> parameterDescriptionList = jCommander.getParameters();
+    Map<String, ParameterDescription> stringParameterDescriptionMap = new HashMap<>();
+    for (ParameterDescription parameterDescription : parameterDescriptionList) {
+      String parameterName = parameterDescription.getParameterized().getName();
+      stringParameterDescriptionMap.put(parameterName, parameterDescription);
+    }
+
+    StringBuilder helpStr = new StringBuilder();
+    helpStr.append("Name:\n\tFullNode - the java-tron command line interface\n");
+    String programName = Strings.isNullOrEmpty(jCommander.getProgramName()) ? "FullNode.jar" :
+        jCommander.getProgramName();
+    helpStr.append(String.format("%nUsage: java -jar %s [options] [seedNode <seedNode> ...]%n",
+        programName));
+    helpStr.append(String.format("%nVERSION: %n%s-%s%n", Version.getVersion(),
+        getCommitIdAbbrev()));
+
+    Map<String, String[]> groupOptionListMap = Args.getOptionGroup();
+    for (Map.Entry<String, String[]> entry : groupOptionListMap.entrySet()) {
+      String group = entry.getKey();
+      helpStr.append(String.format("%n%s OPTIONS:%n", group.toUpperCase()));
+      int optionMaxLength = Arrays.stream(entry.getValue()).mapToInt(p -> {
+        ParameterDescription tmpParameterDescription = stringParameterDescriptionMap.get(p);
+        if (tmpParameterDescription == null) {
+          return 1;
+        }
+        return tmpParameterDescription.getNames().length();
+      }).max().orElse(1);
+
+      for (String option : groupOptionListMap.get(group)) {
+        ParameterDescription parameterDescription = stringParameterDescriptionMap.get(option);
+        if (parameterDescription == null) {
+          logger.warn("Miss option:{}", option);
+          continue;
+        }
+        String tmpOptionDesc = String.format("%s\t\t\t%s%n",
+            Strings.padEnd(parameterDescription.getNames(), optionMaxLength, ' '),
+            upperFirst(parameterDescription.getDescription()));
+        helpStr.append(tmpOptionDesc);
+      }
+    }
+    jCommander.getConsole().println(helpStr.toString());
+  }
+
+  public static String upperFirst(String name) {
+    if (name.length() <= 1) {
+      return name;
+    }
+    name = name.substring(0, 1).toUpperCase() + name.substring(1);
+    return name;
+  }
+
+  private static String getCommitIdAbbrev() {
+    Properties properties = new Properties();
+    try {
+      InputStream in = Thread.currentThread()
+          .getContextClassLoader().getResourceAsStream("git.properties");
+      if (in == null) {
+        logger.warn("git.properties not found on classpath");
+        return "";
+      }
+      properties.load(in);
+    } catch (IOException e) {
+      logger.warn("Load resource failed,git.properties {}", e.getMessage());
+    }
+    return properties.getProperty("git.commit.id.abbrev");
+  }
+
+  private static Map<String, String[]> getOptionGroup() {
+    String[] tronOption = new String[] {"version", "help", "shellConfFileName", "logbackPath",
+        "eventSubscribe", "solidityNode", "keystoreFactory"};
+    String[] dbOption = new String[] {"outputDirectory"};
+    String[] witnessOption = new String[] {"witness", "privateKey"};
+    String[] vmOption = new String[] {"debug"};
+
+    Map<String, String[]> optionGroupMap = new LinkedHashMap<>();
+    optionGroupMap.put("tron", tronOption);
+    optionGroupMap.put("db", dbOption);
+    optionGroupMap.put("witness", witnessOption);
+    optionGroupMap.put("virtual machine", vmOption);
+
+    for (String[] optionList : optionGroupMap.values()) {
+      for (String option : optionList) {
+        try {
+          CLIParameter.class.getField(option);
+        } catch (NoSuchFieldException e) {
+          logger.warn("NoSuchFieldException:{},{}", option, e.getMessage());
+        }
+      }
+    }
+    return optionGroupMap;
   }
 }
 
