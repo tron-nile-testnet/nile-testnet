@@ -56,7 +56,7 @@ public class TransactionRegisterTest {
       threads[i] = new Thread(() -> {
         try {
           TransactionRegister.registerActuator();
-        } catch (Exception e) {
+        } catch (Throwable e) {
           testPassed.set(false);
         }
       });
