@@ -124,8 +124,8 @@ public class VoteWitnessCost3Test extends BaseTest {
     // witness array zero, amount array non-zero
     Program program = mockProgram(0, 0, 64, 1, 0);
     long cost = EnergyCost.getVoteWitnessCost3(program);
-    // witnessMemNeeded = 0 (size is zero)
-    // amountArraySize = 1 * 32 + 32 = 64, memNeeded = 64 + 64 = 128
+    // witnessArraySize = 0 * 32 + 32 = 32, witnessMemNeeded = 0 + 32 = 32
+    // amountArraySize = 1 * 32 + 32 = 64, amountMemNeeded = 64 + 64 = 128
     // memWords = 128 / 32 = 4
     // memEnergy = 3 * 4 + 4 * 4 / 512 = 12
     assertEquals(30012, cost);
