@@ -52,6 +52,7 @@ import org.tron.common.crypto.zksnark.BN128G2;
 import org.tron.common.crypto.zksnark.Fp;
 import org.tron.common.crypto.zksnark.PairingCheck;
 import org.tron.common.es.ExecutorServiceManager;
+import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.runtime.ProgramResult;
 import org.tron.common.runtime.vm.DataWord;
@@ -639,6 +640,10 @@ public class PrecompiledContracts {
       byte[] expHighBytes = parseBytes(data, addSafely(ARGS_OFFSET, baseLen), min(expLen, 32,
           VMConfig.disableJavaLangMath()));
 
+      if (VMConfig.allowTvmOsaka()) {
+        return getEnergyTIP7883(baseLen, modLen, expHighBytes, expLen);
+      }
+
       long multComplexity = getMultComplexity(max(baseLen, modLen, VMConfig.disableJavaLangMath()));
       long adjExpLen = getAdjustedExponentLength(expHighBytes, expLen);
 
@@ -720,6 +725,63 @@ public class PrecompiledContracts {
       } else {
         return 8 * (expLen - 32) + highestBit;
       }
+    }
+
+    /**
+     * TIP-7883: ModExp gas cost increase.
+     * New pricing formula with higher minimum cost and no divisor.
+     */
+    private long getEnergyTIP7883(int baseLen, int modLen,
+                                  byte[] expHighBytes, int expLen) {
+      long multComplexity = getMultComplexityTIP7883(baseLen, modLen);
+      long iterCount = getIterationCountTIP7883(expHighBytes, expLen);
+
+      // use big numbers to stay safe in case of overflow
+      BigInteger energy = BigInteger.valueOf(multComplexity)
+          .multiply(BigInteger.valueOf(iterCount));
+
+      BigInteger minEnergy = BigInteger.valueOf(500);
+      if (isLessThan(energy, minEnergy)) {
+        return 500L;
+      }
+
+      return isLessThan(energy, BigInteger.valueOf(Long.MAX_VALUE)) ? energy.longValueExact()
+          : Long.MAX_VALUE;
+    }
+
+    /**
+     * TIP-7883: New multiplication complexity formula.
+     * Minimal complexity of 16; doubled complexity for base/modulus > 32 bytes.
+     */
+    private long getMultComplexityTIP7883(int baseLen, int modLen) {
+      long maxLength = StrictMathWrapper.max(baseLen, modLen);
+      long words = (maxLength + 7) / 8; // ceil(maxLength / 8)
+      if (maxLength <= 32) {
+        return 16;
+      }
+      return StrictMathWrapper.multiplyExact(2L, StrictMathWrapper.multiplyExact(words, words));
+    }
+
+    /**
+     * TIP-7883: New iteration count formula.
+     * Multiplier for exponents > 32 bytes increased from 8 to 16.
+     */
+    private long getIterationCountTIP7883(byte[] expHighBytes, long expLen) {
+      int leadingZeros = numberOfLeadingZeros(expHighBytes);
+      int highestBit = 8 * expHighBytes.length - leadingZeros;
+
+      if (highestBit > 0) {
+        highestBit--;
+      }
+
+      long iterCount;
+      if (expLen <= 32) {
+        iterCount = highestBit;
+      } else {
+        iterCount = 16 * (expLen - 32) + highestBit;
+      }
+
+      return StrictMathWrapper.max(iterCount, 1L);
     }
 
     private int parseLen(byte[] data, int idx) {
