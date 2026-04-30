@@ -116,11 +116,11 @@ public class JsonrpcServiceTest extends BaseTest {
     blockCapsule0 = BlockUtil.newGenesisBlockCapsule();
     blockCapsule1 = new BlockCapsule(LATEST_BLOCK_NUM, Sha256Hash.wrap(ByteString.copyFrom(
         ByteArray.fromHexString(
-            "0304f784e4e7bae517bcab94c3e0c9214fb4ac7ff9d7d5a937d1f40031f87b81"))), 1,
+            "0304f784e4e7bae517bcab94c3e0c9214fb4ac7ff9d7d5a937d1f40031f87b81"))), 1000000,
         ByteString.copyFromUtf8("testAddress"));
     blockCapsule2 = new BlockCapsule(LATEST_SOLIDIFIED_BLOCK_NUM, Sha256Hash.wrap(
         ByteString.copyFrom(ByteArray.fromHexString(
-            "9938a342238077182498b464ac029222ae169360e540d1fd6aee7c2ae9575a06"))), 1,
+            "9938a342238077182498b464ac029222ae169360e540d1fd6aee7c2ae9575a06"))), 2000000,
         ByteString.copyFromUtf8("testAddress"));
 
     TransferContract transferContract1 = TransferContract.newBuilder().setAmount(1L)
@@ -142,13 +142,15 @@ public class JsonrpcServiceTest extends BaseTest {
 
     transactionCapsule1 = new TransactionCapsule(transferContract1, ContractType.TransferContract);
     transactionCapsule1.setBlockNum(blockCapsule1.getNum());
+    transactionCapsule1.setTimestamp(blockCapsule1.getTimeStamp());
     TransactionCapsule transactionCapsule2 = new TransactionCapsule(transferContract2,
         ContractType.TransferContract);
     transactionCapsule2.setBlockNum(blockCapsule1.getNum());
+    transactionCapsule2.setTimestamp(blockCapsule1.getTimeStamp());
     TransactionCapsule transactionCapsule3 = new TransactionCapsule(transferContract3,
         ContractType.TransferContract);
     transactionCapsule3.setBlockNum(blockCapsule2.getNum());
-
+    transactionCapsule3.setTimestamp(blockCapsule2.getTimeStamp());
     blockCapsule1.addTransaction(transactionCapsule1);
     blockCapsule1.addTransaction(transactionCapsule2);
     blockCapsule2.addTransaction(transactionCapsule3);
@@ -188,6 +190,7 @@ public class JsonrpcServiceTest extends BaseTest {
       TransactionInfoCapsule transactionInfoCapsule = new TransactionInfoCapsule();
       transactionInfoCapsule.setId(tx.getTransactionId().getBytes());
       transactionInfoCapsule.setBlockNumber(blockCapsule1.getNum());
+      transactionInfoCapsule.setBlockTimeStamp(blockCapsule1.getTimeStamp());
       transactionInfoCapsule.addAllLog(logs);
       transactionRetCapsule1.addTransactionInfo(transactionInfoCapsule.getInstance());
     });
@@ -199,6 +202,7 @@ public class JsonrpcServiceTest extends BaseTest {
       TransactionInfoCapsule transactionInfoCapsule = new TransactionInfoCapsule();
       transactionInfoCapsule.setId(tx.getTransactionId().getBytes());
       transactionInfoCapsule.setBlockNumber(blockCapsule2.getNum());
+      transactionInfoCapsule.setBlockTimeStamp(blockCapsule2.getTimeStamp());
       transactionRetCapsule2.addTransactionInfo(transactionInfoCapsule.getInstance());
     });
     dbManager.getTransactionRetStore()
@@ -1113,6 +1117,30 @@ public class JsonrpcServiceTest extends BaseTest {
   }
 
   @Test
+  public void testGetLogs() {
+    try {
+      LogFilterElement[] logs = tronJsonRpc.getLogs(
+          new FilterRequest("0x2710", "0x2710", null, null, null));
+      Assert.assertTrue(logs.length > 0);
+      LogFilterElement log = logs[0];
+      Assert.assertEquals(ByteArray.toJsonHex(blockCapsule1.getNum()), log.getBlockNumber());
+      Assert.assertEquals(ByteArray.toJsonHex(blockCapsule1.getBlockId().toString()),
+          log.getBlockHash());
+      Assert.assertEquals("0x0", log.getLogIndex());
+      Assert.assertFalse(log.isRemoved());
+      Assert.assertEquals(1, log.getTopics().length);
+      Assert.assertEquals(
+          "0x0000000000000000000000000000000000000000000000000000746f70696331",
+          log.getTopics()[0]);
+      Assert.assertEquals(ByteArray.toJsonHex("data1".getBytes()), log.getData());
+      Assert.assertEquals(ByteArray.toJsonHex(blockCapsule1.getTimeStamp() / 1000),
+          log.getBlockTimestamp());
+    } catch (Exception e) {
+      Assert.fail();
+    }
+  }
+
+  @Test
   public void testNewFilterFinalizedBlock() {
 
     try {
@@ -1239,6 +1267,10 @@ public class JsonrpcServiceTest extends BaseTest {
 
         Assert.assertEquals(
             JSON.toJSONString(transactionReceipt), JSON.toJSONString(transactionReceipt1));
+
+        Assert.assertTrue(transactionReceipt1.getLogs().length > 0);
+        Assert.assertEquals(ByteArray.toJsonHex(blockCapsule1.getTimeStamp() / 1000),
+            transactionReceipt1.getLogs()[0].getBlockTimestamp());
       }
     } catch (JsonRpcInvalidParamsException | JsonRpcInternalException e) {
       throw new RuntimeException(e);
