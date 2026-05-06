@@ -964,10 +964,55 @@ public class OperationsTest extends BaseTest {
     testOperations(program);
     Assert.assertEquals(new DataWord(255), program.getStack().pop());
 
+    // Vectors with CLZ in [128, 254] — exercise the (byte) cast path in
+    // DataWord.of(byte) where the unsigned int would otherwise become a
+    // negative byte. Read-back goes through new BigInteger(1, data), so the
+    // bit pattern must round-trip as unsigned.
+    // CLZ = 128 (boundary): byte[16] high bit set
+    val = new byte[32];
+    val[16] = (byte) 0x80;
+    op = buildCLZBytecode(val);
+    program = new Program(op, op, invoke, interTrx);
+    testOperations(program);
+    Assert.assertEquals(new DataWord(128), program.getStack().pop());
+
+    // CLZ = 192 (mid-range): byte[24] high bit set
+    val = new byte[32];
+    val[24] = (byte) 0x80;
+    op = buildCLZBytecode(val);
+    program = new Program(op, op, invoke, interTrx);
+    testOperations(program);
+    Assert.assertEquals(new DataWord(192), program.getStack().pop());
+
+    // CLZ = 247 (near-upper): 30 zero bytes, then 0x01
+    val = new byte[32];
+    val[30] = 0x01;
+    op = buildCLZBytecode(val);
+    program = new Program(op, op, invoke, interTrx);
+    testOperations(program);
+    Assert.assertEquals(new DataWord(247), program.getStack().pop());
+
     // Verify energy cost = LOW_TIER(5) + PUSH32 cost(3) = 8
     Assert.assertEquals(8, program.getResult().getEnergyUsed());
 
     VMConfig.initAllowTvmOsaka(0);
+  }
+
+  @Test
+  public void testCLZRejectedWhenOsakaDisabled() throws ContractValidateException {
+    VMConfig.initAllowTvmOsaka(0);
+
+    invoke = new ProgramInvokeMockImpl();
+    Protocol.Transaction trx = Protocol.Transaction.getDefaultInstance();
+    InternalTransaction interTrx =
+        new InternalTransaction(trx, InternalTransaction.TrxType.TRX_UNKNOWN_TYPE);
+
+    byte[] op = buildCLZBytecode(new byte[32]);
+    program = new Program(op, op, invoke, interTrx);
+    testOperations(program);
+
+    Assert.assertTrue(program.getResult().getException()
+        instanceof Program.IllegalOperationException);
   }
 
   // Build bytecode: PUSH32 <value> CLZ
