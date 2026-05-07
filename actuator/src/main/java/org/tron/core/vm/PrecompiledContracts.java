@@ -755,10 +755,11 @@ public class PrecompiledContracts {
      */
     private long getMultComplexityTIP7883(int baseLen, int modLen) {
       long maxLength = StrictMathWrapper.max(baseLen, modLen);
-      long words = (maxLength + 7) / 8; // ceil(maxLength / 8)
       if (maxLength <= 32) {
         return 16;
       }
+      // ceil(maxLength / 8)
+      long words = StrictMathWrapper.floorDiv(StrictMathWrapper.addExact(maxLength, 7L), 8L);
       return StrictMathWrapper.multiplyExact(2L, StrictMathWrapper.multiplyExact(words, words));
     }
 
@@ -768,17 +769,20 @@ public class PrecompiledContracts {
      */
     private long getIterationCountTIP7883(byte[] expHighBytes, long expLen) {
       int leadingZeros = numberOfLeadingZeros(expHighBytes);
-      int highestBit = 8 * expHighBytes.length - leadingZeros;
+      long highestBit = StrictMathWrapper.subtractExact(
+          StrictMathWrapper.multiplyExact(8L, expHighBytes.length), leadingZeros);
 
       if (highestBit > 0) {
-        highestBit--;
+        highestBit = StrictMathWrapper.subtractExact(highestBit, 1L);
       }
 
       long iterCount;
       if (expLen <= 32) {
         iterCount = highestBit;
       } else {
-        iterCount = 16 * (expLen - 32) + highestBit;
+        iterCount = StrictMathWrapper.addExact(
+            StrictMathWrapper.multiplyExact(16L, StrictMathWrapper.subtractExact(expLen, 32L)),
+            highestBit);
       }
 
       return StrictMathWrapper.max(iterCount, 1L);
