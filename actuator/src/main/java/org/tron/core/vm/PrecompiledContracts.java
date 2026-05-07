@@ -3,6 +3,8 @@ package org.tron.core.vm;
 import static java.util.Arrays.copyOfRange;
 import static org.tron.common.math.Maths.max;
 import static org.tron.common.math.Maths.min;
+import static org.tron.common.math.StrictMathWrapper.multiplyExact;
+import static org.tron.common.math.StrictMathWrapper.subtractExact;
 import static org.tron.common.runtime.vm.DataWord.WORD_SIZE;
 import static org.tron.common.utils.BIUtil.addSafely;
 import static org.tron.common.utils.BIUtil.isLessThan;
@@ -418,8 +420,8 @@ public class PrecompiledContracts {
     if (data == null || data.length % WORD_SIZE != 0) {
       return false;
     }
-    int tail = data.length - headerWords * WORD_SIZE;
-    return tail >= 0 && tail % (itemWords * WORD_SIZE) == 0;
+    long tail = subtractExact(data.length, multiplyExact(headerWords, WORD_SIZE));
+    return tail > 0 && tail % multiplyExact(itemWords, WORD_SIZE) == 0;
   }
 
   public abstract static class PrecompiledContract {
