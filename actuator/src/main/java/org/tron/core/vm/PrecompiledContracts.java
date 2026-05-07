@@ -40,6 +40,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
+import org.bouncycastle.asn1.sec.SECNamedCurves;
+import org.bouncycastle.asn1.x9.X9ECParameters;
+import org.bouncycastle.crypto.params.ECDomainParameters;
+import org.bouncycastle.crypto.params.ECPublicKeyParameters;
+import org.bouncycastle.crypto.signers.ECDSASigner;
+import org.bouncycastle.math.ec.ECPoint;
 import org.tron.common.crypto.Blake2bfMessageDigest;
 import org.tron.common.crypto.Hash;
 import org.tron.common.crypto.Rsv;
@@ -106,6 +112,7 @@ public class PrecompiledContracts {
 
   private static final EthRipemd160 ethRipemd160 = new EthRipemd160();
   private static final Blake2F blake2F = new Blake2F();
+  private static final P256Verify p256Verify = new P256Verify();
 
   // FreezeV2 PrecompileContracts
   private static final GetChainParameter getChainParameter = new GetChainParameter();
@@ -199,6 +206,8 @@ public class PrecompiledContracts {
       "0000000000000000000000000000000000000000000000000000000000020003");
   private static final DataWord blake2FAddr = new DataWord(
       "0000000000000000000000000000000000000000000000000000000000020009");
+  private static final DataWord p256VerifyAddr = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000000000100");
 
   public static PrecompiledContract getOptimizedContractForConstant(PrecompiledContract contract) {
     try {
@@ -280,6 +289,9 @@ public class PrecompiledContracts {
     }
     if (VMConfig.allowTvmCompatibleEvm() && address.equals(blake2FAddr)) {
       return blake2F;
+    }
+    if (VMConfig.allowTvmOsaka() && address.equals(p256VerifyAddr)) {
+      return p256Verify;
     }
 
     if (VMConfig.allowTvmFreezeV2()) {
@@ -2218,6 +2230,61 @@ public class PrecompiledContracts {
       }
 
       return Pair.of(true, longTo32Bytes(acquiredResource));
+    }
+  }
+
+  public static class P256Verify extends PrecompiledContract {
+
+    private static final X9ECParameters CURVE = SECNamedCurves.getByName("secp256r1");
+    private static final ECDomainParameters DOMAIN = new ECDomainParameters(
+        CURVE.getCurve(), CURVE.getG(), CURVE.getN(), CURVE.getH());
+    private static final BigInteger N = CURVE.getN();
+    private static final BigInteger P = CURVE.getCurve().getField().getCharacteristic();
+    private static final int INPUT_LEN = 160;
+    private static final long ENERGY = 6900L;
+
+    @Override
+    public long getEnergyForData(byte[] data) {
+      return ENERGY;
+    }
+
+    @Override
+    public Pair<Boolean, byte[]> execute(byte[] data) {
+      if (data == null || data.length != INPUT_LEN) {
+        return Pair.of(true, EMPTY_BYTE_ARRAY);
+      }
+      try {
+        byte[] hash = copyOfRange(data, 0, 32);
+        BigInteger r = bytesToBigInteger(copyOfRange(data, 32, 64));
+        BigInteger s = bytesToBigInteger(copyOfRange(data, 64, 96));
+        BigInteger qx = bytesToBigInteger(copyOfRange(data, 96, 128));
+        BigInteger qy = bytesToBigInteger(copyOfRange(data, 128, 160));
+
+        if (r.signum() <= 0 || r.compareTo(N) >= 0
+            || s.signum() <= 0 || s.compareTo(N) >= 0) {
+          return Pair.of(true, EMPTY_BYTE_ARRAY);
+        }
+        if (qx.signum() < 0 || qx.compareTo(P) >= 0
+            || qy.signum() < 0 || qy.compareTo(P) >= 0) {
+          return Pair.of(true, EMPTY_BYTE_ARRAY);
+        }
+        if (qx.signum() == 0 && qy.signum() == 0) {
+          return Pair.of(true, EMPTY_BYTE_ARRAY);
+        }
+
+        ECPoint point = CURVE.getCurve().createPoint(qx, qy);
+        DOMAIN.validatePublicPoint(point);
+
+        ECDSASigner verifier = new ECDSASigner();
+        verifier.init(false, new ECPublicKeyParameters(point, DOMAIN));
+        boolean ok = verifier.verifySignature(hash, r, s);
+        return Pair.of(true, ok ? dataOne() : EMPTY_BYTE_ARRAY);
+      } catch (Exception e) {
+        // Off-curve point: createPoint / validatePublicPoint throw IllegalArgumentException.
+        // Crafted signature: BouncyCastle has a known NPE bug inside verifySignature.
+        // EIP-7951 mandates the precompile never reverts; map any failure to (true, empty).
+        return Pair.of(true, EMPTY_BYTE_ARRAY);
+      }
     }
   }
 
