@@ -88,4 +88,55 @@ public class VmConfigTest {
     assertEquals(3, VmConfig.fromConfig(
         withRef("vm { estimateEnergyMaxRetry = 3 }")).getEstimateEnergyMaxRetry());
   }
+
+  // ===========================================================================
+  // Constant-call timeout (issue #6681). The validation rule: any positive
+  // value is accepted, but zero/negative is rejected ONLY when the operator
+  // explicitly set the property in their config. Absence keeps the in-Java
+  // default (0L = "share the block-processing deadline").
+  // ===========================================================================
+
+  @Test
+  public void testConstantCallTimeoutDefaultWhenAbsent() {
+    // No path in the config, no entry in reference.conf -> default 0L kept,
+    // no validation triggered.
+    VmConfig vm = VmConfig.fromConfig(withRef());
+    assertEquals(0L, vm.getConstantCallTimeoutMs());
+  }
+
+  @Test
+  public void testConstantCallTimeoutAcceptsAnyPositiveValue() {
+    assertEquals(1L, VmConfig.fromConfig(
+        withRef("vm { constantCallTimeoutMs = 1 }")).getConstantCallTimeoutMs());
+    assertEquals(50L, VmConfig.fromConfig(
+        withRef("vm { constantCallTimeoutMs = 50 }")).getConstantCallTimeoutMs());
+    assertEquals(500L, VmConfig.fromConfig(
+        withRef("vm { constantCallTimeoutMs = 500 }")).getConstantCallTimeoutMs());
+    assertEquals(5_000L, VmConfig.fromConfig(
+        withRef("vm { constantCallTimeoutMs = 5000 }")).getConstantCallTimeoutMs());
+  }
+
+  @Test
+  public void testConstantCallTimeoutZeroRejectedWhenExplicitlyConfigured() {
+    // Operator wrote `= 0` in config -> treated as a misconfiguration even
+    // though it equals the in-Java default. Forces an explicit positive value.
+    try {
+      VmConfig.fromConfig(withRef("vm { constantCallTimeoutMs = 0 }"));
+      org.junit.Assert.fail("expected IllegalArgumentException for explicit 0");
+    } catch (IllegalArgumentException ex) {
+      org.junit.Assert.assertTrue(ex.getMessage(),
+          ex.getMessage().contains("constantCallTimeoutMs"));
+    }
+  }
+
+  @Test
+  public void testConstantCallTimeoutNegativeRejected() {
+    try {
+      VmConfig.fromConfig(withRef("vm { constantCallTimeoutMs = -1 }"));
+      org.junit.Assert.fail("expected IllegalArgumentException for negative ms");
+    } catch (IllegalArgumentException ex) {
+      org.junit.Assert.assertTrue(ex.getMessage(),
+          ex.getMessage().contains("constantCallTimeoutMs"));
+    }
+  }
 }
