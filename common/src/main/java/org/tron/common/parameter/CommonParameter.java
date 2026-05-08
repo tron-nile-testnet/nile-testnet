@@ -492,21 +492,6 @@ public class CommonParameter {
   public boolean nodeMetricsEnable = false;
   @Getter
   @Setter
-  public boolean metricsStorageEnable = false;
-  @Getter
-  @Setter
-  public String influxDbIp;
-  @Getter
-  @Setter
-  public int influxDbPort;
-  @Getter
-  @Setter
-  public String influxDbDatabase;
-  @Getter
-  @Setter
-  public int metricsReportInterval = 10;
-  @Getter
-  @Setter
   public boolean metricsPrometheusEnable = false;
   @Getter
   @Setter
