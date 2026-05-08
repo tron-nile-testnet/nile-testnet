@@ -625,6 +625,11 @@ public class PrecompiledContracts {
 
     private static final int UPPER_BOUND = 1024;
 
+    private static final long MIN_ENERGY_TIP7883 = 500L;
+
+    private static final BigInteger MIN_ENERGY_TIP7883_BI =
+        BigInteger.valueOf(MIN_ENERGY_TIP7883);
+
     @Override
     public long getEnergyForData(byte[] data) {
 
@@ -740,9 +745,8 @@ public class PrecompiledContracts {
       BigInteger energy = BigInteger.valueOf(multComplexity)
           .multiply(BigInteger.valueOf(iterCount));
 
-      BigInteger minEnergy = BigInteger.valueOf(500);
-      if (isLessThan(energy, minEnergy)) {
-        return 500L;
+      if (isLessThan(energy, MIN_ENERGY_TIP7883_BI)) {
+        return MIN_ENERGY_TIP7883;
       }
 
       return isLessThan(energy, BigInteger.valueOf(Long.MAX_VALUE)) ? energy.longValueExact()
