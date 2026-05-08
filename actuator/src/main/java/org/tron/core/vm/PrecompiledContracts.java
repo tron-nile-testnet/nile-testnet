@@ -58,6 +58,7 @@ import org.tron.common.crypto.zksnark.BN128G2;
 import org.tron.common.crypto.zksnark.Fp;
 import org.tron.common.crypto.zksnark.PairingCheck;
 import org.tron.common.es.ExecutorServiceManager;
+import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.runtime.ProgramResult;
 import org.tron.common.runtime.vm.DataWord;
@@ -636,6 +637,11 @@ public class PrecompiledContracts {
 
     private static final int UPPER_BOUND = 1024;
 
+    private static final long MIN_ENERGY_TIP7883 = 500L;
+
+    private static final BigInteger MIN_ENERGY_TIP7883_BI =
+        BigInteger.valueOf(MIN_ENERGY_TIP7883);
+
     @Override
     public long getEnergyForData(byte[] data) {
 
@@ -650,6 +656,10 @@ public class PrecompiledContracts {
 
       byte[] expHighBytes = parseBytes(data, addSafely(ARGS_OFFSET, baseLen), min(expLen, 32,
           VMConfig.disableJavaLangMath()));
+
+      if (VMConfig.allowTvmOsaka()) {
+        return getEnergyTIP7883(baseLen, modLen, expHighBytes, expLen);
+      }
 
       long multComplexity = getMultComplexity(max(baseLen, modLen, VMConfig.disableJavaLangMath()));
       long adjExpLen = getAdjustedExponentLength(expHighBytes, expLen);
@@ -732,6 +742,66 @@ public class PrecompiledContracts {
       } else {
         return 8 * (expLen - 32) + highestBit;
       }
+    }
+
+    /**
+     * TIP-7883: ModExp gas cost increase.
+     * New pricing formula with higher minimum cost and no divisor.
+     */
+    private long getEnergyTIP7883(int baseLen, int modLen,
+                                  byte[] expHighBytes, int expLen) {
+      long multComplexity = getMultComplexityTIP7883(baseLen, modLen);
+      long iterCount = getIterationCountTIP7883(expHighBytes, expLen);
+
+      // use big numbers to stay safe in case of overflow
+      BigInteger energy = BigInteger.valueOf(multComplexity)
+          .multiply(BigInteger.valueOf(iterCount));
+
+      if (isLessThan(energy, MIN_ENERGY_TIP7883_BI)) {
+        return MIN_ENERGY_TIP7883;
+      }
+
+      return isLessThan(energy, BigInteger.valueOf(Long.MAX_VALUE)) ? energy.longValueExact()
+          : Long.MAX_VALUE;
+    }
+
+    /**
+     * TIP-7883: New multiplication complexity formula.
+     * Minimal complexity of 16; doubled complexity for base/modulus > 32 bytes.
+     */
+    private long getMultComplexityTIP7883(int baseLen, int modLen) {
+      long maxLength = StrictMathWrapper.max(baseLen, modLen);
+      if (maxLength <= 32) {
+        return 16;
+      }
+      // ceil(maxLength / 8)
+      long words = StrictMathWrapper.floorDiv(StrictMathWrapper.addExact(maxLength, 7L), 8L);
+      return StrictMathWrapper.multiplyExact(2L, StrictMathWrapper.multiplyExact(words, words));
+    }
+
+    /**
+     * TIP-7883: New iteration count formula.
+     * Multiplier for exponents > 32 bytes increased from 8 to 16.
+     */
+    private long getIterationCountTIP7883(byte[] expHighBytes, long expLen) {
+      int leadingZeros = numberOfLeadingZeros(expHighBytes);
+      long highestBit = StrictMathWrapper.subtractExact(
+          StrictMathWrapper.multiplyExact(8L, expHighBytes.length), leadingZeros);
+
+      if (highestBit > 0) {
+        highestBit = StrictMathWrapper.subtractExact(highestBit, 1L);
+      }
+
+      long iterCount;
+      if (expLen <= 32) {
+        iterCount = highestBit;
+      } else {
+        iterCount = StrictMathWrapper.addExact(
+            StrictMathWrapper.multiplyExact(16L, StrictMathWrapper.subtractExact(expLen, 32L)),
+            highestBit);
+      }
+
+      return StrictMathWrapper.max(iterCount, 1L);
     }
 
     private int parseLen(byte[] data, int idx) {

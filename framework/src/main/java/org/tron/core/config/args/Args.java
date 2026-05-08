@@ -512,7 +512,6 @@ public class Args extends CommonParameter {
     PARAMETER.consensusLogicOptimization = cc.getConsensusLogicOptimization();
     PARAMETER.allowTvmCancun = cc.getAllowTvmCancun();
     PARAMETER.allowTvmBlob = cc.getAllowTvmBlob();
-    PARAMETER.allowTvmOsaka = cc.getAllowTvmOsaka();
     PARAMETER.unfreezeDelayDays = cc.getUnfreezeDelayDays();
     // allowReceiptsMerkleRoot not in CommonParameter — skip for now
     PARAMETER.allowAccountAssetOptimization = cc.getAllowAccountAssetOptimization();

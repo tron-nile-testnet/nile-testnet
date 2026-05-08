@@ -3004,7 +3004,7 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
     return Optional.ofNullable(getUnchecked(ALLOW_TVM_OSAKA))
         .map(BytesCapsule::getData)
         .map(ByteArray::toLong)
-        .orElse(CommonParameter.getInstance().getAllowTvmOsaka());
+        .orElse(0L);
   }
 
   public void saveAllowTvmOsaka(long value) {
