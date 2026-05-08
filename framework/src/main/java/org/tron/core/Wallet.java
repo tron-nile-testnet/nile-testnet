@@ -241,7 +241,6 @@ import org.tron.protos.contract.BalanceContract;
 import org.tron.protos.contract.BalanceContract.BlockBalanceTrace;
 import org.tron.protos.contract.BalanceContract.TransferContract;
 import org.tron.protos.contract.Common;
-import org.tron.protos.contract.ShieldContract.IncrementalMerkleTree;
 import org.tron.protos.contract.ShieldContract.IncrementalMerkleVoucherInfo;
 import org.tron.protos.contract.ShieldContract.OutputPoint;
 import org.tron.protos.contract.ShieldContract.OutputPointInfo;
@@ -569,41 +568,41 @@ public class Wallet {
         return builder.setResult(true).setCode(response_code.SUCCESS).build();
       }
     } catch (ValidateSignatureException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.SIGERROR)
           .setMessage(ByteString.copyFromUtf8("Validate signature error: " + e.getMessage()))
           .build();
     } catch (ContractValidateException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.CONTRACT_VALIDATE_ERROR)
           .setMessage(ByteString.copyFromUtf8(CONTRACT_VALIDATE_ERROR + e.getMessage()))
           .build();
     } catch (ContractExeException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.CONTRACT_EXE_ERROR)
           .setMessage(ByteString.copyFromUtf8("Contract execute error : " + e.getMessage()))
           .build();
     } catch (AccountResourceInsufficientException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.BANDWITH_ERROR)
           .setMessage(ByteString.copyFromUtf8("Account resource insufficient error."))
           .build();
     } catch (DupTransactionException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.DUP_TRANSACTION_ERROR)
           .setMessage(ByteString.copyFromUtf8("Dup transaction."))
           .build();
     } catch (TaposException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.TAPOS_ERROR)
           .setMessage(ByteString.copyFromUtf8("Tapos check error."))
           .build();
     } catch (TooBigTransactionException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.TOO_BIG_TRANSACTION_ERROR)
           .setMessage(ByteString.copyFromUtf8(e.getMessage())).build();
     } catch (TransactionExpirationException e) {
-      logger.warn(BROADCAST_TRANS_FAILED, txID, e.getMessage());
+      logger.info(BROADCAST_TRANS_FAILED, txID, e.getMessage());
       return builder.setResult(false).setCode(response_code.TRANSACTION_EXPIRATION_ERROR)
           .setMessage(ByteString.copyFromUtf8("Transaction expired"))
           .build();
@@ -2179,23 +2178,6 @@ public class Wallet {
     return result.build();
   }
 
-  public IncrementalMerkleTree getMerkleTreeOfBlock(long blockNum) throws ZksnarkException {
-    checkAllowShieldedTransactionApi();
-    if (blockNum < 0) {
-      return null;
-    }
-
-    try {
-      if (chainBaseManager.getMerkleTreeIndexStore().has(ByteArray.fromLong(blockNum))) {
-        return IncrementalMerkleTree
-            .parseFrom(chainBaseManager.getMerkleTreeIndexStore().get(blockNum));
-      }
-    } catch (Exception ex) {
-      logger.error("GetMerkleTreeOfBlock failed, blockNum:{}", blockNum, ex);
-    }
-
-    return null;
-  }
 
   public long getShieldedTransactionFee() {
     return chainBaseManager.getDynamicPropertiesStore().getShieldedTransactionFee();
@@ -2930,13 +2912,6 @@ public class Wallet {
     return builder.build();
   }
 
-  public Transaction deployContract(TransactionCapsule trxCap) {
-
-    // do nothing, so can add some useful function later
-    // trxCap contract para cacheUnpackValue has value
-
-    return trxCap.getInstance();
-  }
 
   public Transaction triggerContract(TriggerSmartContract
       triggerSmartContract,

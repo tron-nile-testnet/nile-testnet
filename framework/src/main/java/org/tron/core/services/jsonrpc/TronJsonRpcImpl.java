@@ -11,6 +11,7 @@ import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.generateFilterId;
 import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.getEnergyUsageTotal;
 import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.getTransactionIndex;
 import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.getTxID;
+import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.parseBlockNumber;
 import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.triggerCallContract;
 
 import com.alibaba.fastjson.JSON;
@@ -354,11 +355,7 @@ public class TronJsonRpcImpl implements TronJsonRpc, Closeable {
     if (JsonRpcApiUtil.isBlockTag(blockNumOrTag)) {
       throw new JsonRpcInvalidParamsException(TAG_NOT_SUPPORT_ERROR);
     }
-    try {
-      ByteArray.hexToBigInteger(blockNumOrTag);
-    } catch (Exception e) {
-      throw new JsonRpcInvalidParamsException(BLOCK_NUM_ERROR);
-    }
+    parseBlockNumber(blockNumOrTag);
     throw new JsonRpcInvalidParamsException(QUANTITY_NOT_SUPPORT_ERROR);
   }
 
@@ -368,7 +365,6 @@ public class TronJsonRpcImpl implements TronJsonRpc, Closeable {
   }
 
   private Block getBlockByNumOrTag(String blockNumOrTag) throws JsonRpcInvalidParamsException {
-    long blockNum;
     if (JsonRpcApiUtil.isBlockTag(blockNumOrTag)) {
       if (LATEST_STR.equalsIgnoreCase(blockNumOrTag)) {
         // Return the head block directly from blockStore, bypassing blockIndexStore
@@ -377,12 +373,7 @@ public class TronJsonRpcImpl implements TronJsonRpc, Closeable {
       }
       return wallet.getBlockByNum(JsonRpcApiUtil.parseBlockTag(blockNumOrTag, wallet));
     }
-    try {
-      blockNum = ByteArray.hexToBigInteger(blockNumOrTag).longValueExact();
-    } catch (Exception e) {
-      throw new JsonRpcInvalidParamsException(BLOCK_NUM_ERROR);
-    }
-    return wallet.getBlockByNum(blockNum);
+    return wallet.getBlockByNum(parseBlockNumber(blockNumOrTag));
   }
 
   private BlockResult getBlockResult(Block block, boolean fullTx) {
@@ -969,12 +960,7 @@ public class TronJsonRpcImpl implements TronJsonRpc, Closeable {
           throw new JsonRpcInvalidParamsException(JSON_ERROR);
         }
 
-        long blockNumber;
-        try {
-          blockNumber = ByteArray.hexToBigInteger(blockNumOrTag).longValueExact();
-        } catch (Exception e) {
-          throw new JsonRpcInvalidParamsException(BLOCK_NUM_ERROR);
-        }
+        long blockNumber = parseBlockNumber(blockNumOrTag);
 
         if (wallet.getBlockByNum(blockNumber) == null) {
           throw new JsonRpcInternalException(NO_BLOCK_HEADER);
