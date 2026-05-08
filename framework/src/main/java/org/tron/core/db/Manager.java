@@ -109,6 +109,7 @@ import org.tron.core.db.accountstate.callback.AccountStateCallBack;
 import org.tron.core.db.api.AssetUpdateHelper;
 import org.tron.core.db.api.BandwidthPriceHistoryLoader;
 import org.tron.core.db.api.EnergyPriceHistoryLoader;
+import org.tron.core.db.api.MigrateTurkishKeyHelper;
 import org.tron.core.db.api.MoveAbiHelper;
 import org.tron.core.db2.ISession;
 import org.tron.core.db2.core.Chainbase;
@@ -372,6 +373,10 @@ public class Manager {
     return getDynamicPropertiesStore().getSetBlackholeAccountPermission() == 0L;
   }
 
+  private boolean needToMigrateTurkishKeys() {
+    return getDynamicPropertiesStore().getTurkishKeyMigrationDone() == 0L;
+  }
+
   private void resetBlackholeAccountPermission() {
     AccountCapsule blackholeAccount = getAccountStore().getBlackhole();
 
@@ -540,6 +545,10 @@ public class Manager {
 
     if (needToSetBlackholePermission()) {
       resetBlackholeAccountPermission();
+    }
+
+    if (needToMigrateTurkishKeys()) {
+      new MigrateTurkishKeyHelper(chainBaseManager).doWork();
     }
 
     //for test only
@@ -1270,6 +1279,11 @@ public class Manager {
       synchronized (this) {
         Metrics.histogramObserve(blockedTimer.get());
         blockedTimer.remove();
+        if (Metrics.enabled()) {
+          Metrics.histogramObserve(MetricKeys.Histogram.BLOCK_TRANSACTION_COUNT,
+              block.getTransactions().size(),
+              StringUtil.encode58Check(block.getWitnessAddress().toByteArray()));
+        }
         long headerNumber = getDynamicPropertiesStore().getLatestBlockHeaderNumber();
         if (block.getNum() <= headerNumber && khaosDb.containBlockInMiniStore(block.getBlockId())) {
           logger.info("Block {} is already exist.", block.getBlockId().getString());
@@ -1785,6 +1799,9 @@ public class Manager {
   }
 
   private boolean isExchangeTransaction(Transaction transaction) {
+    if (getDynamicPropertiesStore().allowHardenExchangeCalculation()) {
+      return false;
+    }
     Contract contract = transaction.getRawData().getContract(0);
     switch (contract.getType()) {
       case ExchangeTransactionContract: {
