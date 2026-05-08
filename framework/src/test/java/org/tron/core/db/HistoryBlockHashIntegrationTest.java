@@ -8,18 +8,24 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.google.protobuf.ByteString;
+import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
+import org.tron.common.crypto.ECKey;
 import org.tron.common.runtime.vm.DataWord;
 import org.tron.common.utils.Sha256Hash;
+import org.tron.consensus.base.Param;
 import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.capsule.CodeCapsule;
 import org.tron.core.capsule.ContractCapsule;
 import org.tron.core.config.args.Args;
+import org.tron.core.db.accountstate.callback.AccountStateCallBack;
 import org.tron.core.store.DynamicPropertiesStore;
 import org.tron.core.store.StoreFactory;
 import org.tron.core.vm.program.Storage;
@@ -245,6 +251,64 @@ public class HistoryBlockHashIntegrationTest extends BaseTest {
    * upgrade the type to {@code Contract} in place — preserving balance —
    * rather than failing or zeroing the account.
    */
+  /**
+   * SR / validator parity: the producer's {@code generateBlock} simulation
+   * loop and the validator's {@code processBlock} apply loop must see the
+   * same storage state when transactions hit {@code HISTORY_STORAGE_ADDRESS}.
+   * That requires {@link HistoryBlockHashUtil#write} to run before the tx
+   * loop on both paths. {@code processBlock} writes at line 1858; this test
+   * pins the matching write inside {@code generateBlock}.
+   *
+   * <p>Spy {@code accountStateCallBack.preExecute} — called between the
+   * write and the tx loop on both paths — and snapshot the slot from inside
+   * the revoking session. Pre-fix the slot is empty (write never ran);
+   * post-fix it holds the parent block hash.
+   */
+  @Test
+  public void generateBlockWritesParentHashBeforeTxLoop() throws Exception {
+    chainBaseManager.getDynamicPropertiesStore().saveAllowTvmPrague(1L);
+    HistoryBlockHashUtil.deploy(dbManager);
+
+    byte[] expectedParentHash = chainBaseManager.getHeadBlockId().getBytes();
+    long nextBlockNum = chainBaseManager.getHeadBlockNum() + 1;
+    long expectedSlot =
+        (nextBlockNum - 1) % HistoryBlockHashUtil.HISTORY_SERVE_WINDOW;
+
+    Field cbField = Manager.class.getDeclaredField("accountStateCallBack");
+    cbField.setAccessible(true);
+    AccountStateCallBack realCb = (AccountStateCallBack) cbField.get(dbManager);
+    AccountStateCallBack spy = Mockito.spy(realCb);
+    AtomicReference<DataWord> captured = new AtomicReference<>();
+    Mockito.doAnswer(inv -> {
+      Storage st = new Storage(
+          HistoryBlockHashUtil.HISTORY_STORAGE_ADDRESS,
+          chainBaseManager.getStorageRowStore());
+      captured.set(st.getValue(new DataWord(expectedSlot)));
+      return inv.callRealMethod();
+    }).when(spy).preExecute(Mockito.any(BlockCapsule.class));
+    cbField.set(dbManager, spy);
+
+    try {
+      ECKey ecKey = new ECKey();
+      ByteString witness = ByteString.copyFrom(ecKey.getAddress());
+      Param.Miner miner =
+          Param.getInstance().new Miner(ecKey.getPrivKeyBytes(), witness, witness);
+      long blockTime = System.currentTimeMillis() / 3000 * 3000;
+      BlockCapsule generated = dbManager.generateBlock(
+          miner, blockTime, System.currentTimeMillis() + 1000);
+      assertNotNull("generateBlock returned null", generated);
+    } finally {
+      cbField.set(dbManager, realCb);
+    }
+
+    assertNotNull(
+        "preExecute fired with an empty slot — write() must run before preExecute",
+        captured.get());
+    assertArrayEquals(
+        "slot must hold the parent block hash before the tx loop runs",
+        expectedParentHash, captured.get().getData());
+  }
+
   @Test
   public void deployUpgradesPreExistingNormalAccountPreservingBalance() {
     byte[] addr = HistoryBlockHashUtil.HISTORY_STORAGE_ADDRESS;
