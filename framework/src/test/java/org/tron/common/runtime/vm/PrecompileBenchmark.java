@@ -13,6 +13,8 @@ import org.bouncycastle.crypto.params.ECKeyGenerationParameters;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.crypto.signers.ECDSASigner;
+import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.ECKey.ECDSASignature;
@@ -22,9 +24,9 @@ import org.tron.core.vm.PrecompiledContracts;
 /**
  * Manual microbenchmarks comparing the ECRecover (3000 gas) precompile
  * against the new P256VERIFY (6900 gas) precompile from TIP-7951. Not part
- * of the regular test suite — invoke explicitly:
+ * of the regular test suite. It is opt-in behind a system property:
  *
- *   ./gradlew :framework:test --tests \
+ *   ./gradlew :framework:test -DrunPrecompileBenchmark=true --tests \
  *       org.tron.common.runtime.vm.PrecompileBenchmark -i
  *
  * Four @Test methods, each independent:
@@ -33,16 +35,18 @@ import org.tron.core.vm.PrecompiledContracts;
  *                              returns short-circuit before ECDSA math.
  *   - compareDiverseInputs:    rotates over N distinct keypairs to defeat
  *                              any per-key caching and branch-predictor bias.
- *   - coldNoWarmup:            no warmup, distinct input each call, first
+ *   - coldNoWarmup:            no execute() warmup, distinct input each call, first
  *                              100 calls bucketed — closer to the mainnet
  *                              case where P256VERIFY is invoked rarely and
  *                              the JVM has not JIT-compiled the path yet.
  *
  * Single-threaded, pure-Java BouncyCastle path. The first three tests use a
- * 5000-iteration JIT warmup; coldNoWarmup deliberately skips it.
+ * 5000-iteration execute() warmup; coldNoWarmup deliberately skips it. Test
+ * input generation happens before timing and may load cryptographic helper code.
  */
 public class PrecompileBenchmark {
 
+  private static final String RUN_PROPERTY = "runPrecompileBenchmark";
   private static final int WARMUP_ITERS = 5_000;
   private static final int MEASURE_ITERS = 5_000;
   private static final int ROUNDS = 5;
@@ -52,6 +56,12 @@ public class PrecompileBenchmark {
       new PrecompiledContracts.ECRecover();
   private static final PrecompiledContracts.P256Verify P256_VERIFY =
       new PrecompiledContracts.P256Verify();
+
+  @Before
+  public void requireExplicitOptIn() {
+    Assume.assumeTrue("set -D" + RUN_PROPERTY + "=true to run manual benchmarks",
+        Boolean.getBoolean(RUN_PROPERTY));
+  }
 
   // First entry from go-ethereum's EIP-7951 conformance vectors — known-valid.
   private static final String VALID_P256_INPUT =
@@ -358,19 +368,20 @@ public class PrecompileBenchmark {
   /** ============================== TEST 4 ============================== */
 
   /**
-   * Cold no-warmup measurement. Skips the {@code WARMUP_ITERS} prelude so the
-   * first call pays full JIT/classloading tax — closer to the TRON mainnet
-   * scenario where P256VERIFY is invoked at low frequency and the precompile
-   * path rarely reaches C2 steady state.
+   * Cold no-warmup measurement. Skips the {@code WARMUP_ITERS} execute()
+   * prelude so the first measured precompile call sees an unprimed execute path
+   * — closer to the TRON mainnet scenario where P256VERIFY is invoked at low
+   * frequency and the precompile path rarely reaches C2 steady state.
    *
    * <p>Reports the first call alone plus bucketed averages over the first 100
    * calls so the JIT promotion curve is visible. Each call uses a distinct
-   * input (fresh keypair / signature) to defeat any per-input caching. P256 is
-   * timed first so the precompile path is genuinely cold.
+   * input (fresh keypair / signature) to defeat any per-input caching. Inputs
+   * are generated before timing, so this does not measure cryptographic helper
+   * classloading performed by key generation.
    *
-   * <p>For a fully cold measurement, run this test alone in a fresh JVM:
+   * <p>For the coldest execute() measurement, run this test alone in a fresh JVM:
    *
-   *   ./gradlew :framework:test --no-daemon --tests \
+   *   ./gradlew :framework:test --no-daemon -DrunPrecompileBenchmark=true --tests \
    *       'org.tron.common.runtime.vm.PrecompileBenchmark.coldNoWarmup' -i
    *
    * Otherwise the other @Test methods running first will already have

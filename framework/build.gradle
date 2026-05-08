@@ -125,6 +125,8 @@ def configureTestTask = { Task t ->
     }
     t.maxHeapSize = "512m"
     t.maxParallelForks = Math.max(1, Math.min(4, Runtime.runtime.availableProcessors()))
+    t.systemProperty 'runPrecompileBenchmark',
+            System.getProperty('runPrecompileBenchmark', 'false')
     t.doFirst {
         t.forkEvery = 100
     }
