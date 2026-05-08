@@ -573,6 +573,7 @@ public class Args extends CommonParameter {
     PARAMETER.fullNodeHttpPort = http.getFullNodePort();
     PARAMETER.solidityHttpPort = http.getSolidityPort();
     PARAMETER.pBFTHttpPort = http.getPBFTPort();
+    PARAMETER.httpMaxMessageSize = http.getMaxMessageSize();
 
     // ---- JSON-RPC sub-bean ----
     NodeConfig.JsonRpcConfig jsonrpc = nc.getJsonrpc();
@@ -585,6 +586,7 @@ public class Args extends CommonParameter {
     PARAMETER.jsonRpcMaxBlockRange = jsonrpc.getMaxBlockRange();
     PARAMETER.jsonRpcMaxSubTopics = jsonrpc.getMaxSubTopics();
     PARAMETER.jsonRpcMaxBlockFilterNum = jsonrpc.getMaxBlockFilterNum();
+    PARAMETER.jsonRpcMaxMessageSize = jsonrpc.getMaxMessageSize();
 
     // ---- P2P sub-bean ----
     PARAMETER.nodeP2pVersion = nc.getP2p().getVersion();

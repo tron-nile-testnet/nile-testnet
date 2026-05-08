@@ -228,9 +228,17 @@ public class CommonParameter {
   @Getter
   @Setter
   public long maxConnectionAgeInMillis;
+  // Refers to RPC (gRPC) max message size; see httpMaxMessageSize / jsonRpcMaxMessageSize
+  // below for the HTTP / JSON-RPC counterparts.
   @Getter
   @Setter
   public int maxMessageSize;
+  @Getter
+  @Setter
+  public long httpMaxMessageSize;
+  @Getter
+  @Setter
+  public long jsonRpcMaxMessageSize;
   @Getter
   @Setter
   public int maxHeaderListSize;
