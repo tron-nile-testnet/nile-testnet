@@ -1638,6 +1638,7 @@ public class Manager {
     session.reset();
     session.setValue(revokingStore.buildSession());
 
+    HistoryBlockHashUtil.write(this, blockCapsule);
     accountStateCallBack.preExecute(blockCapsule);
 
     if (getDynamicPropertiesStore().getAllowMultiSign() == 1) {
@@ -1867,6 +1868,7 @@ public class Manager {
 
     TransactionRetCapsule transactionRetCapsule =
         new TransactionRetCapsule(block);
+    HistoryBlockHashUtil.write(this, block);
     try {
       merkleContainer.resetCurrentMerkleTree();
       accountStateCallBack.preExecute(block);
