@@ -401,6 +401,10 @@ public class VMActuator implements Actuator2 {
       long maxCpuTimeOfOneTx = rootRepository.getDynamicPropertiesStore()
           .getMaxCpuTimeOfOneTx() * VMConstant.ONE_THOUSAND;
       long thisTxCPULimitInUs = (long) (maxCpuTimeOfOneTx * getCpuLimitInUsRatio());
+      long constantCallTimeoutMs = CommonParameter.getInstance().getConstantCallTimeoutMs();
+      if (isConstantCall && constantCallTimeoutMs > 0L) {
+        thisTxCPULimitInUs = constantCallTimeoutMs * VMConstant.ONE_THOUSAND;
+      }
       long vmStartInUs = System.nanoTime() / VMConstant.ONE_THOUSAND;
       long vmShouldEndInUs = vmStartInUs + thisTxCPULimitInUs;
       ProgramInvoke programInvoke = ProgramInvokeFactory
@@ -514,8 +518,11 @@ public class VMActuator implements Actuator2 {
 
       long maxCpuTimeOfOneTx = rootRepository.getDynamicPropertiesStore()
           .getMaxCpuTimeOfOneTx() * VMConstant.ONE_THOUSAND;
-      long thisTxCPULimitInUs =
-          (long) (maxCpuTimeOfOneTx * getCpuLimitInUsRatio());
+      long thisTxCPULimitInUs = (long) (maxCpuTimeOfOneTx * getCpuLimitInUsRatio());
+      long constantCallTimeoutMs = CommonParameter.getInstance().getConstantCallTimeoutMs();
+      if (isConstantCall && constantCallTimeoutMs > 0L) {
+        thisTxCPULimitInUs = constantCallTimeoutMs * VMConstant.ONE_THOUSAND;
+      }
       long vmStartInUs = System.nanoTime() / VMConstant.ONE_THOUSAND;
       long vmShouldEndInUs = vmStartInUs + thisTxCPULimitInUs;
       ProgramInvoke programInvoke = ProgramInvokeFactory

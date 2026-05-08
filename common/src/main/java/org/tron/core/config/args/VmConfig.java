@@ -2,6 +2,7 @@ package org.tron.core.config.args;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigBeanFactory;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,8 @@ import lombok.extern.slf4j.Slf4j;
 @Setter
 public class VmConfig {
 
+  private static final String CONSTANT_CALL_TIMEOUT_MS_KEY = "constantCallTimeoutMs";
+
   private boolean supportConstant = false;
   private long maxEnergyLimitForConstant = 100_000_000L;
   private int lruCacheSize = 500;
@@ -27,6 +30,11 @@ public class VmConfig {
   private boolean saveInternalTx = false;
   private boolean saveFeaturedInternalTx = false;
   private boolean saveCancelAllUnfreezeV2Details = false;
+  // Excluded from ConfigBeanFactory binding (no setter): the property is
+  // intentionally absent from reference.conf so {@code Config#hasPath} alone
+  // signals operator opt-in. Bound manually in {@link #fromConfig}.
+  @Setter(AccessLevel.NONE)
+  private long constantCallTimeoutMs = 0L;
 
   /**
    * Create VmConfig from the "vm" section of the application config.
@@ -36,11 +44,11 @@ public class VmConfig {
   public static VmConfig fromConfig(Config config) {
     Config vmSection = config.getConfig("vm");
     VmConfig vmConfig = ConfigBeanFactory.create(vmSection, VmConfig.class);
-    vmConfig.postProcess();
+    vmConfig.postProcess(vmSection);
     return vmConfig;
   }
 
-  private void postProcess() {
+  private void postProcess(Config vmSection) {
     // clamp maxEnergyLimitForConstant
     if (maxEnergyLimitForConstant < 3_000_000L) {
       maxEnergyLimitForConstant = 3_000_000L;
@@ -59,6 +67,18 @@ public class VmConfig {
         && (!saveInternalTx || !saveFeaturedInternalTx)) {
       logger.warn("Configuring [vm.saveCancelAllUnfreezeV2Details] won't work as "
           + "vm.saveInternalTx or vm.saveFeaturedInternalTx is off.");
+    }
+
+    // constantCallTimeoutMs is excluded from ConfigBeanFactory binding (no
+    // setter) and intentionally absent from reference.conf, so hasPath alone
+    // tells us whether the operator opted in. Only positive values are valid.
+    if (vmSection.hasPath(CONSTANT_CALL_TIMEOUT_MS_KEY)) {
+      long value = vmSection.getLong(CONSTANT_CALL_TIMEOUT_MS_KEY);
+      if (value <= 0L) {
+        throw new IllegalArgumentException(
+            "vm.constantCallTimeoutMs must be > 0 when configured, got " + value);
+      }
+      constantCallTimeoutMs = value;
     }
   }
 }
