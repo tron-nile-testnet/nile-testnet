@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Assert;
 import org.junit.Test;
+import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.utils.ByteUtil;
 import org.tron.core.vm.PrecompiledContracts;
 import org.tron.core.vm.config.ConfigLoader;
@@ -67,7 +68,7 @@ public class AllowTvmOsakaTest extends VMTestBase {
     byte[] base = new byte[baseLen];
     byte[] exp = new byte[expLen];
     if (expValue.length > 0 && expLen > 0) {
-      System.arraycopy(expValue, 0, exp, 0, expValue.length);
+      System.arraycopy(expValue, 0, exp, 0, StrictMathWrapper.min(expValue.length, expLen));
     }
     byte[] mod = new byte[modLen];
     return ByteUtil.merge(toLenBytes(baseLen), toLenBytes(expLen), toLenBytes(modLen),
@@ -150,11 +151,29 @@ public class AllowTvmOsakaTest extends VMTestBase {
     VMConfig.initAllowTvmOsaka(0);
 
     try {
-      // When Osaka is disabled, old pricing formula should be used
-      // nagydani_1_square: old formula = 4096 * 1 / 20 = 204
+      // When Osaka is disabled, the existing EIP-198-style pricing formula is used:
+      // nagydani_1_square: 4096 * 1 / 20 = 204.
       long energy = getEnergy(64, 1, 64, new byte[]{0x02});
       Assert.assertEquals(204L, energy);
     } finally {
+      ConfigLoader.disable = false;
+    }
+  }
+
+  @Test
+  public void testEIP7883CanBeLowerThanLegacyPricing() {
+    ConfigLoader.disable = true;
+
+    try {
+      byte[] square = {0x02};
+
+      VMConfig.initAllowTvmOsaka(0);
+      Assert.assertEquals(665L, getEnergy(128, 1, 128, square));
+
+      VMConfig.initAllowTvmOsaka(1);
+      Assert.assertEquals(512L, getEnergy(128, 1, 128, square));
+    } finally {
+      VMConfig.initAllowTvmOsaka(0);
       ConfigLoader.disable = false;
     }
   }
