@@ -559,6 +559,7 @@ public class Args extends CommonParameter {
     PARAMETER.jsonRpcMaxBlockRange = jsonrpc.getMaxBlockRange();
     PARAMETER.jsonRpcMaxSubTopics = jsonrpc.getMaxSubTopics();
     PARAMETER.jsonRpcMaxBlockFilterNum = jsonrpc.getMaxBlockFilterNum();
+    PARAMETER.jsonRpcMaxLogFilterNum = jsonrpc.getMaxLogFilterNum();
     PARAMETER.jsonRpcMaxMessageSize = jsonrpc.getMaxMessageSize();
 
     // ---- P2P sub-bean ----
