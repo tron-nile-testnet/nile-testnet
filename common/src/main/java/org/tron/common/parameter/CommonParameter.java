@@ -64,8 +64,8 @@ public class CommonParameter {
    * functions, estimateenergy, eth_call, eth_estimateGas, and any other
    * RPC routed through Wallet#callConstantContract. 0 = use the same
    * deadline as block processing (current behaviour). When operators set
-   * this in config the value must be positive; validated at config-load
-   * in VmConfig.
+   * this in config the value must be positive and fit VM deadline conversion;
+   * validated at config-load in VmConfig.
    */
   @Getter
   @Setter

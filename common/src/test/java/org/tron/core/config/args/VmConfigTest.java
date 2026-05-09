@@ -91,9 +91,10 @@ public class VmConfigTest {
 
   // ===========================================================================
   // Constant-call timeout (issue #6681). The validation rule: any positive
-  // value is accepted, but zero/negative is rejected ONLY when the operator
-  // explicitly set the property in their config. Absence keeps the in-Java
-  // default (0L = "share the block-processing deadline").
+  // value that fits VM deadline conversion is accepted, but zero/negative is
+  // rejected ONLY when the operator explicitly set the property in their
+  // config. Absence keeps the in-Java default (0L = "share the
+  // block-processing deadline").
   // ===========================================================================
 
   @Test
@@ -137,6 +138,18 @@ public class VmConfigTest {
     } catch (IllegalArgumentException ex) {
       org.junit.Assert.assertTrue(ex.getMessage(),
           ex.getMessage().contains("constantCallTimeoutMs"));
+    }
+  }
+
+  @Test
+  public void testConstantCallTimeoutOverflowRejected() {
+    long value = VmConfig.MAX_CONSTANT_CALL_TIMEOUT_MS + 1L;
+    try {
+      VmConfig.fromConfig(withRef("vm { constantCallTimeoutMs = " + value + " }"));
+      org.junit.Assert.fail("expected IllegalArgumentException for overflowing ms");
+    } catch (IllegalArgumentException ex) {
+      org.junit.Assert.assertTrue(ex.getMessage(),
+          ex.getMessage().contains("deadline conversion"));
     }
   }
 }
