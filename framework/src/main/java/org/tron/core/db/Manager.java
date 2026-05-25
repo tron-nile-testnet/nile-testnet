@@ -1633,7 +1633,6 @@ public class Manager {
     session.reset();
     session.setValue(revokingStore.buildSession());
 
-    HistoryBlockHashUtil.write(this, blockCapsule);
     accountStateCallBack.preExecute(blockCapsule);
 
     if (getDynamicPropertiesStore().getAllowMultiSign() == 1) {
@@ -1645,6 +1644,8 @@ public class Manager {
         return null;
       }
     }
+
+    HistoryBlockHashUtil.write(this, blockCapsule);
 
     Set<String> accountSet = new HashSet<>();
     AtomicInteger shieldedTransCounts = new AtomicInteger(0);
