@@ -17,6 +17,7 @@ import org.tron.core.exception.TronError;
 // ConfigBeanFactory auto-binds all fields including sub-beans, dot-notation keys,
 // PBFT fields, and list fields. Only legacy key fallbacks and PascalCase shutdown
 // keys are read manually.
+// Always construct via {@link #fromConfig} — direct construction skips postProcess() clamping.
 @Slf4j
 @Getter
 @Setter
@@ -77,7 +78,6 @@ public class NodeConfig {
   private ValidContractProtoConfig validContractProto = new ValidContractProtoConfig();
   private int shieldedTransInPendingMaxCounts = 10;
   private long blockCacheTimeout = 60;
-  private long receiveTcpMinDataLength = 2048;
   private int maxTransactionPendingSize = 2000;
   private long pendingTransactionTimeout = 60000;
   private int maxTrxCacheSize = 50_000;
@@ -215,10 +215,10 @@ public class NodeConfig {
     private int pBFTPort = 50071;
 
     private int thread = 0;
-    private int maxConcurrentCallsPerConnection = 2147483647;
+    private int maxConcurrentCallsPerConnection = 0;
     private int flowControlWindow = 1048576;
-    private long maxConnectionIdleInMillis = Long.MAX_VALUE;
-    private long maxConnectionAgeInMillis = Long.MAX_VALUE;
+    private long maxConnectionIdleInMillis = 0;
+    private long maxConnectionAgeInMillis = 0;
     private int maxMessageSize = 4194304;
     private int maxHeaderListSize = 8192;
     private int maxRstStream = 0;
@@ -277,8 +277,8 @@ public class NodeConfig {
     private String dnsPrivate = "";
     private List<String> knownUrls = new ArrayList<>();
     private List<String> staticNodes = new ArrayList<>();
-    private int maxMergeSize = 0;
-    private double changeThreshold = 0.0;
+    private int maxMergeSize = 5;
+    private double changeThreshold = 0.1;
     private String serverType = "";
     private String accessKeyId = "";
     private String accessKeySecret = "";
@@ -294,8 +294,7 @@ public class NodeConfig {
    * since ConfigBeanFactory expects typed bean lists, not string lists.
    */
   public static NodeConfig fromConfig(Config config) {
-    Config section = normalizeNonStandardKeys(
-        normalizeMaxMessageSizes(config).getConfig("node"));
+    Config section = normalizeNonStandardKeys(config.getConfig("node"));
 
     // Auto-bind all fields and sub-beans. ConfigBeanFactory fails fast with a
     // descriptive path on any `= null` value
@@ -304,20 +303,28 @@ public class NodeConfig {
     // --- Legacy key fallbacks (backward compatibility) ---
     // node.maxActiveNodes (old) -> maxConnections (new)
     if (section.hasPath("maxActiveNodes")) {
+      logger.warn("Configuring [node.maxActiveNodes] is deprecated and will be removed in a future "
+          + "release. Please use [node.maxConnections] instead.");
       nc.maxConnections = section.getInt("maxActiveNodes");
       if (section.hasPath("connectFactor")) {
+        logger.warn("Configuring [node.connectFactor] is deprecated and will be removed in a future "
+            + "release.");
         nc.minConnections = (int) (nc.maxConnections * section.getDouble("connectFactor"));
       }
       if (section.hasPath("activeConnectFactor")) {
+        logger.warn("Configuring [node.activeConnectFactor] is deprecated and will be removed in a "
+            + "future release.");
         nc.minActiveConnections = (int) (nc.maxConnections
             * section.getDouble("activeConnectFactor"));
       }
     }
     if (section.hasPath("maxActiveNodesWithSameIp")) {
+      logger.warn("Configuring [node.maxActiveNodesWithSameIp] is deprecated and will be removed "
+          + "in a future release. Please use [node.maxConnectionsWithSameIp] instead.");
       nc.maxConnectionsWithSameIp = section.getInt("maxActiveNodesWithSameIp");
     }
 
-    // Legacy key fallback: node.fullNodeAllowShieldedTransaction -> allowShieldedTransactionApi.
+    // Legacy key fallback: node.allowShieldedTransactionApi wins fullNodeAllowShieldedTransaction
     if (section.hasPath("allowShieldedTransactionApi")) {
       nc.allowShieldedTransactionApi =
           section.getBoolean("allowShieldedTransactionApi");
@@ -351,6 +358,16 @@ public class NodeConfig {
       rpc.thread = (Runtime.getRuntime().availableProcessors() + 1) / 2;
     }
 
+    if (rpc.maxConcurrentCallsPerConnection == 0) {
+      rpc.maxConcurrentCallsPerConnection = Integer.MAX_VALUE;
+    }
+    if (rpc.maxConnectionIdleInMillis == 0) {
+      rpc.maxConnectionIdleInMillis = Long.MAX_VALUE;
+    }
+    if (rpc.maxConnectionAgeInMillis == 0) {
+      rpc.maxConnectionAgeInMillis = Long.MAX_VALUE;
+    }
+
     // validateSignThreadNum: 0 = auto-detect
     if (validateSignThreadNum == 0) {
       validateSignThreadNum = Runtime.getRuntime().availableProcessors();
@@ -372,6 +389,14 @@ public class NodeConfig {
     }
     if (syncFetchBatchNum < 100) {
       syncFetchBatchNum = 100;
+    }
+
+    // fetchBlock.timeout : clamp to [100, 1000]
+    if (fetchBlock.timeout > 1000) {
+      fetchBlock.timeout = 1000;
+    }
+    if (fetchBlock.timeout < 100) {
+      fetchBlock.timeout = 100;
     }
 
     // maxPendingBlockSize: clamp to [50, 2000]
@@ -425,6 +450,20 @@ public class NodeConfig {
     if (maxTrxCacheSize < 2000) {
       maxTrxCacheSize = 2000;
     }
+
+    // maxMessageSize: reject negative values
+    if (rpc.maxMessageSize < 0) {
+      throw new TronError("node.rpc.maxMessageSize must be non-negative, got: "
+          + rpc.maxMessageSize, PARAMETER_INIT);
+    }
+    if (http.maxMessageSize < 0) {
+      throw new TronError("node.http.maxMessageSize must be non-negative, got: "
+          + http.maxMessageSize, PARAMETER_INIT);
+    }
+    if (jsonrpc.maxMessageSize < 0) {
+      throw new TronError("node.jsonrpc.maxMessageSize must be non-negative, got: "
+          + jsonrpc.maxMessageSize, PARAMETER_INIT);
+    }
   }
 
   // ===========================================================================
@@ -463,38 +502,6 @@ public class NodeConfig {
       section = section.withValue(externalIpPath, ConfigValueFactory.fromAnyRef(""));
     }
     return section;
-  }
-
-  /**
-   * Pre-normalize size paths so ConfigBeanFactory's primitive int/long binding succeeds
-   * for human-readable values like "4m" / "128MB". For each maxMessageSize key, parse
-   * via getMemorySize, validate non-negative and <= Integer.MAX_VALUE, and write the
-   * numeric byte value back into the Config tree. Validation errors propagate before
-   * bean creation so the failure points at the user-facing config path.
-   */
-  private static Config normalizeMaxMessageSizes(Config config) {
-    String[] paths = {
-        "node.rpc.maxMessageSize",
-        "node.http.maxMessageSize",
-        "node.jsonrpc.maxMessageSize"
-    };
-    Config result = config;
-    for (String path : paths) {
-      if (config.hasPath(path)) {
-        long bytes = parseMaxMessageSize(config, path);
-        result = result.withValue(path, ConfigValueFactory.fromAnyRef(bytes));
-      }
-    }
-    return result;
-  }
-
-  private static long parseMaxMessageSize(Config config, String key) {
-    long value = config.getMemorySize(key).toBytes();
-    if (value < 0 || value > Integer.MAX_VALUE) {
-      throw new TronError(key + " must be non-negative and <= "
-          + Integer.MAX_VALUE + ", got: " + value, PARAMETER_INIT);
-    }
-    return value;
   }
 
 }
