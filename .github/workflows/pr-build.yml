@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       job:
+
         description: 'Job to run: all / macos / ubuntu / rockylinux / debian11'
         required: false
         default: 'all'
