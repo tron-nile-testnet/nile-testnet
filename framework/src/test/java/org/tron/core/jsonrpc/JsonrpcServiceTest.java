@@ -56,6 +56,7 @@ import org.tron.core.services.jsonrpc.TronJsonRpc.LogFilterElement;
 import org.tron.core.services.jsonrpc.TronJsonRpcImpl;
 import org.tron.core.services.jsonrpc.filters.LogFilterWrapper;
 import org.tron.core.services.jsonrpc.types.BlockResult;
+import org.tron.core.services.jsonrpc.types.BuildArguments;
 import org.tron.core.services.jsonrpc.types.TransactionReceipt;
 import org.tron.core.services.jsonrpc.types.TransactionResult;
 import org.tron.json.JSON;
@@ -514,11 +515,9 @@ public class JsonrpcServiceTest extends BaseTest {
         () -> parseBlockNumber("abc", wallet));
     Assert.assertEquals("Incorrect hex syntax", abcEx.getMessage());
 
-    // parseBlockNumber: malformed hex -> throws
     Exception hexEx = Assert.assertThrows(Exception.class,
         () -> parseBlockNumber("0xxabc", wallet));
-    // https://bugs.openjdk.org/browse/JDK-8176425, from JDK 12, the exception message is changed
-    Assert.assertTrue(hexEx.getMessage().startsWith("For input string: \"xabc\""));
+    Assert.assertEquals("invalid block number", hexEx.getMessage());
   }
 
   @Test
@@ -579,10 +578,29 @@ public class JsonrpcServiceTest extends BaseTest {
         () -> tronJsonRpc.getStorageAt("", "", "abc"));
     Assert.assertEquals("invalid block number", e6.getMessage());
 
+    // storageIdx length oversized -> invalid storage key value
+    String addr = "0xabd4b9367799eaa3197fecb144eb71de1e049abc";
+    Exception e7 = Assert.assertThrows(Exception.class,
+        () -> tronJsonRpc.getStorageAt(addr,
+            "0x" + new String(new char[65]).replace('\0', 'a'), "latest"));
+    Assert.assertEquals("invalid storage key value", e7.getMessage());
+
+    // storageIdx is null -> invalid storage key value
+    Exception e8 = Assert.assertThrows(Exception.class,
+        () -> tronJsonRpc.getStorageAt(addr, null, "latest"));
+    Assert.assertEquals("invalid storage key value", e8.getMessage());
+
+    // storageIdx is valid length but decodes to >32 bytes (66 hex chars without 0x = 33 bytes):
+    // DataWord rejects it -> invalid storage key value (-32602), not a leaked Internal error.
+    Exception e9 = Assert.assertThrows(Exception.class,
+        () -> tronJsonRpc.getStorageAt(addr,
+            new String(new char[66]).replace('\0', 'a'), "latest"));
+    Assert.assertEquals("invalid storage key value", e9.getMessage());
+
     // latest happy path: address is an account, not a contract, so returns 32 zero bytes
     try {
       String value = tronJsonRpc.getStorageAt(
-          "0xabd4b9367799eaa3197fecb144eb71de1e049abc", "0x0", "latest");
+          addr, "0x0", "latest");
       Assert.assertEquals(ByteArray.toJsonHex(new byte[32]), value);
     } catch (Exception e) {
       Assert.fail();
@@ -673,6 +691,31 @@ public class JsonrpcServiceTest extends BaseTest {
     } catch (Exception e) {
       Assert.fail();
     }
+
+    // negative index is out of range too -> null (not an Internal error)
+    try {
+      TransactionResult result = tronJsonRpc.getTransactionByBlockNumberAndIndex(
+          ByteArray.toJsonHex(blockCapsule1.getNum()), "0x-1");
+      Assert.assertNull(result);
+    } catch (Exception e) {
+      Assert.fail();
+    }
+
+    // leading zeros are tolerated: "0x00" parses to index 0
+    try {
+      TransactionResult result = tronJsonRpc.getTransactionByBlockNumberAndIndex(
+          ByteArray.toJsonHex(blockCapsule1.getNum()), "0x00");
+      Assert.assertNotNull(result);
+      Assert.assertEquals(ByteArray.toJsonHex(0L), result.getTransactionIndex());
+    } catch (Exception e) {
+      Assert.fail();
+    }
+
+    // oversized index (> 8 hex digits) rejected before parsing
+    Exception oversizedEx = Assert.assertThrows(Exception.class,
+        () -> tronJsonRpc.getTransactionByBlockNumberAndIndex(
+            ByteArray.toJsonHex(blockCapsule1.getNum()), "0x123456789"));
+    Assert.assertEquals("invalid index value", oversizedEx.getMessage());
 
     // latest -> blockCapsule1 (head)
     try {
@@ -1006,6 +1049,29 @@ public class JsonrpcServiceTest extends BaseTest {
       Assert.fail();
     }
 
+    JsonRpcInvalidParamsException shortHashEx = Assert.assertThrows(
+        JsonRpcInvalidParamsException.class,
+        () -> new LogFilterWrapper(new FilterRequest(null, null, null,
+            null, "0x111111"),
+            100, null, false));
+    Assert.assertEquals("invalid hash value", shortHashEx.getMessage());
+
+    JsonRpcInvalidParamsException oversizedHashEx = Assert.assertThrows(
+        JsonRpcInvalidParamsException.class,
+        () -> new LogFilterWrapper(new FilterRequest(null, null, null,
+            null,
+            "0x" + new String(new char[1000]).replace('\0', 'a')),
+            100, null, false));
+    Assert.assertEquals("invalid hash value", oversizedHashEx.getMessage());
+
+    JsonRpcInvalidParamsException validHashEx = Assert.assertThrows(
+        JsonRpcInvalidParamsException.class,
+        () -> new LogFilterWrapper(new FilterRequest(null, null, null,
+            null,
+            "0x" + new String(new char[64]).replace('\0', 'a')),
+            100, null, false));
+    Assert.assertEquals("invalid blockHash", validHashEx.getMessage());
+
     // reset
     Args.getInstance().setJsonRpcMaxBlockRange(oldMaxBlockRange);
   }
@@ -1312,6 +1378,10 @@ public class JsonrpcServiceTest extends BaseTest {
         () -> tronJsonRpc.getBlockReceipts("test"));
     Assert.assertEquals("invalid block number", testReceiptsEx.getMessage());
 
+    Exception nullReceiptsEx = Assert.assertThrows(Exception.class,
+        () -> tronJsonRpc.getBlockReceipts(null));
+    Assert.assertEquals("invalid block number", nullReceiptsEx.getMessage());
+
     try {
       List<TransactionReceipt> transactionReceiptList = tronJsonRpc.getBlockReceipts("0x2");
       Assert.assertNull(transactionReceiptList);
@@ -1387,6 +1457,30 @@ public class JsonrpcServiceTest extends BaseTest {
     } finally {
       fullNodeJsonRpcHttpService.stop();
     }
+  }
+
+  @Test
+  public void testBuildTransactionRejectsDeeplyNestedAbi() {
+    // A pathological ABI with deep nesting overflows the recursive JsonFormat parser.
+    // buildCreateSmartContractTransaction must surface this as invalid-params (-32602),
+    // not let a StackOverflowError escape as a generic internal error.
+    int depth = 200_000;
+    StringBuilder abi = new StringBuilder("[],\"x\":");
+    for (int i = 0; i < depth; i++) {
+      abi.append('[');
+    }
+    for (int i = 0; i < depth; i++) {
+      abi.append(']');
+    }
+
+    BuildArguments args = new BuildArguments();
+    args.setFrom("0xabd4b9367799eaa3197fecb144eb71de1e049abc");
+    args.setData("60806040");
+    args.setAbi(abi.toString());
+
+    JsonRpcInvalidParamsException e = Assert.assertThrows(JsonRpcInvalidParamsException.class,
+        () -> tronJsonRpc.buildTransaction(args));
+    Assert.assertEquals("invalid abi", e.getMessage());
   }
 
   @Test
