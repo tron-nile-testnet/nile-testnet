@@ -1821,12 +1821,6 @@ public class Manager {
   private void signBlockCapsuleWithPQ(BlockCapsule blockCapsule, Miner miner) {
     Param.Miner.PQMiner pq = miner.getPq();
     PQScheme scheme = pq.getScheme();
-    if (!chainBaseManager.getDynamicPropertiesStore().isPqSchemeAllowed(scheme)) {
-      throw new IllegalStateException(
-          "PQ miner " + Hex.toHexString(pq.getWitnessAddress().toByteArray())
-              + " has scheme " + scheme
-              + " but it is not allowed by dynamic properties");
-    }
     byte[] pqPrivateKey = pq.getPrivateKey();
     byte[] pqPublicKey = pq.getPublicKey();
     if (pqPrivateKey == null || pqPublicKey == null) {
