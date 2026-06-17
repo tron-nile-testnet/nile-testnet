@@ -334,6 +334,11 @@ public final class PQSchemeRegistry {
    */
   public static byte[] computeAddress(PQScheme scheme, byte[] publicKey) {
     byte[] h = deriveHash(scheme, publicKey);
+    if (h == null || h.length < 20) {
+      throw new IllegalStateException(
+          "fingerprint hash for " + scheme + " must be at least 20 bytes, got "
+              + (h == null ? -1 : h.length));
+    }
     byte[] addr = new byte[21];
     addr[0] = 0x41;
     System.arraycopy(h, h.length - 20, addr, 1, 20);

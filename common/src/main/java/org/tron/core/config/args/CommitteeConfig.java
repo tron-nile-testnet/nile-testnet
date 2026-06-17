@@ -159,6 +159,22 @@ public class CommitteeConfig {
       memoFee = 1_000_000_000L;
     }
 
+    // clamp allowFnDsa512 to 0-1
+    if (allowFnDsa512 < 0) {
+      allowFnDsa512 = 0;
+    }
+    if (allowFnDsa512 > 1) {
+      allowFnDsa512 = 1;
+    }
+
+    // clamp allowMlDsa44 to 0-1
+    if (allowMlDsa44 < 0) {
+      allowMlDsa44 = 0;
+    }
+    if (allowMlDsa44 > 1) {
+      allowMlDsa44 = 1;
+    }
+
     // cross-field: allowOldRewardOpt requires at least one reward/vote flag
     if (allowOldRewardOpt == 1 && allowNewRewardAlgorithm != 1
         && allowNewReward != 1 && allowTvmVote != 1) {
