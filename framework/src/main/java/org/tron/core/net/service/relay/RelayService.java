@@ -74,7 +74,7 @@ public class RelayService {
 
   private final List<InetSocketAddress> fastForwardNodes = parameter.getFastForwardNodes();
 
-  private final int keySize = Args.getLocalWitnesses().getPrivateKeys().size();
+  private final int ecdsaKeySize = Args.getLocalWitnesses().getPrivateKeys().size();
 
   private final int pqKeySize = Args.getLocalWitnesses().getPqKeypairs().size();
 
@@ -97,10 +97,11 @@ public class RelayService {
     backupManager = ctx.getBean(BackupManager.class);
 
     logger.info(
-        "Fast forward config, isWitness: {}, keySize: {}, pqKeySize: {}, fastForwardNodes: {}",
-        parameter.isWitness(), keySize, pqKeySize, fastForwardNodes.size());
+        "Fast forward config, isWitness: {}, ecdsaKeySize: {}, pqKeySize: {}, fastForwardNodes: {}",
+        parameter.isWitness(), ecdsaKeySize, pqKeySize, fastForwardNodes.size());
 
-    if (!parameter.isWitness() || (keySize == 0 && pqKeySize == 0) || fastForwardNodes.isEmpty()) {
+    if (!parameter.isWitness() || (ecdsaKeySize == 0 && pqKeySize == 0) ||
+        fastForwardNodes.isEmpty()) {
       return;
     }
 
@@ -144,7 +145,7 @@ public class RelayService {
     // is currently in the active schedule — otherwise the receiver
     // rejects on the "not a schedule witness" check in checkHelloMessage.
     List<ByteString> active = witnessScheduleStore.getActiveWitnesses();
-    boolean useEcdsa = keySize > 0 && ecdsaWitnessAddress != null
+    boolean useEcdsa = ecdsaKeySize > 0 && ecdsaWitnessAddress != null
         && active.contains(ecdsaWitnessAddress);
     ByteString announceAddress = useEcdsa ? ecdsaWitnessAddress : pqWitnessAddress;
     Protocol.HelloMessage.Builder builder = message.getHelloMessage().toBuilder()
@@ -258,13 +259,8 @@ public class RelayService {
   private boolean verifyPqAuthSig(byte[] digest, PQAuthSig pqAuthSig,
       ByteString witnessAddr, InetAddress remoteAddress) {
     PQScheme scheme = pqAuthSig.getScheme();
-    if (!PQSchemeRegistry.contains(scheme)) {
-      logger.warn("HelloMessage from {}, pq_auth_sig scheme {} is not registered.", remoteAddress,
-          scheme);
-      return false;
-    }
     if (!manager.getDynamicPropertiesStore().isPqSchemeAllowed(scheme)) {
-      logger.warn("HelloMessage from {}, pq_auth_sig scheme {} is not activated on chain.",
+      logger.warn("HelloMessage from {}, pq_auth_sig scheme {} is not allowed on chain.",
           remoteAddress, scheme);
       return false;
     }
@@ -320,7 +316,7 @@ public class RelayService {
 
   private boolean isActiveWitness() {
     return parameter.isWitness()
-        && (keySize > 0 || pqKeySize > 0)
+        && (ecdsaKeySize > 0 || pqKeySize > 0)
         && !fastForwardNodes.isEmpty()
         && isAnyLocalWitnessActive()
         && backupManager.getStatus().equals(BackupStatusEnum.MASTER);

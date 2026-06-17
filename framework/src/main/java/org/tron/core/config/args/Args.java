@@ -953,6 +953,8 @@ public class Args extends CommonParameter {
       merged.initWitnessAccountAddress(ecdsaWitnesses.getWitnessAccountAddress(),
           PARAMETER.isECKeyCryptoEngine());
       merged.initPqWitnessAccountAddress(pqWitnesses.getPqWitnessAccountAddress());
+      // one account address should authorise witness permission to only one key
+      merged.checkWitnessAddressConflict();
       localWitnesses = merged;
     } else if (ecdsaWitnesses != null) {
       localWitnesses = ecdsaWitnesses;

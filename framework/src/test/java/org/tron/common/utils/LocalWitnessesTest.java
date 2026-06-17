@@ -135,4 +135,40 @@ public class LocalWitnessesTest {
     assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
     assertTrue(err.getMessage().contains("PQ private key"));
   }
+
+  @Test
+  public void sameWitnessAddressForEcdsaAndPqRejected() {
+    LocalWitnesses lw = new LocalWitnesses();
+    // Distinct array instances with identical content: must be compared by value
+    // (Arrays.equals), not by reference.
+    lw.setWitnessAccountAddress(new byte[] {0x41, 1, 2, 3});
+    lw.setPqWitnessAccountAddress(new byte[] {0x41, 1, 2, 3});
+    TronError err = assertThrows(TronError.class, lw::checkWitnessAddressConflict);
+    assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
+    assertTrue(err.getMessage().contains("only one key"));
+  }
+
+  @Test
+  public void distinctWitnessAddressesAccepted() {
+    LocalWitnesses lw = new LocalWitnesses();
+    lw.setWitnessAccountAddress(new byte[] {0x41, 1, 2, 3});
+    lw.setPqWitnessAccountAddress(new byte[] {0x41, 4, 5, 6});
+    lw.checkWitnessAddressConflict(); // no throw
+  }
+
+  @Test
+  public void onlyOneWitnessAddressSetAccepted() {
+    LocalWitnesses ecdsaOnly = new LocalWitnesses();
+    ecdsaOnly.setWitnessAccountAddress(new byte[] {0x41, 1, 2, 3});
+    ecdsaOnly.checkWitnessAddressConflict(); // pq address null -> no throw
+
+    LocalWitnesses pqOnly = new LocalWitnesses();
+    pqOnly.setPqWitnessAccountAddress(new byte[] {0x41, 1, 2, 3});
+    pqOnly.checkWitnessAddressConflict(); // ecdsa address null -> no throw
+  }
+
+  @Test
+  public void noWitnessAddressSetAccepted() {
+    new LocalWitnesses().checkWitnessAddressConflict(); // both null -> no throw
+  }
 }
