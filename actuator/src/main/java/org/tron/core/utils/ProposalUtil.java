@@ -953,8 +953,7 @@ public class ProposalUtil {
         }
         if (dynamicPropertiesStore.getAllowFnDsa512() == value) {
           throw new ContractValidateException(
-              "[ALLOW_FN_DSA_512] has been set to " + value
-                  + ", no need to propose again");
+              "[ALLOW_FN_DSA_512] has been set to " + value + ", no need to propose again");
         }
         break;
       }
@@ -968,8 +967,7 @@ public class ProposalUtil {
         }
         if (dynamicPropertiesStore.getAllowMlDsa44() == value) {
           throw new ContractValidateException(
-              "[ALLOW_ML_DSA_44] has been set to " + value
-                  + ", no need to propose again");
+              "[ALLOW_ML_DSA_44] has been set to " + value + ", no need to propose again");
         }
         break;
       }
