@@ -490,6 +490,8 @@ public class Args extends CommonParameter {
     PARAMETER.dynamicEnergyThreshold = cc.getDynamicEnergyThreshold();
     PARAMETER.dynamicEnergyIncreaseFactor = cc.getDynamicEnergyIncreaseFactor();
     PARAMETER.dynamicEnergyMaxFactor = cc.getDynamicEnergyMaxFactor();
+    PARAMETER.allowFnDsa512 = cc.getAllowFnDsa512();
+    PARAMETER.allowMlDsa44 = cc.getAllowMlDsa44();
   }
 
   /**
@@ -612,6 +614,7 @@ public class Args extends CommonParameter {
 
     PARAMETER.maxFastForwardNum = nc.getMaxFastForwardNum();
     PARAMETER.shieldedTransInPendingMaxCounts = nc.getShieldedTransInPendingMaxCounts();
+    PARAMETER.pqTransInPendingMaxCounts = nc.getPqTransInPendingMaxCounts();
     PARAMETER.agreeNodeCount = nc.getAgreeNodeCount();
 
     PARAMETER.openHistoryQueryWhenLiteFN = nc.isOpenHistoryQueryWhenLiteFN();
@@ -903,32 +906,59 @@ public class Args extends CommonParameter {
       return;
     }
 
-    // path 1: CLI --private-key
-    if (StringUtils.isNotBlank(cmd.privateKey)) {
-      localWitnesses = WitnessInitializer.initFromCLIPrivateKey(
-          cmd.privateKey, cmd.witnessAddress);
-      return;
-    }
-
     LocalWitnessConfig lwConfig = LocalWitnessConfig.fromConfig(config);
+    boolean hasCliPriv = StringUtils.isNotBlank(cmd.privateKey);
+    boolean hasCfgPriv = !lwConfig.getPrivateKeys().isEmpty();
+    boolean hasKeystore = !lwConfig.getKeystores().isEmpty();
+    boolean hasPqKeys = !lwConfig.getPqKeyFiles().isEmpty();
 
-    // path 2: config localwitness (private key list)
-    if (!lwConfig.getPrivateKeys().isEmpty()) {
-      localWitnesses = WitnessInitializer.initFromCFGPrivateKey(
+    // Load the ECDSA source. CLI > config localwitness > keystore — the three
+    // legacy sources stay mutually exclusive among themselves.
+    LocalWitnesses ecdsaWitnesses = null;
+    if (hasCliPriv) {
+      ecdsaWitnesses = WitnessInitializer.initFromCLIPrivateKey(
+          cmd.privateKey, cmd.witnessAddress);
+    } else if (hasCfgPriv) {
+      ecdsaWitnesses = WitnessInitializer.initFromCFGPrivateKey(
           lwConfig.getPrivateKeys(), lwConfig.getAccountAddress());
-      return;
-    }
-
-    // path 3: config localwitnesskeystore + password
-    if (!lwConfig.getKeystores().isEmpty()) {
-      localWitnesses = WitnessInitializer.initFromKeystore(
+    } else if (hasKeystore) {
+      ecdsaWitnesses = WitnessInitializer.initFromKeystore(
           lwConfig.getKeystores(), cmd.password, lwConfig.getAccountAddress());
-      return;
     }
 
-    // no private key source configured
-    throw new TronError("This is a witness node, but localWitnesses is null",
-        TronError.ErrCode.WITNESS_INIT);
+    // Load PQ keypairs independently so a node can host a mix of ECDSA and PQ
+    // SRs (e.g. during a rolling migration where some SRs have moved to PQ and
+    // others have not yet). The PQ side has its own account-address key
+    // (localPqWitness.accountAddress) so mixed-mode configs do not have to drop
+    // the legacy override for the ECDSA side.
+    LocalWitnesses pqWitnesses = null;
+    if (hasPqKeys) {
+      pqWitnesses = WitnessInitializer.buildPqWitnesses(
+          lwConfig.getPqKeyFiles(), lwConfig.getPqAccountAddress());
+    }
+
+    if (ecdsaWitnesses == null && pqWitnesses == null) {
+      // no private key source configured
+      throw new TronError("This is a witness node, but localWitnesses is null",
+          TronError.ErrCode.WITNESS_INIT);
+    }
+
+    if (ecdsaWitnesses != null && pqWitnesses != null) {
+      LocalWitnesses merged = new LocalWitnesses();
+      merged.setPrivateKeys(ecdsaWitnesses.getPrivateKeys());
+      merged.setPqKeypairs(pqWitnesses.getPqKeypairs());
+      // Carry both addresses so a node hosting one ECDSA SR + one PQ SR can
+      // match either schedule slot. Consumers consult the field that matches
+      // their signing path (ECDSA address for ECDSA sigs, PQ address for PQ).
+      merged.initWitnessAccountAddress(ecdsaWitnesses.getWitnessAccountAddress(),
+          PARAMETER.isECKeyCryptoEngine());
+      merged.initPqWitnessAccountAddress(pqWitnesses.getPqWitnessAccountAddress());
+      localWitnesses = merged;
+    } else if (ecdsaWitnesses != null) {
+      localWitnesses = ecdsaWitnesses;
+    } else {
+      localWitnesses = pqWitnesses;
+    }
   }
 
   @VisibleForTesting
@@ -947,15 +977,6 @@ public class Args extends CommonParameter {
     metricsConfig = null;
     eventConfig = null;
   }
-
-  // getProposalExpirationTime removed — logic moved to BlockConfig.fromConfig()
-
-  // getWitnessesFromConfig, createWitness, getAccountsFromConfig, createAccount
-  // removed — logic moved to applyGenesisConfig()
-
-  // getRateLimiterFromConfig removed — logic moved to applyRateLimiterConfig()
-
-  // getInetSocketAddress removed — use filterInetSocketAddress
 
   /**
    * Parse and optionally filter a list of address strings.

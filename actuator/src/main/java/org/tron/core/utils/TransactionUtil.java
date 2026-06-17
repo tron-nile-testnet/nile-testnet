@@ -17,8 +17,8 @@ package org.tron.core.utils;
 
 import static org.tron.common.crypto.Hash.sha3omit12;
 import static org.tron.common.math.Maths.max;
-import static org.tron.core.config.Parameter.ChainConstant.DELEGATE_COST_BASE_SIZE;
 import static org.tron.core.Constant.PER_SIGN_LENGTH;
+import static org.tron.core.config.Parameter.ChainConstant.DELEGATE_COST_BASE_SIZE;
 import static org.tron.core.config.Parameter.ChainConstant.TRX_PRECISION;
 
 import com.google.common.base.CaseFormat;
@@ -38,6 +38,7 @@ import org.tron.api.GrpcAPI.Return.response_code;
 import org.tron.api.GrpcAPI.TransactionExtention;
 import org.tron.api.GrpcAPI.TransactionSignWeight;
 import org.tron.api.GrpcAPI.TransactionSignWeight.Result;
+import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.ChainBaseManager;
@@ -51,9 +52,9 @@ import org.tron.protos.Protocol.Permission.PermissionType;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
 import org.tron.protos.Protocol.Transaction.Result.contractResult;
+import org.tron.protos.contract.BalanceContract.DelegateResourceContract;
 import org.tron.protos.contract.SmartContractOuterClass.CreateSmartContract;
 import org.tron.protos.contract.SmartContractOuterClass.TriggerSmartContract;
-import org.tron.protos.contract.BalanceContract.DelegateResourceContract;
 
 @Slf4j(topic = "capsule")
 @Component
@@ -83,7 +84,8 @@ public class TransactionUtil {
   }
 
   public static boolean validAccountId(byte[] accountId) {
-    return validReadableBytes(accountId, MAX_ACCOUNT_ID_LEN) && accountId.length >= MIN_ACCOUNT_ID_LEN;
+    return validReadableBytes(accountId, MAX_ACCOUNT_ID_LEN)
+        && accountId.length >= MIN_ACCOUNT_ID_LEN;
   }
 
   public static boolean validAssetName(byte[] assetName) {
@@ -199,8 +201,8 @@ public class TransactionUtil {
   public TransactionSignWeight getTransactionSignWeight(Transaction trx) {
     TransactionSignWeight.Builder tswBuilder = TransactionSignWeight.newBuilder();
     Result.Builder resultBuilder = Result.newBuilder();
-    if (trx.getSignatureCount() > chainBaseManager.getDynamicPropertiesStore()
-        .getTotalSignNum()) {
+    if (trx.getSignatureCount() + trx.getPqAuthSigCount()
+        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
       resultBuilder.setCode(Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);
@@ -243,14 +245,30 @@ public class TransactionUtil {
           }
         }
         tswBuilder.setPermission(permission);
+        long currentWeight = 0L;
+        List<ByteString> approveList = new ArrayList<>();
         if (trx.getSignatureCount() > 0) {
-          List<ByteString> approveList = new ArrayList<>();
-          long currentWeight = TransactionCapsule.checkWeight(permission, trx.getSignatureList(),
+          currentWeight = TransactionCapsule.checkWeight(permission, trx.getSignatureList(),
               Sha256Hash.hash(CommonParameter.getInstance()
                   .isECKeyCryptoEngine(), trx.getRawData().toByteArray()), approveList);
-          tswBuilder.addAllApprovedList(approveList);
-          tswBuilder.setCurrentWeight(currentWeight);
         }
+        if (trx.getPqAuthSigCount() > 0) {
+          if (!chainBaseManager.getDynamicPropertiesStore().isAnyPqSchemeAllowed()) {
+            throw new PermissionException(
+                "pq_auth_sig not allowed: no post-quantum scheme is activated");
+          }
+          try {
+            long pqWeight = TransactionCapsule.validatePQSignatureGetWeight(trx, permission,
+                chainBaseManager.getDynamicPropertiesStore(), approveList);
+            currentWeight = StrictMathWrapper.addExact(currentWeight, pqWeight);
+          } catch (ArithmeticException e) {
+            throw new PermissionException("weight overflow");
+          }
+        }
+
+        tswBuilder.addAllApprovedList(approveList);
+        tswBuilder.setCurrentWeight(currentWeight);
+
         if (tswBuilder.getCurrentWeight() >= permission.getThreshold()) {
           resultBuilder.setCode(Result.response_code.ENOUGH_PERMISSION);
         } else {
@@ -279,13 +297,13 @@ public class TransactionUtil {
     DelegateResourceContract.Builder builder;
     if (dps.supportMaxDelegateLockPeriod()) {
       builder = DelegateResourceContract.newBuilder()
-              .setLock(true)
-              .setLockPeriod(dps.getMaxDelegateLockPeriod())
-              .setBalance(balance);
+          .setLock(true)
+          .setLockPeriod(dps.getMaxDelegateLockPeriod())
+          .setBalance(balance);
     } else {
       builder = DelegateResourceContract.newBuilder()
-              .setLock(true)
-              .setBalance(balance);
+          .setLock(true)
+          .setBalance(balance);
     }
     long builderSize = builder.build().getSerializedSize();
     DelegateResourceContract.Builder builder2 = DelegateResourceContract.newBuilder()

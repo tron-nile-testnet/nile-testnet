@@ -95,13 +95,14 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
     long weightSum = 0;
     List<ByteString> addressList = permission.getKeysList()
         .stream()
-        .map(x -> x.getAddress())
+        .map(Key::getAddress)
         .distinct()
         .collect(toList());
     if (addressList.size() != permission.getKeysList().size()) {
       throw new ContractValidateException(
           "address should be distinct in permission " + permission.getType());
     }
+
     for (Key key : permission.getKeysList()) {
       if (!DecodeUtil.addressValid(key.getAddress().toByteArray())) {
         throw new ContractValidateException("key is not a validate address");
@@ -237,4 +238,5 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
   public long calcFee() {
     return chainBaseManager.getDynamicPropertiesStore().getUpdateAccountPermissionFee();
   }
+
 }

@@ -65,6 +65,8 @@ public class CommitteeConfig {
   private long dynamicEnergyThreshold = 0;
   private long dynamicEnergyIncreaseFactor = 0;
   private long dynamicEnergyMaxFactor = 0;
+  private long allowFnDsa512 = 0;
+  private long allowMlDsa44 = 0;
 
   // proposalExpireTime is NOT a committee field — it's in block.* and handled by BlockConfig
   // Defaults come from reference.conf (loaded globally via Configuration.java)

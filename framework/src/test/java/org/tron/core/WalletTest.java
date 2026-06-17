@@ -1481,8 +1481,7 @@ public class WalletTest extends BaseTest {
     for (int i = 0; i < keysCount + 1; i++) {
       overLimit.addSignature(oneSig);
     }
-    GrpcAPI.TransactionApprovedList rejected =
-        wallet.getTransactionApprovedList(overLimit.build());
+    GrpcAPI.TransactionApprovedList rejected = wallet.getTransactionApprovedList(overLimit.build());
     assertEquals(GrpcAPI.TransactionApprovedList.Result.response_code.OTHER_ERROR,
         rejected.getResult().getCode());
     assertEquals(0, rejected.getApprovedListCount());
@@ -1514,8 +1513,7 @@ public class WalletTest extends BaseTest {
     assertEquals(65, validSig.size());
 
     // Pad the 65-byte signature with trailing junk bytes.
-    ByteString oversized = validSig.concat(
-        ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5}));
+    ByteString oversized = validSig.concat(ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5}));
     assertEquals(70, oversized.size());
 
     GrpcAPI.TransactionApprovedList reply = wallet.getTransactionApprovedList(
@@ -1561,8 +1559,7 @@ public class WalletTest extends BaseTest {
       overLimit.addSignature(oneSig);
     }
 
-    GrpcAPI.TransactionApprovedList rejected =
-        wallet.getTransactionApprovedList(overLimit.build());
+    GrpcAPI.TransactionApprovedList rejected = wallet.getTransactionApprovedList(overLimit.build());
     assertEquals(GrpcAPI.TransactionApprovedList.Result.response_code.OTHER_ERROR,
         rejected.getResult().getCode());
     Assert.assertTrue(rejected.getResult().getMessage().contains("too many signatures"));
