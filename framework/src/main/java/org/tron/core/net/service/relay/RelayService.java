@@ -100,8 +100,8 @@ public class RelayService {
         "Fast forward config, isWitness: {}, ecdsaKeySize: {}, pqKeySize: {}, fastForwardNodes: {}",
         parameter.isWitness(), ecdsaKeySize, pqKeySize, fastForwardNodes.size());
 
-    if (!parameter.isWitness() || (ecdsaKeySize == 0 && pqKeySize == 0) ||
-        fastForwardNodes.isEmpty()) {
+    if (!parameter.isWitness() || (ecdsaKeySize == 0 && pqKeySize == 0)
+        || fastForwardNodes.isEmpty()) {
       return;
     }
 

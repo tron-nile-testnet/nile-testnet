@@ -514,7 +514,7 @@ public class TransactionCapsuleTest extends BaseTest {
       cap.validatePubSignature(dbManager.getAccountStore(), dbManager.getDynamicPropertiesStore());
       Assert.fail("unsupported scheme must be rejected");
     } catch (ValidateSignatureException e) {
-      Assert.assertTrue(e.getMessage().contains("unsupported pq scheme"));
+      Assert.assertTrue(e.getMessage().contains("is not allowed"));
     }
   }
 

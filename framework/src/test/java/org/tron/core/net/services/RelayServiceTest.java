@@ -363,9 +363,12 @@ public class RelayServiceTest extends BaseTest {
     try {
       Class<?> clazz = service.getClass();
 
-      Field keySizeField = clazz.getDeclaredField("keySize");
-      keySizeField.setAccessible(true);
-      keySizeField.set(service, 0);
+      Field ecdsaKeySizeField = clazz.getDeclaredField("ecdsaKeySize");
+      ecdsaKeySizeField.setAccessible(true);
+      ecdsaKeySizeField.set(service, 0);
+      Field pqKeySizeField = clazz.getDeclaredField("pqKeySize");
+      pqKeySizeField.setAccessible(true);
+      pqKeySizeField.set(service, 0);
 
       Field ecdsaField = clazz.getDeclaredField("ecdsaWitnessAddress");
       ecdsaField.setAccessible(true);
