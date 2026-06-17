@@ -158,6 +158,11 @@ public final class FNDSA512 implements PQSignature {
   }
 
   @Override
+  public void validatePrivateKey(byte[] privateKey) {
+    validatePrivateKeyBytes(privateKey);
+  }
+
+  @Override
   public int getPublicKeyLength() {
     return PUBLIC_KEY_LENGTH;
   }
