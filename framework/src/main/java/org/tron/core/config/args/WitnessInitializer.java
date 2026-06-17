@@ -199,13 +199,14 @@ public class WitnessInitializer {
 
     boolean hasSeed = StringUtils.isNotBlank(keyFile.getSeed());
     boolean hasPriv = StringUtils.isNotBlank(keyFile.getPrivateKey());
-    if (hasSeed == hasPriv) {
-      throw witnessError("%s[%d] (%s) must define exactly one of `seed` or `privateKey`",
+    if (!hasSeed && !hasPriv) {
+      throw witnessError("%s[%d] (%s) must define at least one of `seed` or `privateKey`",
           PQ_KEYS_PATH, index, keyFilePath);
     }
-    return hasSeed
-        ? keypairFromSeed(index, scheme, keyFile.getSeed())
-        : keypairFromKey(index, scheme, keyFile.getPrivateKey(), keyFile.getPublicKey());
+    // When both are present (--all mode), privateKey takes priority; seed is treated as backup.
+    return hasPriv
+        ? keypairFromKey(index, scheme, keyFile.getPrivateKey(), keyFile.getPublicKey())
+        : keypairFromSeed(index, scheme, keyFile.getSeed());
   }
 
   private static PqKeyFile readKeyFile(int index, String keyFilePath) {
@@ -265,18 +266,26 @@ public class WitnessInitializer {
     boolean hasPub = StringUtils.isNotBlank(rawPub);
 
     if (PQSchemeRegistry.canDerivePublicKey(scheme)) {
-      // ML-DSA-44: the private key alone determines the keypair; derive the pub.
-      // A publicKey field is redundant and must not be set.
-      if (hasPub) {
-        throw witnessError("%s[%d].publicKey must not be set for %s; it is derived "
-            + "from privateKey", PQ_KEYS_PATH, index, scheme);
-      }
+      // ML-DSA-44: derive the public key from the private key.
+      // publicKey is optional; when present it is verified to match the derived value.
       byte[] pubBytes;
       try {
         pubBytes = PQSchemeRegistry.derivePublicKey(scheme, privBytes);
       } catch (RuntimeException e) {
         throw witnessError("%s[%d].privateKey cannot recover public key for %s: %s",
             PQ_KEYS_PATH, index, scheme, e.getMessage());
+      }
+      if (hasPub) {
+        int pubHexLen = PQSchemeRegistry.getPublicKeyLength(scheme) * 2;
+        String pubHex = stripHexPrefix(rawPub);
+        if (pubHex.length() != pubHexLen) {
+          throw witnessError("%s[%d].publicKey must be %d hex chars for %s, actual: %d",
+              PQ_KEYS_PATH, index, pubHexLen, scheme, pubHex.length());
+        }
+        if (!pubHex.equalsIgnoreCase(Hex.toHexString(pubBytes))) {
+          throw witnessError("%s[%d].publicKey does not match the key derived from privateKey"
+              + " for %s", PQ_KEYS_PATH, index, scheme);
+        }
       }
       return new PqKeypair(scheme, privHex, Hex.toHexString(pubBytes));
     }

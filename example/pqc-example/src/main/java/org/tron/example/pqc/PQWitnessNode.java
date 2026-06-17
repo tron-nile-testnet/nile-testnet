@@ -18,6 +18,7 @@ import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.crypto.pqc.PQSignature;
 import org.tron.common.utils.ByteArray;
+import org.tron.common.utils.StringUtil;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.capsule.WitnessCapsule;
@@ -60,7 +61,7 @@ public class PQWitnessNode {
    * the witness uses to sign blocks.
    */
   static final PQScheme PQ_SCHEME = PQScheme.valueOf(
-      System.getProperty("pqc.scheme", PQScheme.ML_DSA_44.name()));
+      System.getProperty("pqc.scheme", PQScheme.FN_DSA_512.name()));
 
   /** Per-scheme fixed seed for the PQ witness keypair (shared with PQClient). */
   static final Map<PQScheme, byte[]> WITNESS_SEEDS = filledSeeds((byte) 0x01);
@@ -250,22 +251,21 @@ public class PQWitnessNode {
   }
 
   private static Path writeWitnessConfig(PQSignature witnessKp) throws java.io.IOException {
-    // Write the keypair to a JSON key file, then reference its path from the node
-    // config. For schemes whose expanded sk lets BC recover the pk (ML-DSA-44),
-    // emit privateKey only; otherwise emit privateKey + publicKey (Falcon-512,
-    // since BC has no public path from (f, g) to h — see bcgit/bc-java#2297).
+    // Write the full keypair to a JSON key file: seed, privateKey, publicKey, and address.
+    // privateKey takes priority at load time; seed is retained as a backup field.
+    String address = StringUtil.encode58Check(witnessKp.getAddress());
     Path keyFile = Files.createTempFile("pqc-witness-key-", ".json");
     keyFile.toFile().deleteOnExit();
     StringBuilder json = new StringBuilder()
         .append("{\n")
         .append("  \"scheme\": \"").append(PQ_SCHEME.name()).append("\",\n")
+        .append("  \"seed\": \"").append(Hex.toHexString(WITNESS_SEED)).append("\",\n")
         .append("  \"privateKey\": \"").append(Hex.toHexString(witnessKp.getPrivateKey()))
-        .append("\"");
-    if (!PQSchemeRegistry.canDerivePublicKey(PQ_SCHEME)) {
-      json.append(",\n  \"publicKey\": \"")
-          .append(Hex.toHexString(witnessKp.getPublicKey())).append("\"");
-    }
-    json.append("\n}\n");
+        .append("\",\n")
+        .append("  \"publicKey\": \"").append(Hex.toHexString(witnessKp.getPublicKey()))
+        .append("\",\n")
+        .append("  \"address\": \"").append(address).append("\"")
+        .append("\n}\n");
     Files.write(keyFile, json.toString().getBytes(StandardCharsets.UTF_8));
 
     Path conf = Files.createTempFile("pqc-witness-", ".conf");

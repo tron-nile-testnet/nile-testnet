@@ -118,19 +118,21 @@ public class ArgsPqConfigTest {
   }
 
   @Test
-  public void keyAndSeedBothSetRejected() throws IOException {
-    MLDSA44 ml = new MLDSA44(filled(MLDSA44.SEED_LENGTH, (byte) 0x05));
-    String seed = Hex.toHexString(filled(MLDSA44.SEED_LENGTH, (byte) 0x05));
+  public void keyAndSeedBothSetUsesPrivateKey() throws IOException {
+    // When both seed and privateKey are present (--all mode), privateKey takes priority.
+    byte[] seedBytes = filled(MLDSA44.SEED_LENGTH, (byte) 0x05);
+    MLDSA44 ml = new MLDSA44(seedBytes);
+    String seedHex = Hex.toHexString(seedBytes);
     Path conf = writeConf(writeKeyFile(
         "{ \"scheme\": \"ML_DSA_44\","
-            + " \"privateKey\": \"" + Hex.toHexString(ml.getPrivateKey()) + "\","
-            + " \"seed\": \"" + seed + "\" }"));
+            + " \"seed\": \"" + seedHex + "\","
+            + " \"privateKey\": \"" + Hex.toHexString(ml.getPrivateKey()) + "\" }"));
 
-    TronError err = assertThrows(TronError.class,
-        () -> Args.setParam(new String[]{"--witness"}, conf.toString()));
-    assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
-    assertTrue(err.getMessage(),
-        err.getMessage().contains("exactly one of `seed` or `privateKey`"));
+    Args.setParam(new String[]{"--witness"}, conf.toString());
+    LocalWitnesses lw = Args.getLocalWitnesses();
+    PqKeypair kp = lw.getPqKeypairs().get(0);
+    // privateKey takes priority: loaded keypair must match the explicit key, not the seed
+    assertEquals(Hex.toHexString(ml.getPrivateKey()), kp.getPrivateKey());
   }
 
   @Test
@@ -141,7 +143,7 @@ public class ArgsPqConfigTest {
         () -> Args.setParam(new String[]{"--witness"}, conf.toString()));
     assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
     assertTrue(err.getMessage(),
-        err.getMessage().contains("exactly one of `seed` or `privateKey`"));
+        err.getMessage().contains("at least one of `seed` or `privateKey`"));
   }
 
   @Test
@@ -169,19 +171,33 @@ public class ArgsPqConfigTest {
   }
 
   @Test
-  public void mlDsa44PublicKeySetRejected() throws IOException {
-    // ML-DSA-44's public key is derived from the private key, so an explicit
-    // publicKey is redundant and rejected.
+  public void mlDsa44PublicKeyMatchingAccepted() throws IOException {
+    // ML-DSA-44 publicKey is optional; when present and matching the derived key it is accepted.
     MLDSA44 ml = new MLDSA44(filled(MLDSA44.SEED_LENGTH, (byte) 0x0B));
     Path conf = writeConf(writeKeyFile(
         "{ \"scheme\": \"ML_DSA_44\","
             + " \"privateKey\": \"" + Hex.toHexString(ml.getPrivateKey()) + "\","
             + " \"publicKey\": \"" + Hex.toHexString(ml.getPublicKey()) + "\" }"));
 
+    Args.setParam(new String[]{"--witness"}, conf.toString());
+    PqKeypair kp = Args.getLocalWitnesses().getPqKeypairs().get(0);
+    assertEquals(Hex.toHexString(ml.getPublicKey()), kp.getPublicKey());
+  }
+
+  @Test
+  public void mlDsa44PublicKeyMismatchRejected() throws IOException {
+    // When publicKey is present for ML_DSA_44 but does not match privateKey, it must be rejected.
+    MLDSA44 ml = new MLDSA44(filled(MLDSA44.SEED_LENGTH, (byte) 0x0B));
+    MLDSA44 other = new MLDSA44(filled(MLDSA44.SEED_LENGTH, (byte) 0x0C));
+    Path conf = writeConf(writeKeyFile(
+        "{ \"scheme\": \"ML_DSA_44\","
+            + " \"privateKey\": \"" + Hex.toHexString(ml.getPrivateKey()) + "\","
+            + " \"publicKey\": \"" + Hex.toHexString(other.getPublicKey()) + "\" }"));
+
     TronError err = assertThrows(TronError.class,
         () -> Args.setParam(new String[]{"--witness"}, conf.toString()));
     assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
-    assertTrue(err.getMessage(), err.getMessage().contains("publicKey must not be set"));
+    assertTrue(err.getMessage(), err.getMessage().contains("does not match"));
   }
 
   @Test
