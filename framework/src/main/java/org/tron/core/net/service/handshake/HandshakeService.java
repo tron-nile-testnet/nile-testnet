@@ -125,6 +125,8 @@ public class HandshakeService {
 
     peer.setHelloMessageReceive(msg);
 
+    // Wall-clock from libp2p channel creation to TRON handshake completion (this hello processed).
+    // Both stamps come from this node's clock, so it is skew-free; not a pure network RTT.
     long latencyMs = System.currentTimeMillis() - peer.getChannel().getStartTime();
     peer.getChannel().updateAvgLatency(latencyMs);
     // Sample only the SR<->FF handshake path:
