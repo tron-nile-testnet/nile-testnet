@@ -3150,6 +3150,8 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
         if (PQSchemeRegistry.contains(scheme)) {
           throw new IllegalStateException(
               "Missing governance flag mapping for registered PQ scheme: " + scheme);
+        } else {
+          logger.warn(" pq_auth_sig scheme {} is not registered.", scheme);
         }
         return false;
     }

@@ -747,11 +747,8 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     long weight = 0L;
     for (PQAuthSig witness : transaction.getPqAuthSigList()) {
       PQScheme scheme = witness.getScheme();
-      if (!PQSchemeRegistry.contains(scheme)) {
-        throw new PermissionException("unsupported pq scheme: " + scheme);
-      }
       if (!dynamicPropertiesStore.isPqSchemeAllowed(scheme)) {
-        throw new PermissionException(scheme + " is not activated");
+        throw new PermissionException(scheme + " is not allowed");
       }
       byte[] pk = witness.getPublicKey().toByteArray();
       byte[] sig = witness.getSignature().toByteArray();

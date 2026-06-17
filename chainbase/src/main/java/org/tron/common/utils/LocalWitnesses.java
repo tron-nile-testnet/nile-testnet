@@ -16,6 +16,7 @@
 package org.tron.common.utils;
 
 import com.google.common.collect.Lists;
+import java.util.Arrays;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,6 +38,10 @@ public class LocalWitnesses {
   @Getter
   private List<String> privateKeys = Lists.newArrayList();
 
+  /**
+   * The ECDSA SR account address. Derived from the local ECDSA witness key and
+   * used by the legacy (secp256k1) block-production / signing path.
+   */
   @Setter
   @Getter
   private byte[] witnessAccountAddress;
@@ -112,6 +117,21 @@ public class LocalWitnesses {
       PqKeypair first = pqKeypairs.get(0);
       byte[] pubKey = ByteArray.fromHexString(first.getPublicKey());
       this.pqWitnessAccountAddress = PQSchemeRegistry.computeAddress(first.getScheme(), pubKey);
+    }
+  }
+
+  /**
+   * One account address should authorise its witness permission to only one key
+   * (either ECDSA or PQ). Throws if the same address is configured for both.
+   */
+  public void checkWitnessAddressConflict() {
+    if (witnessAccountAddress != null && pqWitnessAccountAddress != null
+        && Arrays.equals(witnessAccountAddress, pqWitnessAccountAddress)) {
+      throw new TronError(
+          String.format("Witness account address %s is authorised to both an ECDSA and a PQ key; "
+                  + "one account address should authorise witness permission to only one key.",
+              ByteArray.toHexString(witnessAccountAddress)),
+          TronError.ErrCode.WITNESS_INIT);
     }
   }
 

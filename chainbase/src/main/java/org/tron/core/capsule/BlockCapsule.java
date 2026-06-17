@@ -263,11 +263,8 @@ public class BlockCapsule implements ProtoCapsule<Block> {
       Verify the PQ scheme is supported and proposal opened
      */
     PQScheme scheme = pqAuthSig.getScheme();
-    if (!PQSchemeRegistry.contains(scheme)) {
-      throw new ValidateSignatureException("pq_auth_sig scheme " + scheme + " is not registered");
-    }
     if (!dynamicPropertiesStore.isPqSchemeAllowed(scheme)) {
-      throw new ValidateSignatureException("pq_auth_sig scheme " + scheme + " is not activated");
+      throw new ValidateSignatureException("pq_auth_sig scheme " + scheme + " is not allowed");
     }
 
     byte[] publicKey = pqAuthSig.getPublicKey().toByteArray();
