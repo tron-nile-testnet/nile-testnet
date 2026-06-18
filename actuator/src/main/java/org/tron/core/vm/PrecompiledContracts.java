@@ -2653,10 +2653,11 @@ public class PrecompiledContracts {
         FNDSA512.SIGNATURE_MAX_LENGTH - FNDSA512.SIGNATURE_HEADER_LENGTH;
     private static final int PK_LEN = FNDSA512.PUBLIC_KEY_LENGTH;
     private static final int INPUT_LEN = MSG_LEN + SIG_SLOT_LEN + PK_LEN;
+    private static final long ENERGY = 80;
 
     @Override
     public long getEnergyForData(byte[] data) {
-      return 4000;
+      return ENERGY;
     }
 
     @Override
@@ -2709,11 +2710,11 @@ public class PrecompiledContracts {
    *
    * <p>Reuses the {@code BatchValidateSign.workers} pool when not in a constant
    * call and enforces {@code getCPUTimeLeftInNanoSecond()} timeout. {@code MAX_SIZE = 16}.
-   * Energy is {@code cnt × 2000}.
+   * Energy is {@code cnt × 90}.
    */
   public static class BatchValidateFnDsa512 extends PrecompiledContract {
 
-    private static final int ENERGY_PER_SIGN = 2000;
+    private static final int ENERGY_PER_SIGN = 90;
     private static final int MAX_SIZE = 16;
     private static final int PK_LEN = FNDSA512.PUBLIC_KEY_LENGTH;
     private static final int SIG_SLOT_LEN =
@@ -2889,10 +2890,11 @@ public class PrecompiledContracts {
     private static final int SIG_LEN = MLDSA44.SIGNATURE_LENGTH;
     private static final int PK_LEN = MLDSA44.PUBLIC_KEY_LENGTH;
     private static final int INPUT_LEN = MSG_LEN + SIG_LEN + PK_LEN;
+    private static final long ENERGY = 180;
 
     @Override
     public long getEnergyForData(byte[] data) {
-      return 4500;
+      return ENERGY;
     }
 
     @Override
@@ -2939,8 +2941,8 @@ public class PrecompiledContracts {
    * Dilithium sigs are exactly 2420 B and Dilithium pks 1312 B.
    *
    * <p>{@code MAX_SIZE = 5} across ECDSA + PQ entries combined. Energy is
-   * {@code ecdsaCnt × 1500 + sum_i pqEnergy(scheme_i)} with FN-DSA-512 = 2000
-   * and ML-DSA-44 = 4000. Unknown tags are charged at worst case so an attacker
+   * {@code ecdsaCnt × 1500 + sum_i pqEnergy(scheme_i)} with FN-DSA-512 = 90
+   * and ML-DSA-44 = 210. Unknown tags are charged at worst case so an attacker
    * cannot underpay by encoding a tag the dispatcher will then reject.
    *
    * <p>Per-entry runtime gate: a Falcon entry returns {@code DATA_FALSE} when
@@ -2950,8 +2952,8 @@ public class PrecompiledContracts {
   public static class ValidateMultiPQSig extends PrecompiledContract {
 
     private static final int ECDSA_ENERGY_PER_SIGN = 1500;
-    private static final int FN_DSA_512_ENERGY = 2000;
-    private static final int ML_DSA_44_ENERGY = 4000;
+    private static final int FN_DSA_512_ENERGY = 90;
+    private static final int ML_DSA_44_ENERGY = 210;
     private static final int WORST_PQ_ENERGY = ML_DSA_44_ENERGY;
     private static final int MAX_SIZE = 5;
     // address, permissionId, data, ecdsaOff, schemeOff, pqSigOff, pqPkOff.
@@ -3140,11 +3142,11 @@ public class PrecompiledContracts {
    * Returns a 256-bit bitmap where bit {@code i} is set iff
    * {@code derive(pk_i) == expectedAddr_i} AND {@code MLDSA44.verify(pk_i, hash, sig_i)}.
    * Same ABI shape as 0x17, with sigs 2420 B and pks 1312 B.
-   * {@code MAX_SIZE = 16}; energy is {@code cnt × 4000}.
+   * {@code MAX_SIZE = 16}; energy is {@code cnt × 210}.
    */
   public static class BatchValidateMlDsa44 extends PrecompiledContract {
 
-    private static final int ENERGY_PER_SIGN = 4000;
+    private static final int ENERGY_PER_SIGN = 210;
     private static final int MAX_SIZE = 16;
     private static final int PK_LEN = MLDSA44.PUBLIC_KEY_LENGTH;
     private static final int SIG_LEN = MLDSA44.SIGNATURE_LENGTH;
