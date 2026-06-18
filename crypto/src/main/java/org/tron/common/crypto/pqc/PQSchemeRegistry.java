@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.AllArgsConstructor;
 import org.tron.common.crypto.Hash;
+import org.tron.common.utils.DecodeUtil;
 import org.tron.protos.Protocol.PQScheme;
 
 /**
@@ -329,7 +330,7 @@ public final class PQSchemeRegistry {
 
   /**
    * Derive the 21-byte TRON address from a PQ public key as
-   * {@code 0x41 ‖ deriveHash(scheme, public_key)[12..32]} — the rightmost 20
+   * {@code addressPreFixByte ‖ deriveHash(scheme, public_key)[12..32]} — the rightmost 20
    * bytes of the digest, matching the ECDSA address derivation slice.
    */
   public static byte[] computeAddress(PQScheme scheme, byte[] publicKey) {
@@ -340,7 +341,7 @@ public final class PQSchemeRegistry {
               + (h == null ? -1 : h.length));
     }
     byte[] addr = new byte[21];
-    addr[0] = 0x41;
+    addr[0] = DecodeUtil.addressPreFixByte;
     System.arraycopy(h, h.length - 20, addr, 1, 20);
     return addr;
   }

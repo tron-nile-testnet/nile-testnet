@@ -1644,6 +1644,17 @@ public class Manager {
     Metrics.histogramObserve(MetricKeys.Histogram.MINER_DELAY,
         (System.currentTimeMillis() - blockTime) / Metrics.MILLISECONDS_PER_SECOND, address);
     long postponedTrxCount = 0;
+
+    if (miner.isPq()) {
+      Param.Miner.PQMiner pq = miner.getPq();
+      if (!getDynamicPropertiesStore().isPqSchemeAllowed(pq.getScheme())) {
+        logger.warn("PQ miner {} has scheme {} configured but that scheme is not currently "
+                + "allowed by dynamic properties, skipping block generation.",
+            Hex.toHexString(pq.getWitnessAddress().toByteArray()), pq.getScheme());
+        return null;
+      }
+    }
+
     logger.info("Generate block {} begin.", chainBaseManager.getHeadBlockNum() + 1);
 
     BlockCapsule blockCapsule = new BlockCapsule(chainBaseManager.getHeadBlockNum() + 1,
@@ -1785,20 +1796,8 @@ public class Manager {
 
     blockCapsule.setMerkleRoot();
     if (miner.isPq()) {
-      // PQ-only miner: never fall back to ECDSA signing — miner.getPrivateKey() is
-      // null on this path, and a silent fallback would NPE inside blockCapsule.sign.
-      // Fail fast with a clear cause; DposTask's Throwable handler logs it and the
-      // witness misses this slot, but the producer thread stays alive.
-      // Gate on this miner's specific scheme, not on the broader "any PQ scheme
-      // allowed" flag — a Falcon-configured miner must not produce while only
-      // ML-DSA is active (and vice versa).
-      Param.Miner.PQMiner pq = miner.getPq();
-      if (!getDynamicPropertiesStore().isPqSchemeAllowed(pq.getScheme())) {
-        throw new IllegalStateException(
-            "PQ miner " + Hex.toHexString(pq.getWitnessAddress().toByteArray())
-                + " has scheme " + pq.getScheme()
-                + " configured but that scheme is not allowed by dynamic properties");
-      }
+      // Scheme was verified active at entry; sign with the configured PQ key.
+      // PQ-only miner never falls back to ECDSA — miner.getPrivateKey() is null on this path.
       signBlockCapsuleWithPQ(blockCapsule, miner);
     } else {
       blockCapsule.sign(miner.getPrivateKey());
