@@ -1294,9 +1294,15 @@ public class Manager {
         Metrics.histogramObserve(blockedTimer.get());
         blockedTimer.remove();
         if (Metrics.enabled()) {
+          String witnessAddr = StringUtil.encode58Check(block.getWitnessAddress().toByteArray());
+          List<TransactionCapsule> blockTxs = block.getTransactions();
           Metrics.histogramObserve(MetricKeys.Histogram.BLOCK_TRANSACTION_COUNT,
-              block.getTransactions().size(),
-              StringUtil.encode58Check(block.getWitnessAddress().toByteArray()));
+              blockTxs.size(), witnessAddr);
+          long pqTxCount = blockTxs.stream()
+              .filter(tx -> tx.getInstance().getPqAuthSigCount() > 0)
+              .count();
+          Metrics.histogramObserve(MetricKeys.Histogram.BLOCK_PQ_TRANSACTION_COUNT,
+              pqTxCount, witnessAddr);
         }
         long headerNumber = getDynamicPropertiesStore().getLatestBlockHeaderNumber();
         if (block.getNum() <= headerNumber && khaosDb.containBlockInMiniStore(block.getBlockId())) {

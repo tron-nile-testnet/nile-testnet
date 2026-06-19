@@ -67,6 +67,7 @@ public class MetricKeys {
     public static final String BLOCK_FETCH_LATENCY = "tron:block_fetch_latency_seconds";
     public static final String BLOCK_RECEIVE_DELAY = "tron:block_receive_delay_seconds";
     public static final String BLOCK_TRANSACTION_COUNT = "tron:block_transaction_count";
+    public static final String BLOCK_PQ_TRANSACTION_COUNT = "tron:block_pq_transaction_count";
     /**
      * Transaction fetch round-trip latency in seconds: from sending
      * {@code GET_DATA (FETCH_INV_DATA)} to receiving the full {@code TXS}
