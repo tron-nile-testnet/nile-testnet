@@ -203,7 +203,7 @@ public class BatchValidateFnDsa512Test {
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
     byte[] input = encode(HASH, sigs, pks, addrs);
-    Assert.assertEquals(3L * 2000L, contract.getEnergyForData(input));
+    Assert.assertEquals(3L * 220L, contract.getEnergyForData(input));
   }
 
   @Test
