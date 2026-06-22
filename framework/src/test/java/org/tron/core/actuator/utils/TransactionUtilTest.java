@@ -28,6 +28,7 @@ import org.tron.api.GrpcAPI.TransactionSignWeight;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
+import org.tron.common.crypto.pqc.FNDSA512;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Utils;
 import org.tron.core.ChainBaseManager;
@@ -40,6 +41,8 @@ import org.tron.core.store.DynamicPropertiesStore;
 import org.tron.core.utils.TransactionUtil;
 import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.AccountType;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
@@ -488,8 +491,7 @@ public class TransactionUtilTest extends BaseTest {
     assertEquals(65, validSig.size());
 
     // Pad the 65-byte signature with trailing junk bytes.
-    ByteString oversized = validSig.concat(
-        ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5}));
+    ByteString oversized = validSig.concat(ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5}));
     assertEquals(70, oversized.size());
 
     TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(
@@ -535,11 +537,44 @@ public class TransactionUtilTest extends BaseTest {
       overLimit.addSignature(oneSig);
     }
 
-    TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(
-        overLimit.build());
+    TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(overLimit.build());
     assertEquals(TransactionSignWeight.Result.response_code.OTHER_ERROR,
         reply.getResult().getCode());
     Assert.assertTrue(reply.getResult().getMessage().contains("too many signatures"));
     assertEquals(0, reply.getApprovedListCount());
+  }
+
+  @Test
+  public void testSignWeightTooManyPqSigs_dos() {
+    // DOS-1 / TB-01: the guard must count pq_auth_sig entries regardless of
+    // whether any PQ scheme is activated. 0 ECDSA + N PQ entries must be
+    // rejected before any expensive verification runs.
+    FNDSA512 kp = new FNDSA512();
+    PQAuthSig dummySig = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+        .setSignature(ByteString.copyFrom(kp.sign(new byte[32])))
+        .build();
+
+    Transaction unsigned = Transaction.newBuilder().setRawData(
+        Transaction.raw.newBuilder().addContract(
+            Contract.newBuilder().setType(ContractType.TransferContract)
+                .setParameter(Any.pack(TransferContract.newBuilder().setAmount(1)
+                    .setOwnerAddress(ByteString.copyFrom(
+                        ByteArray.fromHexString(OWNER_ADDRESS)))
+                    .setToAddress(ByteString.copyFrom(
+                        ByteArray.fromHexString(OWNER_ADDRESS)))
+                    .build())).build()).build()).build();
+
+    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+    Transaction.Builder overLimit = unsigned.toBuilder();
+    for (int i = 0; i < totalSignNum + 1; i++) {
+      overLimit.addPqAuthSig(dummySig);
+    }
+
+    TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(overLimit.build());
+    assertEquals(TransactionSignWeight.Result.response_code.OTHER_ERROR,
+        reply.getResult().getCode());
+    Assert.assertTrue(reply.getResult().getMessage().contains("too many signatures"));
   }
 }

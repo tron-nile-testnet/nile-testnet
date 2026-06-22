@@ -16,6 +16,8 @@ import org.tron.core.config.args.Args;
 import org.tron.core.utils.TransactionUtil;
 import org.tron.json.JSONObject;
 import org.tron.protos.Protocol;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Transaction;
 
 public class UtilTest extends BaseTest {
@@ -189,6 +191,39 @@ public class UtilTest extends BaseTest {
     Transaction transaction = Util.packTransaction(strTransaction, false);
     TransactionSignWeight txSignWeight = transactionUtil.getTransactionSignWeight(transaction);
     Assert.assertNotNull(txSignWeight);
+  }
+
+  @Test
+  public void roundtripPQAuthSigJson() throws Exception {
+    byte[] sig = new byte[752];
+    byte[] pubKey = new byte[897];
+    for (int i = 0; i < sig.length; i++) {
+      sig[i] = (byte) (i & 0xff);
+    }
+    for (int i = 0; i < pubKey.length; i++) {
+      pubKey[i] = (byte) ((i * 7) & 0xff);
+    }
+    PQAuthSig pqAuthSig = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(pubKey))
+        .setSignature(ByteString.copyFrom(sig))
+        .build();
+    Transaction original = Transaction.newBuilder()
+        .setRawData(Transaction.raw.newBuilder().setTimestamp(1L).build())
+        .addPqAuthSig(pqAuthSig)
+        .build();
+
+    String json = Util.printTransactionToJSON(original, false).toJSONString();
+    Assert.assertTrue("JSON output should contain pq_auth_sig field", json.contains("pq_auth_sig"));
+
+    Transaction.Builder rebuilt = Transaction.newBuilder();
+    JsonFormat.merge(json, rebuilt, false);
+    Transaction decoded = rebuilt.build();
+
+    Assert.assertEquals(1, decoded.getPqAuthSigCount());
+    Assert.assertEquals(pqAuthSig.getScheme(), decoded.getPqAuthSig(0).getScheme());
+    Assert.assertEquals(pqAuthSig.getPublicKey(), decoded.getPqAuthSig(0).getPublicKey());
+    Assert.assertEquals(pqAuthSig.getSignature(), decoded.getPqAuthSig(0).getSignature());
   }
 
   private Transaction buildTooManySigsTransaction() {

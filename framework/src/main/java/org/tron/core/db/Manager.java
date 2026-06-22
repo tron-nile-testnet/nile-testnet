@@ -55,6 +55,7 @@ import org.tron.api.GrpcAPI.TransactionInfoList;
 import org.tron.common.args.GenesisBlock;
 import org.tron.common.bloom.Bloom;
 import org.tron.common.cron.CronExpression;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.exit.ExitManager;
 import org.tron.common.logsfilter.EventPluginLoader;
@@ -85,6 +86,7 @@ import org.tron.common.utils.Sha256Hash;
 import org.tron.common.utils.StringUtil;
 import org.tron.common.zksnark.MerkleContainer;
 import org.tron.consensus.Consensus;
+import org.tron.consensus.base.Param;
 import org.tron.consensus.base.Param.Miner;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.Constant;
@@ -171,6 +173,8 @@ import org.tron.core.store.WitnessStore;
 import org.tron.core.utils.TransactionRegister;
 import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.AccountType;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
@@ -183,6 +187,7 @@ import org.tron.protos.contract.BalanceContract;
 public class Manager {
 
   private static final int SHIELDED_TRANS_IN_BLOCK_COUNTS = 1;
+  private static final int PQ_TRANS_IN_BLOCK_COUNTS = 1000;
   private static final String SAVE_BLOCK = "Save block: {}";
   private static final int SLEEP_TIME_OUT = 50;
   private static final int TX_ID_CACHE_SIZE = 100_000;
@@ -190,6 +195,7 @@ public class Manager {
   private static final int NO_BLOCK_WAITING_LOCK = 0;
   private final int shieldedTransInPendingMaxCounts =
       Args.getInstance().getShieldedTransInPendingMaxCounts();
+  private final int pqTransInPendingMaxCounts = Args.getInstance().getPqTransInPendingMaxCounts();
   @Getter
   @Setter
   public boolean eventPluginLoaded = false;
@@ -245,6 +251,8 @@ public class Manager {
   private BlockingQueue<TransactionCapsule> pendingTransactions;
   @Getter
   private AtomicInteger shieldedTransInPendingCounts = new AtomicInteger(0);
+  @Getter
+  private AtomicInteger pqTransInPendingCounts = new AtomicInteger(0);
   // transactions popped
   private List<TransactionCapsule> poppedTransactions =
       Collections.synchronizedList(Lists.newArrayList());
@@ -926,6 +934,10 @@ public class Manager {
                   && shieldedTransInPendingCounts.get() >= shieldedTransInPendingMaxCounts) {
             return false;
           }
+          if (isPQTransaction(trx.getInstance())
+                  && pqTransInPendingCounts.get() >= pqTransInPendingMaxCounts) {
+            return false;
+          }
           if (!session.valid()) {
             session.setValue(revokingStore.buildSession());
           }
@@ -940,6 +952,9 @@ public class Manager {
           }
           if (isShieldedTransaction(trx.getInstance())) {
             shieldedTransInPendingCounts.incrementAndGet();
+          }
+          if (isPQTransaction(trx.getInstance())) {
+            pqTransInPendingCounts.incrementAndGet();
           }
         }
       }
@@ -1279,9 +1294,15 @@ public class Manager {
         Metrics.histogramObserve(blockedTimer.get());
         blockedTimer.remove();
         if (Metrics.enabled()) {
+          String witnessAddr = StringUtil.encode58Check(block.getWitnessAddress().toByteArray());
+          List<TransactionCapsule> blockTxs = block.getTransactions();
           Metrics.histogramObserve(MetricKeys.Histogram.BLOCK_TRANSACTION_COUNT,
-              block.getTransactions().size(),
-              StringUtil.encode58Check(block.getWitnessAddress().toByteArray()));
+              blockTxs.size(), witnessAddr);
+          long pqTxCount = blockTxs.stream()
+              .filter(tx -> tx.getInstance().getPqAuthSigCount() > 0)
+              .count();
+          Metrics.histogramObserve(MetricKeys.Histogram.BLOCK_PQ_TRANSACTION_COUNT,
+              pqTxCount, witnessAddr);
         }
         long headerNumber = getDynamicPropertiesStore().getLatestBlockHeaderNumber();
         if (block.getNum() <= headerNumber && khaosDb.containBlockInMiniStore(block.getBlockId())) {
@@ -1622,17 +1643,29 @@ public class Manager {
    * Generate a block.
    */
   public BlockCapsule generateBlock(Miner miner, long blockTime, long timeout) {
-    String address =  StringUtil.encode58Check(miner.getWitnessAddress().toByteArray());
+    ByteString witnessAddress = miner.getEffectiveWitnessAddress();
+    String address =  StringUtil.encode58Check(witnessAddress.toByteArray());
     final Histogram.Timer timer = Metrics.histogramStartTimer(
         MetricKeys.Histogram.BLOCK_GENERATE_LATENCY, address);
     Metrics.histogramObserve(MetricKeys.Histogram.MINER_DELAY,
         (System.currentTimeMillis() - blockTime) / Metrics.MILLISECONDS_PER_SECOND, address);
     long postponedTrxCount = 0;
+
+    if (miner.isPq()) {
+      Param.Miner.PQMiner pq = miner.getPq();
+      if (!getDynamicPropertiesStore().isPqSchemeAllowed(pq.getScheme())) {
+        logger.warn("PQ miner {} has scheme {} configured but that scheme is not currently "
+                + "allowed by dynamic properties, skipping block generation.",
+            Hex.toHexString(pq.getWitnessAddress().toByteArray()), pq.getScheme());
+        return null;
+      }
+    }
+
     logger.info("Generate block {} begin.", chainBaseManager.getHeadBlockNum() + 1);
 
     BlockCapsule blockCapsule = new BlockCapsule(chainBaseManager.getHeadBlockNum() + 1,
         chainBaseManager.getHeadBlockId(),
-        blockTime, miner.getWitnessAddress());
+        blockTime, witnessAddress);
     blockCapsule.generatedByMyself = true;
     session.reset();
     session.setValue(revokingStore.buildSession());
@@ -1640,9 +1673,9 @@ public class Manager {
     accountStateCallBack.preExecute(blockCapsule);
 
     if (getDynamicPropertiesStore().getAllowMultiSign() == 1) {
-      byte[] privateKeyAddress = miner.getPrivateKeyAddress().toByteArray();
+      byte[] privateKeyAddress = miner.getEffectivePrivateKeyAddress().toByteArray();
       AccountCapsule witnessAccount = getAccountStore()
-          .get(miner.getWitnessAddress().toByteArray());
+          .get(witnessAddress.toByteArray());
       if (!Arrays.equals(privateKeyAddress, witnessAccount.getWitnessPermissionAddress())) {
         logger.warn("Witness permission is wrong.");
         return null;
@@ -1653,8 +1686,15 @@ public class Manager {
 
     Set<String> accountSet = new HashSet<>();
     AtomicInteger shieldedTransCounts = new AtomicInteger(0);
+    AtomicInteger pqTransCounts = new AtomicInteger(0);
     List<TransactionCapsule> toBePacked = new ArrayList<>();
     long currentSize = blockCapsule.getInstance().getSerializedSize();
+    if (miner.isPq()) {
+      // signBlockCapsuleWithPQ appends the PQAuthSig after this loop; reserve its
+      // wire size now so the packed block never exceeds maxBlockSize on receivers.
+      PQScheme pqScheme = miner.getPq().getScheme();
+      currentSize += PQSchemeRegistry.computePQAuthSigWireSize(pqScheme);
+    }
     boolean isSort = Args.getInstance().isOpenTransactionSort();
     int[] logSize = new int[] {pendingTransactions.size(), rePushTransactions.size(), 0, 0};
     while (pendingTransactions.size() > 0 || rePushTransactions.size() > 0) {
@@ -1711,6 +1751,11 @@ public class Manager {
           && shieldedTransCounts.incrementAndGet() > SHIELDED_TRANS_IN_BLOCK_COUNTS) {
         continue;
       }
+      //pq transaction
+      boolean isPqTransaction = isPQTransaction(transaction);
+      if (isPqTransaction && pqTransCounts.get() >= PQ_TRANS_IN_BLOCK_COUNTS) {
+        continue;
+      }
       //multi sign transaction
       byte[] owner = trx.getOwnerAddress();
       String ownerAddress = ByteArray.toHexString(owner);
@@ -1736,6 +1781,9 @@ public class Manager {
         accountStateCallBack.exeTransFinish();
         tmpSession.merge();
         toBePacked.add(trx);
+        if (isPqTransaction) {
+          pqTransCounts.incrementAndGet();
+        }
         currentSize += trxPackSize;
         if (fromPending) {
           logSize[2] += 1;
@@ -1753,7 +1801,13 @@ public class Manager {
     session.reset();
 
     blockCapsule.setMerkleRoot();
-    blockCapsule.sign(miner.getPrivateKey());
+    if (miner.isPq()) {
+      // Scheme was verified active at entry; sign with the configured PQ key.
+      // PQ-only miner never falls back to ECDSA — miner.getPrivateKey() is null on this path.
+      signBlockCapsuleWithPQ(blockCapsule, miner);
+    } else {
+      blockCapsule.sign(miner.getPrivateKey());
+    }
 
     BlockCapsule capsule = new BlockCapsule(blockCapsule.getInstance());
     capsule.generatedByMyself = true;
@@ -1767,6 +1821,26 @@ public class Manager {
         capsule.getSerializedSize());
 
     return capsule;
+  }
+
+  private void signBlockCapsuleWithPQ(BlockCapsule blockCapsule, Miner miner) {
+    Param.Miner.PQMiner pq = miner.getPq();
+    PQScheme scheme = pq.getScheme();
+    byte[] pqPrivateKey = pq.getPrivateKey();
+    byte[] pqPublicKey = pq.getPublicKey();
+    if (pqPrivateKey == null || pqPublicKey == null) {
+      throw new IllegalStateException(
+          "miner " + Hex.toHexString(pq.getWitnessAddress().toByteArray())
+              + " has scheme " + scheme
+              + " set but local PQ key material is missing");
+    }
+    byte[] digest = blockCapsule.getRawHashBytes();
+    byte[] signature = PQSchemeRegistry.sign(scheme, pqPrivateKey, digest);
+    PQAuthSig.Builder builder = PQAuthSig.newBuilder()
+        .setScheme(scheme)
+        .setPublicKey(ByteString.copyFrom(pqPublicKey))
+        .setSignature(ByteString.copyFrom(signature));
+    blockCapsule.setPqAuthSig(builder.build());
   }
 
   private void filterOwnerAddress(TransactionCapsule transactionCapsule, Set<String> result) {
@@ -1797,6 +1871,10 @@ public class Manager {
       default:
         return false;
     }
+  }
+
+  private boolean isPQTransaction(Transaction transaction) {
+    return transaction.getPqAuthSigCount() > 0;
   }
 
   private boolean isExchangeTransaction(Transaction transaction) {

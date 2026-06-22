@@ -47,6 +47,8 @@ public class ConfigLoader {
         VMConfig.initAllowTvmSelfdestructRestriction(ds.getAllowTvmSelfdestructRestriction());
         VMConfig.initAllowTvmOsaka(ds.getAllowTvmOsaka());
         VMConfig.initAllowHardenResourceCalculation(ds.getAllowHardenResourceCalculation());
+        VMConfig.initAllowFnDsa512(ds.getAllowFnDsa512());
+        VMConfig.initAllowMlDsa44(ds.getAllowMlDsa44());
       }
     }
   }

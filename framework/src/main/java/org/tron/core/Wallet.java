@@ -632,8 +632,8 @@ public class Wallet {
     TransactionApprovedList.Builder tswBuilder = TransactionApprovedList.newBuilder();
     TransactionApprovedList.Result.Builder resultBuilder = TransactionApprovedList.Result
         .newBuilder();
-    if (trx.getSignatureCount() > chainBaseManager.getDynamicPropertiesStore()
-        .getTotalSignNum()) {
+    if (trx.getSignatureCount() + trx.getPqAuthSigCount()
+        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
       resultBuilder.setCode(TransactionApprovedList.Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);
@@ -1521,6 +1521,16 @@ public class Wallet {
     builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
         .setKey("getAllowHardenExchangeCalculation")
         .setValue(dbManager.getDynamicPropertiesStore().getAllowHardenExchangeCalculation())
+        .build());
+
+    builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
+        .setKey("getAllowFnDsa512")
+        .setValue(dbManager.getDynamicPropertiesStore().getAllowFnDsa512())
+        .build());
+
+    builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
+        .setKey("getAllowMlDsa44")
+        .setValue(dbManager.getDynamicPropertiesStore().getAllowMlDsa44())
         .build());
 
     return builder.build();

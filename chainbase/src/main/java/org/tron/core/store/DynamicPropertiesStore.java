@@ -16,6 +16,7 @@ import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Sha256Hash;
@@ -24,6 +25,7 @@ import org.tron.core.config.Parameter.ChainConstant;
 import org.tron.core.db.TronStoreWithRevoking;
 import org.tron.core.exception.BadItemException;
 import org.tron.core.exception.ItemNotFoundException;
+import org.tron.protos.Protocol.PQScheme;
 
 @Slf4j(topic = "DB")
 @Component
@@ -257,6 +259,10 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
 
   private static final byte[] TURKISH_KEY_MIGRATION_DONE =
       "TURKISH_KEY_MIGRATION_DONE".getBytes();
+
+  private static final byte[] ALLOW_FN_DSA_512 = "ALLOW_FN_DSA_512".getBytes();
+
+  private static final byte[] ALLOW_ML_DSA_44 = "ALLOW_ML_DSA_44".getBytes();
 
   @Autowired
   private DynamicPropertiesStore(@Value("properties") String dbName) {
@@ -3081,6 +3087,72 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
         .map(BytesCapsule::getData)
         .map(ByteArray::toLong)
         .orElse(0L);
+  }
+
+  public long getAllowFnDsa512() {
+    return Optional.ofNullable(getUnchecked(ALLOW_FN_DSA_512))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(CommonParameter.getInstance().getAllowFnDsa512());
+  }
+
+  public void saveAllowFnDsa512(long value) {
+    this.put(ALLOW_FN_DSA_512, new BytesCapsule(ByteArray.fromLong(value)));
+  }
+
+  public boolean allowFnDsa512() {
+    return getAllowFnDsa512() == 1L;
+  }
+
+  public long getAllowMlDsa44() {
+    return Optional.ofNullable(getUnchecked(ALLOW_ML_DSA_44))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(CommonParameter.getInstance().getAllowMlDsa44());
+  }
+
+  public void saveAllowMlDsa44(long value) {
+    this.put(ALLOW_ML_DSA_44, new BytesCapsule(ByteArray.fromLong(value)));
+  }
+
+  public boolean allowMlDsa44() {
+    return getAllowMlDsa44() == 1L;
+  }
+
+  /**
+   * Returns true iff at least one post-quantum signature scheme is currently
+   * activated. Driven by {@link PQSchemeRegistry#registeredSchemes()} so that
+   * adding a new scheme to the registry (and its corresponding case in
+   * {@link #isPqSchemeAllowed}) automatically propagates here — no manual edit
+   * needed.
+   */
+  public boolean isAnyPqSchemeAllowed() {
+    for (PQScheme scheme : PQSchemeRegistry.registeredSchemes()) {
+      if (isPqSchemeAllowed(scheme)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Per-scheme governance check. Each registered scheme has its own flag so
+   * activation is independent.
+   */
+  public boolean isPqSchemeAllowed(PQScheme scheme) {
+    if (scheme == null) {
+      return false;
+    }
+    switch (scheme) {
+      case FN_DSA_512: return allowFnDsa512();
+      case ML_DSA_44: return allowMlDsa44();
+      default:
+        if (PQSchemeRegistry.contains(scheme)) {
+          throw new IllegalStateException(
+              "Missing governance flag mapping for registered PQ scheme: " + scheme);
+        }
+        return false;
+    }
   }
 
   private static class DynamicResourceProperties {
