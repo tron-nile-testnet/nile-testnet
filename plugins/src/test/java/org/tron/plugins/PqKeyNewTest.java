@@ -165,6 +165,85 @@ public class PqKeyNewTest {
   }
 
   @Test
+  public void testCustomSeedIsDeterministic() throws Exception {
+    // ML_DSA_44 key derivation is bit-stable, so the same seed must yield the same key.
+    String seedHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+    File dir1 = tempFolder.newFolder("pq-seed-1");
+    int exit1 = new CommandLine(new Toolkit())
+        .execute("pq-key", "new",
+            "--scheme", "ML_DSA_44",
+            "--seed", seedHex,
+            "--output-dir", dir1.getAbsolutePath());
+    assertEquals(0, exit1);
+
+    File dir2 = tempFolder.newFolder("pq-seed-2");
+    int exit2 = new CommandLine(new Toolkit())
+        .execute("pq-key", "new",
+            "--scheme", "ML_DSA_44",
+            "--seed", seedHex,
+            "--output-dir", dir2.getAbsolutePath());
+    assertEquals(0, exit2);
+
+    JsonNode key1 = MAPPER.readTree(dir1.listFiles((d, name) -> name.endsWith(".json"))[0]);
+    JsonNode key2 = MAPPER.readTree(dir2.listFiles((d, name) -> name.endsWith(".json"))[0]);
+
+    assertEquals("seed should match the supplied value", seedHex, key1.get("seed").asText());
+    assertEquals("same seed must derive the same privateKey",
+        key1.get("privateKey").asText(), key2.get("privateKey").asText());
+    assertEquals("same seed must derive the same address",
+        key1.get("address").asText(), key2.get("address").asText());
+  }
+
+  @Test
+  public void testCustomSeedWith0xPrefix() throws Exception {
+    File dir = tempFolder.newFolder("pq-seed-0x");
+    String seedHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+    int exitCode = new CommandLine(new Toolkit())
+        .execute("pq-key", "new",
+            "--scheme", "ML_DSA_44",
+            "--seed", "0x" + seedHex,
+            "--output-dir", dir.getAbsolutePath());
+
+    assertEquals(0, exitCode);
+    JsonNode key = MAPPER.readTree(dir.listFiles((d, name) -> name.endsWith(".json"))[0]);
+    assertEquals("0x prefix should be stripped before decoding",
+        seedHex, key.get("seed").asText());
+  }
+
+  @Test
+  public void testSeedWrongLength() throws Exception {
+    StringWriter err = new StringWriter();
+    CommandLine cmd = new CommandLine(new Toolkit());
+    cmd.setErr(new PrintWriter(err));
+
+    // 32-byte seed supplied for FN_DSA_512 which requires 48 bytes.
+    int exitCode = cmd.execute("pq-key", "new",
+        "--scheme", "FN_DSA_512",
+        "--seed", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        "--output-dir", tempFolder.newFolder("pq-seed-bad-len").getAbsolutePath());
+
+    assertEquals(1, exitCode);
+    assertTrue(err.toString().contains("Invalid seed length"));
+  }
+
+  @Test
+  public void testSeedInvalidHex() throws Exception {
+    StringWriter err = new StringWriter();
+    CommandLine cmd = new CommandLine(new Toolkit());
+    cmd.setErr(new PrintWriter(err));
+
+    int exitCode = cmd.execute("pq-key", "new",
+        "--scheme", "ML_DSA_44",
+        "--seed", "zzzznothex",
+        "--output-dir", tempFolder.newFolder("pq-seed-bad-hex").getAbsolutePath());
+
+    assertEquals(1, exitCode);
+    assertTrue(err.toString().contains("Invalid seed"));
+  }
+
+  @Test
   public void testKeyFileIsValidJson() throws Exception {
     File dir = tempFolder.newFolder("pq-valid");
 
