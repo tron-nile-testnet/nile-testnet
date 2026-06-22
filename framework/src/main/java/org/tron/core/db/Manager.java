@@ -1651,17 +1651,16 @@ public class Manager {
         (System.currentTimeMillis() - blockTime) / Metrics.MILLISECONDS_PER_SECOND, address);
     long postponedTrxCount = 0;
 
+    logger.info("Generate block {} begin.", chainBaseManager.getHeadBlockNum() + 1);
     if (miner.isPq()) {
       Param.Miner.PQMiner pq = miner.getPq();
       if (!getDynamicPropertiesStore().isPqSchemeAllowed(pq.getScheme())) {
-        logger.error("PQ miner {} has scheme {} configured but that scheme is not currently "
+        logger.warn("PQ miner {} has scheme {} configured but that scheme is not currently "
                 + "allowed by dynamic properties, skipping block generation.",
             Hex.toHexString(pq.getWitnessAddress().toByteArray()), pq.getScheme());
         return null;
       }
     }
-
-    logger.info("Generate block {} begin.", chainBaseManager.getHeadBlockNum() + 1);
 
     BlockCapsule blockCapsule = new BlockCapsule(chainBaseManager.getHeadBlockNum() + 1,
         chainBaseManager.getHeadBlockId(),
