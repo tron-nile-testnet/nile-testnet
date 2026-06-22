@@ -944,7 +944,7 @@ public class ProposalUtil {
         break;
       }
       case ALLOW_FN_DSA_512: {
-        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2)) {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_PQ1)) {
           throw new ContractValidateException("Bad chain parameter id [ALLOW_FN_DSA_512]");
         }
         if (value != 0 && value != 1) {
@@ -958,7 +958,7 @@ public class ProposalUtil {
         break;
       }
       case ALLOW_ML_DSA_44: {
-        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2)) {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_PQ1)) {
           throw new ContractValidateException("Bad chain parameter id [ALLOW_ML_DSA_44]");
         }
         if (value != 0 && value != 1) {
@@ -1060,8 +1060,8 @@ public class ProposalUtil {
     ALLOW_TVM_OSAKA(96), // 0, 1
     ALLOW_HARDEN_RESOURCE_CALCULATION(97), // 0, 1
     ALLOW_HARDEN_EXCHANGE_CALCULATION(98), // 0, 1
-    ALLOW_FN_DSA_512(99), // 0, 1
-    ALLOW_ML_DSA_44(100); // 0, 1
+    ALLOW_FN_DSA_512(1000), // 0, 1
+    ALLOW_ML_DSA_44(1001); // 0, 1
 
     private long code;
 

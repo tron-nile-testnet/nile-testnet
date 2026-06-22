@@ -816,12 +816,11 @@ public class ProposalUtilTest extends BaseTest {
     long maintenanceTimeInterval = forkUtils.getManager().getDynamicPropertiesStore()
         .getMaintenanceTimeInterval();
     long hardForkTime =
-        ((ForkBlockVersionEnum.VERSION_4_8_2.getHardForkTime() - 1) / maintenanceTimeInterval + 1)
+        ((ForkBlockVersionEnum.VERSION_4_8_2_PQ1.getHardForkTime() - 1) / maintenanceTimeInterval + 1)
             * maintenanceTimeInterval;
     forkUtils.getManager().getDynamicPropertiesStore()
         .saveLatestBlockHeaderTimestamp(hardForkTime - 1);
 
-    // 1) before fork 4.8.2 -> rejected
     ContractValidateException thrown = assertThrows(ContractValidateException.class, proposeOne);
     assertEquals("Bad chain parameter id [ALLOW_FN_DSA_512]", thrown.getMessage());
 
@@ -829,7 +828,7 @@ public class ProposalUtilTest extends BaseTest {
         .saveLatestBlockHeaderTimestamp(hardForkTime + 1);
     Arrays.fill(stats, (byte) 1);
     forkUtils.getManager().getDynamicPropertiesStore()
-        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_2.getValue(), stats);
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_2_PQ1.getValue(), stats);
 
     // 2) value not in {0, 1} -> rejected
     thrown = assertThrows(ContractValidateException.class, proposeTwo);
@@ -879,7 +878,7 @@ public class ProposalUtilTest extends BaseTest {
     long maintenanceTimeInterval = forkUtils.getManager().getDynamicPropertiesStore()
         .getMaintenanceTimeInterval();
     long hardForkTime =
-        ((ForkBlockVersionEnum.VERSION_4_8_2.getHardForkTime() - 1) / maintenanceTimeInterval + 1)
+        ((ForkBlockVersionEnum.VERSION_4_8_2_PQ1.getHardForkTime() - 1) / maintenanceTimeInterval + 1)
             * maintenanceTimeInterval;
     forkUtils.getManager().getDynamicPropertiesStore()
         .saveLatestBlockHeaderTimestamp(hardForkTime - 1);
@@ -891,7 +890,7 @@ public class ProposalUtilTest extends BaseTest {
         .saveLatestBlockHeaderTimestamp(hardForkTime + 1);
     Arrays.fill(stats, (byte) 1);
     forkUtils.getManager().getDynamicPropertiesStore()
-        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_2.getValue(), stats);
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_2_PQ1.getValue(), stats);
 
     thrown = assertThrows(ContractValidateException.class, proposeTwo);
     assertEquals("This value[ALLOW_ML_DSA_44] is only allowed to be 0 or 1", thrown.getMessage());
