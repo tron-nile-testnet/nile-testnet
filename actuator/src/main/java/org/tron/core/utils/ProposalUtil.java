@@ -1060,8 +1060,8 @@ public class ProposalUtil {
     ALLOW_TVM_OSAKA(96), // 0, 1
     ALLOW_HARDEN_RESOURCE_CALCULATION(97), // 0, 1
     ALLOW_HARDEN_EXCHANGE_CALCULATION(98), // 0, 1
-    ALLOW_FN_DSA_512(99), // 0, 1
-    ALLOW_ML_DSA_44(100); // 0, 1
+    ALLOW_FN_DSA_512(1000), // 0, 1
+    ALLOW_ML_DSA_44(1001); // 0, 1
 
     private long code;
 

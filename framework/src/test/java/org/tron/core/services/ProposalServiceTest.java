@@ -57,7 +57,7 @@ public class ProposalServiceTest extends BaseTest {
     boolean result = ProposalService.process(dbManager, proposalCapsule);
     Assert.assertTrue(result);
     //
-    proposal = Proposal.newBuilder().putParameters(1000, 1).build();
+    proposal = Proposal.newBuilder().putParameters(9999, 1).build();
     proposalCapsule = new ProposalCapsule(proposal);
     result = ProposalService.process(dbManager, proposalCapsule);
     Assert.assertFalse(result);
