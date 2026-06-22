@@ -1654,7 +1654,7 @@ public class Manager {
     if (miner.isPq()) {
       Param.Miner.PQMiner pq = miner.getPq();
       if (!getDynamicPropertiesStore().isPqSchemeAllowed(pq.getScheme())) {
-        logger.warn("PQ miner {} has scheme {} configured but that scheme is not currently "
+        logger.error("PQ miner {} has scheme {} configured but that scheme is not currently "
                 + "allowed by dynamic properties, skipping block generation.",
             Hex.toHexString(pq.getWitnessAddress().toByteArray()), pq.getScheme());
         return null;
