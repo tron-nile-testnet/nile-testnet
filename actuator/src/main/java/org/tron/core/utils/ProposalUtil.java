@@ -944,7 +944,7 @@ public class ProposalUtil {
         break;
       }
       case ALLOW_FN_DSA_512: {
-        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2)) {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_PQ1)) {
           throw new ContractValidateException("Bad chain parameter id [ALLOW_FN_DSA_512]");
         }
         if (value != 0 && value != 1) {
@@ -958,7 +958,7 @@ public class ProposalUtil {
         break;
       }
       case ALLOW_ML_DSA_44: {
-        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2)) {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_PQ1)) {
           throw new ContractValidateException("Bad chain parameter id [ALLOW_ML_DSA_44]");
         }
         if (value != 0 && value != 1) {
