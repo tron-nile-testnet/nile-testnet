@@ -1651,6 +1651,7 @@ public class Manager {
         (System.currentTimeMillis() - blockTime) / Metrics.MILLISECONDS_PER_SECOND, address);
     long postponedTrxCount = 0;
 
+    logger.info("Generate block {} begin.", chainBaseManager.getHeadBlockNum() + 1);
     if (miner.isPq()) {
       Param.Miner.PQMiner pq = miner.getPq();
       if (!getDynamicPropertiesStore().isPqSchemeAllowed(pq.getScheme())) {
@@ -1660,8 +1661,6 @@ public class Manager {
         return null;
       }
     }
-
-    logger.info("Generate block {} begin.", chainBaseManager.getHeadBlockNum() + 1);
 
     BlockCapsule blockCapsule = new BlockCapsule(chainBaseManager.getHeadBlockNum() + 1,
         chainBaseManager.getHeadBlockId(),

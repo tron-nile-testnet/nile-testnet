@@ -57,6 +57,13 @@ public class PqKeyNew implements Callable<Integer> {
           + " human-readable text")
   private boolean json;
 
+  @Option(names = {"--seed"},
+      description = "Optional hex-encoded seed to derive the key from."
+          + " Length must match the scheme (FN_DSA_512: 48 bytes / 96 hex chars,"
+          + " ML_DSA_44: 32 bytes / 64 hex chars)."
+          + " If omitted, a random seed is generated.")
+  private String seed;
+
   @Override
   public Integer call() {
     PrintWriter out = spec.commandLine().getOut();
@@ -71,8 +78,10 @@ public class PqKeyNew implements Callable<Integer> {
 
       int seedLen = pqScheme == PQScheme.FN_DSA_512
           ? FNDSA512.SEED_LENGTH : MLDSA44.SEED_LENGTH;
-      byte[] seedBytes = new byte[seedLen];
-      new SecureRandom().nextBytes(seedBytes);
+      byte[] seedBytes = parseSeed(seed, pqScheme, seedLen, err);
+      if (seedBytes == null) {
+        return 1;
+      }
 
       PQSignature kp = pqScheme == PQScheme.FN_DSA_512
           ? new FNDSA512(seedBytes) : new MLDSA44(seedBytes);
@@ -126,6 +135,36 @@ public class PqKeyNew implements Callable<Integer> {
     }
     err.println("Unknown scheme '" + name + "'. Valid values: FN_DSA_512, ML_DSA_44");
     return null;
+  }
+
+  /**
+   * Returns the seed bytes to derive the key from. When {@code seedHex} is null or blank a fresh
+   * random seed of {@code seedLen} bytes is generated. Otherwise the hex string is decoded and its
+   * length validated against the scheme. Returns null (after printing to err) on any error.
+   */
+  private static byte[] parseSeed(String seedHex, PQScheme scheme, int seedLen, PrintWriter err) {
+    if (seedHex == null || seedHex.trim().isEmpty()) {
+      byte[] seedBytes = new byte[seedLen];
+      new SecureRandom().nextBytes(seedBytes);
+      return seedBytes;
+    }
+    String normalized = seedHex.trim();
+    if (normalized.startsWith("0x") || normalized.startsWith("0X")) {
+      normalized = normalized.substring(2);
+    }
+    byte[] seedBytes;
+    try {
+      seedBytes = Hex.decode(normalized);
+    } catch (Exception e) {
+      err.println("Invalid seed: not a valid hex string.");
+      return null;
+    }
+    if (seedBytes.length != seedLen) {
+      err.println("Invalid seed length for " + scheme.name() + ": expected " + seedLen
+          + " bytes (" + (seedLen * 2) + " hex chars), got " + seedBytes.length + " bytes.");
+      return null;
+    }
+    return seedBytes;
   }
 
   private static String buildJson(PQScheme scheme, byte[] seedBytes,
