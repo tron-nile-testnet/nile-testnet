@@ -19,6 +19,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.UnknownFieldSet;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -37,6 +38,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.tron.api.GrpcAPI;
 import org.tron.common.crypto.Hash;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.ByteUtil;
@@ -215,6 +217,49 @@ public class WalletMockTest {
         .build();
     ret = wallet.broadcastTransaction(paddedSig);
     assertEquals(GrpcAPI.Return.response_code.BLOCK_UNSOLIDIFIED, ret.getCode());
+  }
+
+  @Test
+  public void testBroadcastTxInvalidPqAuthSig() throws Exception {
+    Wallet wallet = new Wallet();
+    TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
+    Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
+    field.setAccessible(true);
+    field.set(wallet, tronNetDelegateMock);
+
+    int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
+    int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
+
+    // known fields legal, but a large nested unknown field smuggled in → SIGERROR
+    UnknownFieldSet unknown = UnknownFieldSet.newBuilder()
+        .addField(99, UnknownFieldSet.Field.newBuilder()
+            .addLengthDelimited(ByteString.copyFrom(new byte[4096])).build())
+        .build();
+    Protocol.Transaction smuggled = Protocol.Transaction.newBuilder()
+        .addPqAuthSig(Protocol.PQAuthSig.newBuilder()
+            .setScheme(Protocol.PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(new byte[pk]))
+            .setSignature(ByteString.copyFrom(new byte[sig]))
+            .setUnknownFields(unknown)
+            .build())
+        .build();
+    GrpcAPI.Return ret = wallet.broadcastTransaction(smuggled);
+    assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+    assertTrue(ret.getMessage().toStringUtf8().contains("pq_auth_sig size is out of bounds"));
+
+    // oversized public_key for the declared scheme → SIGERROR
+    Protocol.Transaction oversized = Protocol.Transaction.newBuilder()
+        .addPqAuthSig(Protocol.PQAuthSig.newBuilder()
+            .setScheme(Protocol.PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(new byte[pk + 1]))
+            .setSignature(ByteString.copyFrom(new byte[sig]))
+            .build())
+        .build();
+    ret = wallet.broadcastTransaction(oversized);
+    assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+
+    // rejected up front: tronNetDelegate must not be consulted
+    Mockito.verify(tronNetDelegateMock, Mockito.never()).isBlockUnsolidified();
   }
 
   @Test

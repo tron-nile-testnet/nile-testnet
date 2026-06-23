@@ -3,7 +3,7 @@ package org.tron.core.net.message.handshake;
 import com.google.protobuf.ByteString;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
-import org.tron.common.crypto.pqc.PQSchemeRegistry;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.DecodeUtil;
 import org.tron.common.utils.Sha256Hash;
@@ -224,30 +224,11 @@ public class HelloMessage extends TronMessage {
     // back to the global maximum so memory stays bounded without rejecting
     // forward-compatible peers (the exact per-scheme length is re-checked later
     // in RelayService#verifyPqAuthSig before any signature verification).
-    if (this.helloMessage.hasPqAuthSig()) {
-      Protocol.PQAuthSig pqAuthSig = this.helloMessage.getPqAuthSig();
-      // PQAuthSig retains and re-serializes unknown fields, so bounding only
-      // public_key/signature would still let a peer smuggle a multi-MB unknown
-      // field inside pq_auth_sig. Its field set is fixed (scheme/public_key/
-      // signature) and cross-version additions are gated by the strict p2p
-      // version check below, so reject any nested unknown field outright.
-      if (pqAuthSig.getUnknownFields().getSerializedSize() != 0) {
-        return false;
-      }
-      Protocol.PQScheme scheme = pqAuthSig.getScheme();
-      int maxPkSize;
-      int maxSigSize;
-      if (PQSchemeRegistry.contains(scheme)) {
-        maxPkSize = PQSchemeRegistry.getPublicKeyLength(scheme);
-        maxSigSize = PQSchemeRegistry.getSignatureLength(scheme);
-      } else {
-        maxPkSize = PQSchemeRegistry.getMaxPublicKeyLength();
-        maxSigSize = PQSchemeRegistry.getMaxSignatureLength();
-      }
-      if (pqAuthSig.getPublicKey().size() > maxPkSize
-          || pqAuthSig.getSignature().size() > maxSigSize) {
-        return false;
-      }
+    // Shared size gate (bounds public_key/signature per scheme and rejects
+    // nested unknown fields), also applied at the transaction entry points.
+    if (this.helloMessage.hasPqAuthSig()
+        && !PQAuthSigValidator.isLengthWithinBounds(this.helloMessage.getPqAuthSig())) {
+      return false;
     }
 
     return true;
