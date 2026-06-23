@@ -304,6 +304,7 @@ public class WalletMockTest {
   @Test
   public void testBroadcastTransactionBlockUnsolidified() throws Exception {
     Wallet wallet = new Wallet();
+    injectTotalSignNum(wallet, 5);
     Protocol.Transaction transaction = Protocol.Transaction.newBuilder().build();
 
     TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
@@ -321,6 +322,7 @@ public class WalletMockTest {
   @Test
   public void testBroadcastTransactionNoConnection() throws Exception {
     Wallet wallet = new Wallet();
+    injectTotalSignNum(wallet, 5);
     Protocol.Transaction transaction = Protocol.Transaction.newBuilder().build();
     List<PeerConnection> peerConnections = new ArrayList<>();
 
@@ -345,6 +347,7 @@ public class WalletMockTest {
   @Test
   public void testBroadcastTransactionConnectionNotEnough() throws Exception {
     Wallet wallet = new Wallet();
+    injectTotalSignNum(wallet, 5);
     Protocol.Transaction transaction = Protocol.Transaction.newBuilder().build();
     List<PeerConnection> peerConnections = new ArrayList<>();
     PeerConnection p1 = new PeerConnection();
@@ -373,6 +376,7 @@ public class WalletMockTest {
   @Test
   public void testBroadcastTransactionTooManyPending() throws Exception {
     Wallet wallet = new Wallet();
+    injectTotalSignNum(wallet, 5);
     Protocol.Transaction transaction = Protocol.Transaction.newBuilder().build();
 
     TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
@@ -396,6 +400,7 @@ public class WalletMockTest {
   @Test
   public void testBroadcastTransactionAlreadyExists() throws Exception {
     Wallet wallet = new Wallet();
+    injectTotalSignNum(wallet, 5);
     Protocol.Transaction transaction = Protocol.Transaction.newBuilder().build();
     TransactionCapsule trx = new TransactionCapsule(transaction);
     trx.setTime(System.currentTimeMillis());
@@ -445,6 +450,7 @@ public class WalletMockTest {
     when(managerMock.isTooManyPending()).thenReturn(false);
     when(chainBaseManagerMock.getDynamicPropertiesStore())
         .thenReturn(dynamicPropertiesStoreMock);
+    when(dynamicPropertiesStoreMock.getTotalSignNum()).thenReturn(5);
     when(dynamicPropertiesStoreMock.supportVM()).thenReturn(false);
 
     Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
@@ -483,6 +489,7 @@ public class WalletMockTest {
     when(managerMock.isTooManyPending()).thenReturn(false);
     when(chainBaseManagerMock.getDynamicPropertiesStore())
         .thenReturn(dynamicPropertiesStoreMock);
+    when(dynamicPropertiesStoreMock.getTotalSignNum()).thenReturn(5);
     when(dynamicPropertiesStoreMock.supportVM()).thenReturn(false);
 
     Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
@@ -539,6 +546,7 @@ public class WalletMockTest {
     when(managerMock.isTooManyPending()).thenReturn(false);
     when(chainBaseManagerMock.getDynamicPropertiesStore())
         .thenReturn(dynamicPropertiesStoreMock);
+    when(dynamicPropertiesStoreMock.getTotalSignNum()).thenReturn(5);
     when(dynamicPropertiesStoreMock.supportVM()).thenReturn(false);
 
     doThrow(tronException).when(managerMock).pushTransaction(any());

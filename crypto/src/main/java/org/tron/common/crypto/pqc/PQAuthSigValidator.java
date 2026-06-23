@@ -19,24 +19,18 @@ public final class PQAuthSigValidator {
   }
 
   /**
-   * Bounds known fields by scheme and rejects nested unknown fields. Unknown
-   * schemes fall back to the global registered maximum.
+   * Bounds known fields for registered schemes and rejects nested unknown
+   * fields. Unregistered schemes are invalid at admission.
    */
   public static boolean isLengthWithinBounds(PQAuthSig pqAuthSig) {
     if (hasUnknownFields(pqAuthSig)) {
       return false;
     }
     PQScheme scheme = pqAuthSig.getScheme();
-    int maxPk;
-    int maxSig;
-    if (PQSchemeRegistry.contains(scheme)) {
-      maxPk = PQSchemeRegistry.getPublicKeyLength(scheme);
-      maxSig = PQSchemeRegistry.getSignatureLength(scheme);
-    } else {
-      maxPk = PQSchemeRegistry.getMaxPublicKeyLength();
-      maxSig = PQSchemeRegistry.getMaxSignatureLength();
+    if (!PQSchemeRegistry.contains(scheme)) {
+      return false;
     }
-    return pqAuthSig.getPublicKey().size() <= maxPk
-        && pqAuthSig.getSignature().size() <= maxSig;
+    return pqAuthSig.getPublicKey().size() <= PQSchemeRegistry.getPublicKeyLength(scheme)
+        && pqAuthSig.getSignature().size() <= PQSchemeRegistry.getSignatureLength(scheme);
   }
 }

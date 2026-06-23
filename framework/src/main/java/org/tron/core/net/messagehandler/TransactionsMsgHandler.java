@@ -158,11 +158,10 @@ public class TransactionsMsgHandler implements TronMsgHandler {
       }
       // Bound signature entry count before per-entry validation.
       int sigCount = trx.getSignatureCount() + trx.getPqAuthSigCount();
-      if (sigCount > 0
-          && sigCount > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
+      int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      if (sigCount > totalSignNum) {
         throw new P2pException(TypeEnum.BAD_TRX, "tx " + item.getHash()
-            + " total signature count is " + sigCount + " exceeds "
-            + chainBaseManager.getDynamicPropertiesStore().getTotalSignNum());
+            + " total signature count is " + sigCount + " exceeds " + totalSignNum);
       }
       for (ByteString sig : trx.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {

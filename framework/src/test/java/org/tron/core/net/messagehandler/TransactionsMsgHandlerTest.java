@@ -52,6 +52,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
     TransactionsMsgHandler transactionsMsgHandler = new TransactionsMsgHandler();
     try {
       transactionsMsgHandler.init();
+      injectChainBaseManager(transactionsMsgHandler);
 
       PeerConnection peer = Mockito.mock(PeerConnection.class);
       TronNetDelegate tronNetDelegate = Mockito.mock(TronNetDelegate.class);
@@ -158,6 +159,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   @Test
   public void testRejectedExecution() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    injectChainBaseManager(handler);
     try {
       ExecutorService mockPool = Mockito.mock(ExecutorService.class);
       Mockito.when(mockPool.submit(Mockito.any(Runnable.class)))
@@ -181,6 +183,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   @Test
   public void testCloseDuringProcessing() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    injectChainBaseManager(handler);
     try {
       Field closedField = TransactionsMsgHandler.class.getDeclaredField("isClosed");
       closedField.setAccessible(true);
@@ -234,6 +237,10 @@ public class TransactionsMsgHandlerTest extends BaseTest {
       advInvRequest.put(item, 0L);
     }
     Mockito.when(peer.getAdvInvRequest()).thenReturn(advInvRequest);
+  }
+
+  private void injectChainBaseManager(TransactionsMsgHandler handler) {
+    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
   }
 
   @Test
@@ -297,6 +304,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testDuplicateTransactionRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
+    injectChainBaseManager(handler);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -343,8 +351,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidSigLength() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
-    // check() reads totalSignNum for the admission cap.
-    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
+    injectChainBaseManager(handler);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -430,8 +437,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidPqAuthSigRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
-    // check() reads totalSignNum for the admission cap.
-    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
+    injectChainBaseManager(handler);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -504,8 +510,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testTooManyPqAuthSigRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
-    // check() reads totalSignNum for the admission cap.
-    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
+    injectChainBaseManager(handler);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 

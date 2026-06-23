@@ -514,10 +514,9 @@ public class Wallet {
       // Bound signature entry count before per-entry validation.
       int totalSignCount = signedTransaction.getSignatureCount()
           + signedTransaction.getPqAuthSigCount();
-      if (totalSignCount > 0
-          && totalSignCount > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
-        String info = "total signature count " + totalSignCount + " exceeds "
-            + chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      if (totalSignCount > totalSignNum) {
+        String info = "total signature count " + totalSignCount + " exceeds " + totalSignNum;
         logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
         return builder.setResult(false).setCode(response_code.SIGERROR)
             .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
@@ -657,8 +656,8 @@ public class Wallet {
     TransactionApprovedList.Builder tswBuilder = TransactionApprovedList.newBuilder();
     TransactionApprovedList.Result.Builder resultBuilder = TransactionApprovedList.Result
         .newBuilder();
-    if (trx.getSignatureCount() + trx.getPqAuthSigCount()
-        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
+    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+    if (trx.getSignatureCount() + trx.getPqAuthSigCount() > totalSignNum) {
       resultBuilder.setCode(TransactionApprovedList.Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);

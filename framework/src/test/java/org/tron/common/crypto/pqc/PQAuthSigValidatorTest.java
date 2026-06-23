@@ -77,14 +77,8 @@ public class PQAuthSigValidatorTest {
   }
 
   @Test
-  public void unknownSchemeFallsBackToGlobalMax() {
-    int maxPk = PQSchemeRegistry.getMaxPublicKeyLength();
-    int maxSig = PQSchemeRegistry.getMaxSignatureLength();
-    // within the global max is accepted even though the scheme is unknown
-    assertTrue(PQAuthSigValidator.isLengthWithinBounds(
-        sig(PQScheme.UNKNOWN_PQ_SCHEME, maxPk, maxSig)));
-    // beyond the global max is rejected
+  public void rejectsUnknownScheme() {
     assertFalse(PQAuthSigValidator.isLengthWithinBounds(
-        sig(PQScheme.UNKNOWN_PQ_SCHEME, maxPk + 1, maxSig)));
+        sig(PQScheme.UNKNOWN_PQ_SCHEME, 0, 0)));
   }
 }

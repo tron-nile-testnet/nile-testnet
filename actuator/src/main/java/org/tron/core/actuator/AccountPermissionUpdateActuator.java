@@ -70,9 +70,10 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
 
   private boolean checkPermission(Permission permission) throws ContractValidateException {
     DynamicPropertiesStore dynamicStore = chainBaseManager.getDynamicPropertiesStore();
-    if (permission.getKeysCount() > dynamicStore.getTotalSignNum()) {
+    int totalSignNum = dynamicStore.getTotalSignNum();
+    if (permission.getKeysCount() > totalSignNum) {
       throw new ContractValidateException("number of keys in permission should not be greater "
-          + "than " + dynamicStore.getTotalSignNum());
+          + "than " + totalSignNum);
     }
     if (permission.getKeysCount() == 0) {
       throw new ContractValidateException("key's count should be greater than 0");

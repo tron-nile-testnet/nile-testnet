@@ -685,7 +685,8 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
       if (signatureCount == 0 || this.transaction.getRawData().getContractCount() <= 0) {
         throw new ValidateSignatureException("miss sig or contract");
       }
-      if (signatureCount > dynamicPropertiesStore.getTotalSignNum()) {
+      int totalSignNum = dynamicPropertiesStore.getTotalSignNum();
+      if (signatureCount > totalSignNum) {
         throw new ValidateSignatureException("too many signatures");
       }
 

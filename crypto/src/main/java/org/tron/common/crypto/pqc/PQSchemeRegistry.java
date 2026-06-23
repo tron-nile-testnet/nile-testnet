@@ -236,22 +236,6 @@ public final class PQSchemeRegistry {
     return require(scheme).signatureLength;
   }
 
-  /**
-   * Largest public-key length across all registered schemes; the global upper
-   * bound for an unknown/future scheme.
-   */
-  public static int getMaxPublicKeyLength() {
-    return SCHEMES.values().stream().mapToInt(info -> info.publicKeyLength).max().orElse(0);
-  }
-
-  /**
-   * Largest signature length across all registered schemes; the global upper
-   * bound for an unknown/future scheme.
-   */
-  public static int getMaxSignatureLength() {
-    return SCHEMES.values().stream().mapToInt(info -> info.signatureLength).max().orElse(0);
-  }
-
   public static int getSeedLength(PQScheme scheme) {
     return require(scheme).seedLength;
   }
