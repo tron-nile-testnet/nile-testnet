@@ -430,7 +430,8 @@ public class BatchValidateFnDsa512Test {
 
   /**
    * Pin a Falcon-512 signature into the precompile's fixed 666-byte slot using the
-   * EIP-8052 headerless convention enforced by 0x02000016 / 0x02000017 / 0x0200001a: strip BC's leading
+   * EIP-8052 headerless convention enforced by 0x02000016 / 0x02000017 / 0x0200001a:
+   * strip BC's leading
    * 0x39 header so the slot holds {@code salt ‖ s2}; the tail is zero-padded.
    */
   private static byte[] padSlot(byte[] sig) {

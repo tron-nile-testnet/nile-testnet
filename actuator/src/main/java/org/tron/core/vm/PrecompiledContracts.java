@@ -595,7 +595,7 @@ public class PrecompiledContracts {
    * fixed slot {@code data[from..to)}: the offset of the last non-zero byte
    * (exclusive). Canonical Falcon encodings always end in a non-zero byte
    * ({@code compressed_s2}'s unary terminator), so anything beyond is zero
-   * padding. Returns 0 if the slot is all zero. Shared by 0x02000016, 0x02000018, and 0x0200001a
+   * padding. Returns 0 if the slot is all zero. Shared by 0x02000016, 0x02000017, and 0x0200001a
    * because every precompile slot for Falcon sigs is the same 666-byte slot.
    */
   static int recoverFalconSigLen(byte[] data, int from, int to) {
@@ -615,7 +615,7 @@ public class PrecompiledContracts {
    * the logical body ends at the last non-zero byte. Returns
    * {@code 0x39 ‖ body} so BC's {@code FalconSigner} (which requires the header)
    * can verify it, or {@code null} if the recovered body length is out of range.
-   * Shared by 0x02000016, 0x02000018, and 0x0200001a.
+   * Shared by 0x02000016, 0x02000017, and 0x0200001a.
    */
   static byte[] falconSlotToHeaderedSig(byte[] data, int from, int to) {
     int bodyLen = recoverFalconSigLen(data, from, to);
