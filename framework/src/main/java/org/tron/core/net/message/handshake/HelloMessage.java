@@ -170,11 +170,6 @@ public class HelloMessage extends TronMessage {
   }
 
   public boolean valid() {
-    // valid() can run on messages built outside the inbound constructor.
-    if (this.data != null && this.data.length > MAX_HELLO_MESSAGE_SIZE) {
-      return false;
-    }
-
     byte[] genesisBlockByte = this.helloMessage.getGenesisBlockId().getHash().toByteArray();
     if (genesisBlockByte.length != Sha256Hash.LENGTH) {
       return false;

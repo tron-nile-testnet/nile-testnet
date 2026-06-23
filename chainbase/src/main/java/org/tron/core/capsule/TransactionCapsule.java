@@ -243,7 +243,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     long currentWeight = 0;
     if (sigs.size() > permission.getKeysCount()) {
       throw new PermissionException(
-          "Signature count is " + (sigs.size()) + " more than key counts of permission : "
+          "Signature count " + sigs.size() + " exceeds permission key count "
               + permission.getKeysCount());
     }
     HashMap addMap = new HashMap();
@@ -750,8 +750,8 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     // A PQ signer must map to a distinct permission key.
     if (pqAuthSigList.size() > permission.getKeysCount()) {
       throw new PermissionException(
-          "pq_auth_sig count is " + pqAuthSigList.size()
-              + " more than key counts of permission : " + permission.getKeysCount());
+          "pq_auth_sig count " + pqAuthSigList.size()
+              + " exceeds permission key count " + permission.getKeysCount());
     }
 
     long weight = 0L;

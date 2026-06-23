@@ -292,7 +292,7 @@ public class TransactionCapsuleTest extends BaseTest {
       cap.validatePubSignature(dbManager.getAccountStore(), dbManager.getDynamicPropertiesStore());
       Assert.fail("pq_auth_sig count exceeding permission key count should be rejected");
     } catch (ValidateSignatureException e) {
-      Assert.assertTrue(e.getMessage().contains("more than key counts of permission"));
+      Assert.assertTrue(e.getMessage().contains("exceeds permission key count"));
     }
   }
 
