@@ -3,6 +3,7 @@ package org.tron.core.services.jsonrpc.types;
 import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.getToAddress;
 import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.getTransactionAmount;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ public class TransactionResult {
   private String s;
 
   @Getter
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   private List<PQAuthSigResult> pqAuthSigList;
 
   @JsonPropertyOrder(alphabetic = true)
