@@ -20,7 +20,7 @@ import org.tron.core.vm.config.VMConfig;
 import org.tron.protos.Protocol.PQScheme;
 
 /**
- * Unit tests for the 0x19 batch independent ML-DSA-44 verify precompile.
+ * Unit tests for the 0x02000019 batch independent ML-DSA-44 verify precompile.
  * Returns a 256-bit bitmap where bit i is set iff
  * {@code derive(pk_i) == expectedAddr_i && MLDSA44.verify(pk_i, hash, sig_i)}.
  * Stateless — no chain DB.
@@ -28,8 +28,8 @@ import org.tron.protos.Protocol.PQScheme;
 @Slf4j
 public class BatchValidateMlDsa44Test {
 
-  private static final DataWord ADDR_0X19 = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000019");
+  private static final DataWord ADDR_0X02000019 = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000002000019");
 
   private static final String METHOD_SIGN =
       "batchvalidatemldsa44(bytes32,bytes[],bytes[],bytes32[])";
@@ -58,12 +58,12 @@ public class BatchValidateMlDsa44Test {
   @Test
   public void switchOff_returnsNull() {
     VMConfig.initAllowMlDsa44(0L);
-    Assert.assertNull(PrecompiledContracts.getContractForAddress(ADDR_0X19));
+    Assert.assertNull(PrecompiledContracts.getContractForAddress(ADDR_0X02000019));
   }
 
   @Test
   public void switchOn_returnsContract() {
-    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X19);
+    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X02000019);
     Assert.assertNotNull(pc);
     Assert.assertTrue(pc instanceof BatchValidateMlDsa44);
   }
@@ -311,7 +311,7 @@ public class BatchValidateMlDsa44Test {
       contract.setVmShouldEndInUs(System.nanoTime() / 1000 + 10_000_000L);
     }
     Pair<Boolean, byte[]> ret = contract.execute(input);
-    logger.info("0x19 bitmap: {}", Hex.toHexString(ret.getRight()));
+    logger.info("0x02000019 bitmap: {}", Hex.toHexString(ret.getRight()));
     return ret;
   }
 

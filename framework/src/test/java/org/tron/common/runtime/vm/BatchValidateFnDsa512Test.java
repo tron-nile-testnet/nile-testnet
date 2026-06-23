@@ -20,7 +20,7 @@ import org.tron.core.vm.config.VMConfig;
 import org.tron.protos.Protocol.PQScheme;
 
 /**
- * Unit tests for the 0x17 batch independent Falcon-512 verify precompile.
+ * Unit tests for the 0x02000017 batch independent Falcon-512 verify precompile.
  * Returns a 256-bit bitmap where bit i is set iff
  * {@code derive(pk_i) == expectedAddr_i && FNDSA512.verify(pk_i, hash, sig_i)}.
  * Stateless — no chain DB.
@@ -28,8 +28,8 @@ import org.tron.protos.Protocol.PQScheme;
 @Slf4j
 public class BatchValidateFnDsa512Test {
 
-  private static final DataWord ADDR_0X17 = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000017");
+  private static final DataWord ADDR_0X02000017 = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000002000017");
 
   private static final String METHOD_SIGN =
       "batchvalidatefndsa512(bytes32,bytes[],bytes[],bytes32[])";
@@ -58,12 +58,12 @@ public class BatchValidateFnDsa512Test {
   @Test
   public void switchOff_returnsNull() {
     VMConfig.initAllowFnDsa512(0L);
-    Assert.assertNull(PrecompiledContracts.getContractForAddress(ADDR_0X17));
+    Assert.assertNull(PrecompiledContracts.getContractForAddress(ADDR_0X02000017));
   }
 
   @Test
   public void switchOn_returnsContract() {
-    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X17);
+    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X02000017);
     Assert.assertNotNull(pc);
     Assert.assertTrue(pc instanceof BatchValidateFnDsa512);
   }
@@ -430,7 +430,7 @@ public class BatchValidateFnDsa512Test {
 
   /**
    * Pin a Falcon-512 signature into the precompile's fixed 666-byte slot using the
-   * EIP-8052 headerless convention enforced by 0x16 / 0x17 / 0x1a: strip BC's leading
+   * EIP-8052 headerless convention enforced by 0x02000016 / 0x02000017 / 0x0200001a: strip BC's leading
    * 0x39 header so the slot holds {@code salt ‖ s2}; the tail is zero-padded.
    */
   private static byte[] padSlot(byte[] sig) {
@@ -452,7 +452,7 @@ public class BatchValidateFnDsa512Test {
       contract.setVmShouldEndInUs(System.nanoTime() / 1000 + 5_000_000L);
     }
     Pair<Boolean, byte[]> ret = contract.execute(input);
-    logger.info("0x17 bitmap: {}", Hex.toHexString(ret.getRight()));
+    logger.info("0x02000017 bitmap: {}", Hex.toHexString(ret.getRight()));
     return ret;
   }
 

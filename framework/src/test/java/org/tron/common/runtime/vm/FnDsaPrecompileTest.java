@@ -11,7 +11,7 @@ import org.tron.core.vm.PrecompiledContracts.PrecompiledContract;
 import org.tron.core.vm.config.VMConfig;
 
 /**
- * Unit tests for the FN-DSA / Falcon-512 (0x16) verify precompile (EIP-8052 / TRON extension).
+ * Unit tests for the FN-DSA / Falcon-512 (0x02000016) verify precompile (EIP-8052 / TRON extension).
  * Input layout (fixed-length): [msg 32B | sig 666B (zero-padded) | pk 896B] = 1594B total.
  * The 666-byte sig slot holds the EIP-8052 <em>headerless</em> body (salt ‖ s2): BC's
  * leading 0x39 header is stripped on the way in and re-inserted by the precompile.
@@ -20,7 +20,7 @@ import org.tron.core.vm.config.VMConfig;
 public class FnDsaPrecompileTest {
 
   private static final DataWord FNDSA_ADDR = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000016");
+      "0000000000000000000000000000000000000000000000000000000002000016");
 
   private static final int INPUT_LEN =
       32 + FNDSA512.SIGNATURE_MAX_LENGTH - 1 + FNDSA512.PUBLIC_KEY_LENGTH;

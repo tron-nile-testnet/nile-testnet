@@ -12,12 +12,12 @@ import org.tron.core.vm.config.VMConfig;
 
 /**
  * Unit tests for the ML-DSA-44 verify precompile (FIPS 204 / Dilithium-2).
- * Address 0x18: standard 1312-byte FIPS public key layout.
+ * Address 0x02000018: standard 1312-byte FIPS public key layout.
  */
 public class MlDsa44PrecompileTest {
 
   private static final DataWord MLDSA_DRAFT_ADDR = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000018");
+      "0000000000000000000000000000000000000000000000000000000002000018");
 
   private static final byte[] MESSAGE_HASH = new byte[32];
 
