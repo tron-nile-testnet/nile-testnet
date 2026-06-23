@@ -3,6 +3,7 @@ package org.tron.core.net.message.handshake;
 import com.google.protobuf.ByteString;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.DecodeUtil;
 import org.tron.common.utils.Sha256Hash;
@@ -10,6 +11,7 @@ import org.tron.common.utils.StringUtil;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.config.args.Args;
+import org.tron.core.exception.P2pException;
 import org.tron.core.net.message.MessageTypes;
 import org.tron.core.net.message.TronMessage;
 import org.tron.p2p.discover.Node;
@@ -23,14 +25,36 @@ public class HelloMessage extends TronMessage {
   @Getter
   private Protocol.HelloMessage helloMessage;
 
+  /**
+   * Hard upper bound on the raw size of an inbound hello, enforced before
+   * parsing. A legitimate hello is at most a few KB (block ids + address +
+   * codeVersion + a single ~3.75KB pq_auth_sig), so 16KB leaves ample headroom
+   * for forward-compatible field additions. This is the only guard that truly
+   * bounds the message: per-field/unknown-field checks on the parsed object do
+   * not cap the raw {@code data}, which can still bloat via repeated singular
+   * fields (parser merges them) or unbounded bytes sub-fields of {@code from}
+   * (Endpoint). The raw {@code data} is what gets retained per peer, so it is
+   * the real memory cost.
+   */
+  public static final int MAX_HELLO_MESSAGE_SIZE = 16 * 1024;
+
   public HelloMessage(byte type, byte[] rawData) throws Exception {
     super(type, rawData);
+    checkRawSize(rawData);
     this.helloMessage = Protocol.HelloMessage.parseFrom(rawData);
   }
 
   public HelloMessage(byte[] data) throws Exception {
     super(MessageTypes.P2P_HELLO.asByte(), data);
+    checkRawSize(data);
     this.helloMessage = Protocol.HelloMessage.parseFrom(data);
+  }
+
+  private static void checkRawSize(byte[] rawData) throws P2pException {
+    if (rawData != null && rawData.length > MAX_HELLO_MESSAGE_SIZE) {
+      throw new P2pException(P2pException.TypeEnum.BAD_MESSAGE,
+          "hello message size " + rawData.length + " exceeds " + MAX_HELLO_MESSAGE_SIZE);
+    }
   }
 
   public HelloMessage(Node from, long timestamp, ChainBaseManager chainBaseManager) {
@@ -156,6 +180,13 @@ public class HelloMessage extends TronMessage {
   }
 
   public boolean valid() {
+    // Defensive re-check of the raw size; the inbound constructor already
+    // rejects oversized hellos before parsing, but valid() may run on messages
+    // built through other paths.
+    if (this.data != null && this.data.length > MAX_HELLO_MESSAGE_SIZE) {
+      return false;
+    }
+
     byte[] genesisBlockByte = this.helloMessage.getGenesisBlockId().getHash().toByteArray();
     if (genesisBlockByte.length != Sha256Hash.LENGTH) {
       return false;
@@ -185,6 +216,38 @@ public class HelloMessage extends TronMessage {
     ByteString codeVersion = this.helloMessage.getCodeVersion();
     if (!codeVersion.isEmpty() && codeVersion.toByteArray().length > maxByteSize) {
       return false;
+    }
+
+    // pq_auth_sig carries lattice public key + signature, far larger than the
+    // legacy 200B fields, so it needs its own bound. Cap to the declared
+    // scheme's legal maximum when registered; for an unknown/future scheme fall
+    // back to the global maximum so memory stays bounded without rejecting
+    // forward-compatible peers (the exact per-scheme length is re-checked later
+    // in RelayService#verifyPqAuthSig before any signature verification).
+    if (this.helloMessage.hasPqAuthSig()) {
+      Protocol.PQAuthSig pqAuthSig = this.helloMessage.getPqAuthSig();
+      // PQAuthSig retains and re-serializes unknown fields, so bounding only
+      // public_key/signature would still let a peer smuggle a multi-MB unknown
+      // field inside pq_auth_sig. Its field set is fixed (scheme/public_key/
+      // signature) and cross-version additions are gated by the strict p2p
+      // version check below, so reject any nested unknown field outright.
+      if (pqAuthSig.getUnknownFields().getSerializedSize() != 0) {
+        return false;
+      }
+      Protocol.PQScheme scheme = pqAuthSig.getScheme();
+      int maxPkSize;
+      int maxSigSize;
+      if (PQSchemeRegistry.contains(scheme)) {
+        maxPkSize = PQSchemeRegistry.getPublicKeyLength(scheme);
+        maxSigSize = PQSchemeRegistry.getSignatureLength(scheme);
+      } else {
+        maxPkSize = PQSchemeRegistry.getMaxPublicKeyLength();
+        maxSigSize = PQSchemeRegistry.getMaxSignatureLength();
+      }
+      if (pqAuthSig.getPublicKey().size() > maxPkSize
+          || pqAuthSig.getSignature().size() > maxSigSize) {
+        return false;
+      }
     }
 
     return true;

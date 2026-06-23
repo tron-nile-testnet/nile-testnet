@@ -26,6 +26,15 @@ public class TronMessageFactory {
     boolean isException = false;
     try {
       byte type = data[0];
+      // Reject an oversized hello before copying out its body, so a bloated
+      // hello never costs a subarray allocation (the constructor re-checks
+      // defensively before parsing).
+      if (type == MessageTypes.P2P_HELLO.asByte()
+          && data.length - 1 > HelloMessage.MAX_HELLO_MESSAGE_SIZE) {
+        throw new P2pException(P2pException.TypeEnum.BAD_MESSAGE,
+            "hello message size " + (data.length - 1) + " exceeds "
+                + HelloMessage.MAX_HELLO_MESSAGE_SIZE);
+      }
       byte[] rawData = ArrayUtils.subarray(data, 1, data.length);
       return create(type, rawData);
     } catch (final P2pException e) {
