@@ -511,6 +511,26 @@ public class Wallet {
     trx.setTime(System.currentTimeMillis());
     Sha256Hash txID = trx.getTransactionId();
     try {
+      // Admission cap, mirroring the consensus check in validatePubSignature:
+      // the total signature entries (legacy + pq) can never exceed totalSignNum
+      // since each must map to a distinct permission key, so reject a flood up
+      // front before the per-entry length loops. This also bounds pq entries,
+      // which — unlike an empty ECDSA sig that isValidLength rejects — would
+      // otherwise pass the per-entry size gate even when empty/default.
+      int sigCount = signedTransaction.getSignatureCount();
+      int pqAuthSigCount = signedTransaction.getPqAuthSigCount();
+      if (sigCount + pqAuthSigCount > 0) {
+        int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+        if (sigCount + pqAuthSigCount > totalSignNum) {
+          String info = "total signature count " + (sigCount + pqAuthSigCount)
+              + " exceeds " + totalSignNum;
+          logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+          return builder.setResult(false).setCode(response_code.SIGERROR)
+              .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+              .build();
+        }
+      }
+
       for (ByteString sig : signedTransaction.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           String info = "Signature size is " + sig.size();

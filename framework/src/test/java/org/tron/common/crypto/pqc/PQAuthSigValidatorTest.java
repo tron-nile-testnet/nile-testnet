@@ -62,6 +62,21 @@ public class PQAuthSigValidatorTest {
   }
 
   @Test
+  public void hasNoUnknownFieldsReflectsPresenceOfUnknownFields() {
+    int pk = PQSchemeRegistry.getPublicKeyLength(PQScheme.FN_DSA_512);
+    int s = PQSchemeRegistry.getSignatureLength(PQScheme.FN_DSA_512);
+    assertTrue(PQAuthSigValidator.hasNoUnknownFields(sig(PQScheme.FN_DSA_512, pk, s)));
+
+    PQAuthSig withUnknown = sig(PQScheme.FN_DSA_512, pk, s).toBuilder()
+        .setUnknownFields(UnknownFieldSet.newBuilder()
+            .addField(99, UnknownFieldSet.Field.newBuilder()
+                .addLengthDelimited(ByteString.copyFrom(new byte[16])).build())
+            .build())
+        .build();
+    assertFalse(PQAuthSigValidator.hasNoUnknownFields(withUnknown));
+  }
+
+  @Test
   public void unknownSchemeFallsBackToGlobalMax() {
     int maxPk = PQSchemeRegistry.getMaxPublicKeyLength();
     int maxSig = PQSchemeRegistry.getMaxSignatureLength();

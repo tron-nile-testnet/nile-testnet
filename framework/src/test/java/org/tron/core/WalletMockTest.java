@@ -179,6 +179,10 @@ public class WalletMockTest {
     field.setAccessible(true);
     field.set(wallet, tronNetDelegateMock);
 
+    // The admission count cap reads totalSignNum; each tx below carries a single
+    // signature, well within the cap, so it proceeds to the length check.
+    injectTotalSignNum(wallet, 5);
+
     // signature shorter than 65 bytes → SIGERROR
     Protocol.Transaction shortSig = Protocol.Transaction.newBuilder()
         .addSignature(ByteString.copyFrom(new byte[64]))
@@ -227,6 +231,9 @@ public class WalletMockTest {
     field.setAccessible(true);
     field.set(wallet, tronNetDelegateMock);
 
+    // Each tx below carries a single pq_auth_sig, within the admission cap.
+    injectTotalSignNum(wallet, 5);
+
     int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
     int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
 
@@ -257,6 +264,44 @@ public class WalletMockTest {
         .build();
     ret = wallet.broadcastTransaction(oversized);
     assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+
+    // rejected up front: tronNetDelegate must not be consulted
+    Mockito.verify(tronNetDelegateMock, Mockito.never()).isBlockUnsolidified();
+  }
+
+  /**
+   * Inject a chainBaseManager whose dynamic store reports the given totalSignNum,
+   * so broadcastTransaction's admission count cap can be exercised.
+   */
+  private static void injectTotalSignNum(Wallet wallet, int totalSignNum) throws Exception {
+    ChainBaseManager chainBaseManagerMock = mock(ChainBaseManager.class);
+    DynamicPropertiesStore dynamicPropertiesStoreMock = mock(DynamicPropertiesStore.class);
+    when(chainBaseManagerMock.getDynamicPropertiesStore()).thenReturn(dynamicPropertiesStoreMock);
+    when(dynamicPropertiesStoreMock.getTotalSignNum()).thenReturn(totalSignNum);
+    Field field = wallet.getClass().getDeclaredField("chainBaseManager");
+    field.setAccessible(true);
+    field.set(wallet, chainBaseManagerMock);
+  }
+
+  @Test
+  public void testBroadcastTxTooManyPqAuthSig() throws Exception {
+    Wallet wallet = new Wallet();
+    TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
+    Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
+    field.setAccessible(true);
+    field.set(wallet, tronNetDelegateMock);
+    injectTotalSignNum(wallet, 5);
+
+    // Six empty/default pq_auth_sig entries: each passes the per-entry size gate
+    // (an empty PQAuthSig is within bounds), but the total count exceeds the
+    // totalSignNum admission cap, so the flood is rejected before the loops.
+    Protocol.Transaction.Builder builder = Protocol.Transaction.newBuilder();
+    for (int i = 0; i < 6; i++) {
+      builder.addPqAuthSig(Protocol.PQAuthSig.getDefaultInstance());
+    }
+    GrpcAPI.Return ret = wallet.broadcastTransaction(builder.build());
+    assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+    assertTrue(ret.getMessage().toStringUtf8().contains("total signature count"));
 
     // rejected up front: tronNetDelegate must not be consulted
     Mockito.verify(tronNetDelegateMock, Mockito.never()).isBlockUnsolidified();

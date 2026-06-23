@@ -1,6 +1,7 @@
 package org.tron.core.capsule;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.UnknownFieldSet;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -192,6 +193,29 @@ public class BlockCapsulePQTest extends BaseTest {
     block.setPqAuthSig(buildPQAuthSig(signPQ(digest)));
     Assert.assertTrue(block.validateSignature(
         dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+  }
+
+  @Test(expected = ValidateSignatureException.class)
+  public void pqAuthSigWithUnknownFieldRejected() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowMultiSign(1L);
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    AccountCapsule witness = buildWitnessAccount(pqAddress);
+    dbManager.getAccountStore().put(witnessAddress, witness);
+
+    byte[] parentHash = new byte[32];
+    BlockCapsule block = buildUnsignedBlock(parentHash);
+    byte[] digest = block.getRawHashBytes();
+    // Valid scheme/key/signature, but a nested unknown field (#99) is smuggled
+    // into the header's pq_auth_sig. The block path must reject it outright,
+    // matching the tx consensus path and the ingress gates.
+    PQAuthSig withUnknown = buildPQAuthSig(signPQ(digest)).toBuilder()
+        .setUnknownFields(UnknownFieldSet.newBuilder()
+            .addField(99, UnknownFieldSet.Field.newBuilder()
+                .addLengthDelimited(ByteString.copyFrom(new byte[16])).build())
+            .build())
+        .build();
+    block.setPqAuthSig(withUnknown);
+    block.validateSignature(dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore());
   }
 
   @Test(expected = ValidateSignatureException.class)

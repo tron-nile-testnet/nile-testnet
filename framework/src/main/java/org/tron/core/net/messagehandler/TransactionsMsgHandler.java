@@ -156,6 +156,20 @@ public class TransactionsMsgHandler implements TronMsgHandler {
         throw new P2pException(TypeEnum.BAD_TRX,
             "tx " + item.getHash() + " contract size should be greater than 0");
       }
+      // Admission cap, mirroring the consensus check in validatePubSignature:
+      // the total signature entries (legacy + pq) can never exceed totalSignNum,
+      // so reject a flood before the per-entry length loops. This also bounds pq
+      // entries, which — unlike an empty ECDSA sig that isValidLength rejects —
+      // would otherwise pass the per-entry size gate even when empty/default.
+      int sigCount = trx.getSignatureCount() + trx.getPqAuthSigCount();
+      if (sigCount > 0) {
+        int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+        if (sigCount > totalSignNum) {
+          throw new P2pException(TypeEnum.BAD_TRX,
+              "tx " + item.getHash() + " total signature count is " + sigCount
+                  + " exceeds " + totalSignNum);
+        }
+      }
       for (ByteString sig : trx.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           throw new P2pException(TypeEnum.BAD_TRX,

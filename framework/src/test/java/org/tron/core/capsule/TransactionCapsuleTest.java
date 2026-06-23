@@ -154,21 +154,30 @@ public class TransactionCapsuleTest extends BaseTest {
    * fingerprint hash (see {@link PQSchemeRegistry#computeAddress}).
    */
   private void putAccountWithPQPermission(String ownerHex, byte[] pqPublicKey, PQScheme scheme) {
+    putAccountWithPQKeys(ownerHex, scheme, pqPublicKey);
+  }
+
+  /**
+   * Store an Owner permission whose keys are the addresses derived from each
+   * given PQ public key. Used to build multi-key permissions so the
+   * pq_auth_sig count gate (count vs key count) can be exercised independently
+   * of the per-signer gates.
+   */
+  private void putAccountWithPQKeys(String ownerHex, PQScheme scheme, byte[]... pqPublicKeys) {
     byte[] addr = ByteArray.fromHexString(ownerHex);
-    byte[] signerAddr = PQSchemeRegistry.computeAddress(scheme, pqPublicKey);
-    Key pqKey = Key.newBuilder()
-        .setAddress(ByteString.copyFrom(signerAddr))
-        .setWeight(1L)
-        .build();
-    Permission owner = Permission.newBuilder()
+    Permission.Builder owner = Permission.newBuilder()
         .setType(PermissionType.Owner)
         .setPermissionName("owner")
-        .setThreshold(1)
-        .addKeys(pqKey)
-        .build();
+        .setThreshold(1);
+    for (byte[] pqPublicKey : pqPublicKeys) {
+      owner.addKeys(Key.newBuilder()
+          .setAddress(ByteString.copyFrom(PQSchemeRegistry.computeAddress(scheme, pqPublicKey)))
+          .setWeight(1L)
+          .build());
+    }
     AccountCapsule acc = new AccountCapsule(ByteString.copyFrom(addr),
         ByteString.copyFromUtf8("pqowner"), AccountType.Normal);
-    acc.updatePermissions(owner, null, java.util.Collections.emptyList());
+    acc.updatePermissions(owner.build(), null, java.util.Collections.emptyList());
     dbManager.getAccountStore().put(addr, acc);
   }
 
@@ -245,11 +254,16 @@ public class TransactionCapsuleTest extends BaseTest {
   public void duplicateSignerRejected() throws Exception {
     dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
     FNDSA512 kp = new FNDSA512();
-    putAccountWithPQPermission(PQ_OWNER_HEX, kp.getPublicKey(), PQScheme.FN_DSA_512);
+    // Two-key permission so the count gate (pq_auth_sig count vs key count)
+    // passes and the duplicate-signer gate is what rejects the two identical
+    // sigs. The filler key is a distinct PQ-derived address that never signs.
+    FNDSA512 filler = new FNDSA512();
+    putAccountWithPQKeys(PQ_OWNER_HEX, PQScheme.FN_DSA_512,
+        kp.getPublicKey(), filler.getPublicKey());
 
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
-    
+
     byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
     PQAuthSig w = PQAuthSig.newBuilder()
         .setScheme(PQScheme.FN_DSA_512)
@@ -264,6 +278,65 @@ public class TransactionCapsuleTest extends BaseTest {
       Assert.fail("duplicate signer should be rejected");
     } catch (ValidateSignatureException e) {
       Assert.assertTrue(e.getMessage().contains("has signed twice"));
+    }
+  }
+
+  @Test
+  public void pqAuthSigCountExceedingKeyCountRejected() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    FNDSA512 kp = new FNDSA512();
+    // Single-key permission, but the tx carries two pq_auth_sigs (within the
+    // global totalSignNum=5 cap), so the per-permission count gate must reject
+    // it before any signature verification — mirroring legacy checkWeight.
+    putAccountWithPQPermission(PQ_OWNER_HEX, kp.getPublicKey(), PQScheme.FN_DSA_512);
+
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] txid = txId(tx);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    PQAuthSig w = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+        .setSignature(ByteString.copyFrom(sig))
+        .build();
+    Transaction signed = tx.toBuilder().addPqAuthSig(w).addPqAuthSig(w).build();
+
+    TransactionCapsule cap = new TransactionCapsule(signed);
+    try {
+      cap.validatePubSignature(dbManager.getAccountStore(), dbManager.getDynamicPropertiesStore());
+      Assert.fail("pq_auth_sig count exceeding permission key count should be rejected");
+    } catch (ValidateSignatureException e) {
+      Assert.assertTrue(e.getMessage().contains("more than key counts of permission"));
+    }
+  }
+
+  @Test
+  public void pqAuthSigWithUnknownFieldRejected() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    FNDSA512 kp = new FNDSA512();
+    putAccountWithPQPermission(PQ_OWNER_HEX, kp.getPublicKey(), PQScheme.FN_DSA_512);
+
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] txid = txId(tx);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    // Known fields are valid, but a nested unknown field (#99) is smuggled in.
+    // The consensus path must reject it outright, not just the ingress gates.
+    PQAuthSig smuggled = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+        .setSignature(ByteString.copyFrom(sig))
+        .setUnknownFields(com.google.protobuf.UnknownFieldSet.newBuilder()
+            .addField(99, com.google.protobuf.UnknownFieldSet.Field.newBuilder()
+                .addLengthDelimited(ByteString.copyFrom(new byte[16])).build())
+            .build())
+        .build();
+    Transaction signed = tx.toBuilder().addPqAuthSig(smuggled).build();
+
+    TransactionCapsule cap = new TransactionCapsule(signed);
+    try {
+      cap.validatePubSignature(dbManager.getAccountStore(), dbManager.getDynamicPropertiesStore());
+      Assert.fail("pq_auth_sig with unknown fields should be rejected");
+    } catch (ValidateSignatureException e) {
+      Assert.assertTrue(e.getMessage().contains("unknown fields"));
     }
   }
 

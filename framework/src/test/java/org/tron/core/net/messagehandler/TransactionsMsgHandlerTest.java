@@ -343,6 +343,8 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidSigLength() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
+    // check() reads totalSignNum for the admission cap; wire the real store.
+    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -428,6 +430,8 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidPqAuthSigRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
+    // check() reads totalSignNum for the admission cap; wire the real store.
+    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -491,6 +495,47 @@ public class TransactionsMsgHandlerTest extends BaseTest {
           () -> handler.processMessage(peer, new TransactionsMessage(oversizedList)));
       Assert.assertEquals(TypeEnum.BAD_TRX, ex2.getType());
       Assert.assertTrue(ex2.getMessage().contains("pq_auth_sig size is out of bounds"));
+    } finally {
+      handler.close();
+    }
+  }
+
+  @Test
+  public void testTooManyPqAuthSigRejected() throws Exception {
+    TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    handler.init();
+    // check() reads totalSignNum for the admission cap; wire the real store.
+    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
+    try {
+      PeerConnection peer = Mockito.mock(PeerConnection.class);
+
+      BalanceContract.TransferContract transferContract = BalanceContract.TransferContract
+          .newBuilder()
+          .setAmount(10)
+          .setOwnerAddress(ByteString.copyFrom(ByteArray.fromHexString("121212a9cf")))
+          .setToAddress(ByteString.copyFrom(ByteArray.fromHexString("232323a9cf")))
+          .build();
+
+      // More pq_auth_sig entries than totalSignNum (default 5). Each empty entry
+      // passes the per-entry size gate, but the admission count cap rejects the
+      // flood before the per-entry loops.
+      Protocol.Transaction.Builder builder = Protocol.Transaction.newBuilder()
+          .setRawData(Protocol.Transaction.raw.newBuilder()
+              .setRefBlockNum(3)
+              .addContract(Protocol.Transaction.Contract.newBuilder()
+                  .setType(Protocol.Transaction.Contract.ContractType.TransferContract)
+                  .setParameter(Any.pack(transferContract)).build())
+              .build());
+      for (int i = 0; i < 6; i++) {
+        builder.addPqAuthSig(Protocol.PQAuthSig.getDefaultInstance());
+      }
+      List<Protocol.Transaction> floodList = new ArrayList<>();
+      floodList.add(builder.build());
+      stubAdvInvRequest(peer, new TransactionsMessage(floodList));
+      P2pException ex = Assert.assertThrows(P2pException.class,
+          () -> handler.processMessage(peer, new TransactionsMessage(floodList)));
+      Assert.assertEquals(TypeEnum.BAD_TRX, ex.getType());
+      Assert.assertTrue(ex.getMessage().contains("total signature count"));
     } finally {
       handler.close();
     }

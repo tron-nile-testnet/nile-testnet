@@ -48,6 +48,7 @@ import org.tron.common.crypto.ECKey.ECDSASignature;
 import org.tron.common.crypto.Rsv;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.math.StrictMathWrapper;
@@ -744,8 +745,25 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
 
     Set<ByteString> signedAddresses = new HashSet<>(approveList);
 
+    List<PQAuthSig> pqAuthSigList = transaction.getPqAuthSigList();
+    // Bound the pq_auth_sig count, mirroring the legacy ECDSA checkWeight: each
+    // signature must map to a distinct permission key, so more entries than the
+    // permission has keys can never satisfy the threshold and only wastes
+    // verification work.
+    if (pqAuthSigList.size() > permission.getKeysCount()) {
+      throw new PermissionException(
+          "pq_auth_sig count is " + pqAuthSigList.size()
+              + " more than key counts of permission : " + permission.getKeysCount());
+    }
+
     long weight = 0L;
-    for (PQAuthSig witness : transaction.getPqAuthSigList()) {
+    for (PQAuthSig witness : pqAuthSigList) {
+      // Reject nested unknown fields here too, not just at the ingress gates, so
+      // the fixed (scheme/public_key/signature) field set is enforced uniformly
+      // on the consensus path that a block-included tx flows through.
+      if (!PQAuthSigValidator.hasNoUnknownFields(witness)) {
+        throw new SignatureFormatException("pq_auth_sig contains unknown fields");
+      }
       PQScheme scheme = witness.getScheme();
       if (!dynamicPropertiesStore.isPqSchemeAllowed(scheme)) {
         throw new PermissionException(scheme + " is not allowed");

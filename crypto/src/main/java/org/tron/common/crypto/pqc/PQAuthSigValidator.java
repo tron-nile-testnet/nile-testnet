@@ -13,10 +13,32 @@ import org.tron.protos.Protocol.PQScheme;
  * and the actual signature verification still happen later in the dedicated
  * verify paths ({@code RelayService}, {@code TransactionCapsule},
  * {@code BlockCapsule}).
+ *
+ * <p><b>Unknown fields are rejected uniformly</b> across the ingress gates and
+ * the consensus verify paths ({@code TransactionCapsule#validatePQSignatureGetWeight},
+ * {@code BlockCapsule#validatePQSignature}) via {@link #hasNoUnknownFields}.
+ * Keeping the rule identical at every layer removes the asymmetry where a
+ * relay/RPC gate would reject a {@code PQAuthSig} that consensus would still
+ * accept. {@code PQAuthSig}'s field set is fixed (scheme/public_key/signature);
+ * a future field addition is a wire-format change that must be coordinated by a
+ * protocol upgrade / hard fork anyway, so rejecting unknown fields outright is
+ * the intended, forward-safe behavior rather than a compatibility hazard.
  */
 public final class PQAuthSigValidator {
 
   private PQAuthSigValidator() {
+  }
+
+  /**
+   * Returns {@code true} iff the {@link PQAuthSig} carries no nested unknown
+   * fields. Generated {@code PQAuthSig} retains and re-serializes unknown
+   * fields, so bounding only public_key/signature would let a caller smuggle a
+   * large (or simply unexpected) unknown length-delimited field while both
+   * known fields stay within bounds. This is the single primitive every entry
+   * point and consensus verify path uses to enforce the fixed field set.
+   */
+  public static boolean hasNoUnknownFields(PQAuthSig pqAuthSig) {
+    return pqAuthSig.getUnknownFields().getSerializedSize() == 0;
   }
 
   /**
@@ -34,7 +56,7 @@ public final class PQAuthSigValidator {
    * (scheme/public_key/signature), so rejecting unknown fields is safe.
    */
   public static boolean isLengthWithinBounds(PQAuthSig pqAuthSig) {
-    if (pqAuthSig.getUnknownFields().getSerializedSize() != 0) {
+    if (!hasNoUnknownFields(pqAuthSig)) {
       return false;
     }
     PQScheme scheme = pqAuthSig.getScheme();

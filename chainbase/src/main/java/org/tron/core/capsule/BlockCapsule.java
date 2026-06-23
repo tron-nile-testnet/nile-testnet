@@ -34,6 +34,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.tron.common.bloom.Bloom;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
@@ -262,6 +263,13 @@ public class BlockCapsule implements ProtoCapsule<Block> {
     /*
       Verify the PQ scheme is supported and proposal opened
      */
+    // Enforce the fixed (scheme/public_key/signature) field set on the block
+    // path too, matching the ingress gates and the tx consensus path so unknown
+    // fields cannot ride along inside a block header's pq_auth_sig.
+    if (!PQAuthSigValidator.hasNoUnknownFields(pqAuthSig)) {
+      throw new ValidateSignatureException("pq_auth_sig contains unknown fields");
+    }
+
     PQScheme scheme = pqAuthSig.getScheme();
     if (!dynamicPropertiesStore.isPqSchemeAllowed(scheme)) {
       throw new ValidateSignatureException("pq_auth_sig scheme " + scheme + " is not allowed");
