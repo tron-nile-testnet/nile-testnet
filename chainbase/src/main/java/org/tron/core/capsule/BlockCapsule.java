@@ -260,12 +260,7 @@ public class BlockCapsule implements ProtoCapsule<Block> {
   private boolean validatePQSignature(DynamicPropertiesStore dynamicPropertiesStore,
       byte[] witnessPermissionAddress, PQAuthSig pqAuthSig)
       throws ValidateSignatureException {
-    /*
-      Verify the PQ scheme is supported and proposal opened
-     */
-    // Enforce the fixed (scheme/public_key/signature) field set on the block
-    // path too, matching the ingress gates and the tx consensus path so unknown
-    // fields cannot ride along inside a block header's pq_auth_sig.
+    // Keep consensus and ingress handling of PQAuthSig wire fields aligned.
     if (PQAuthSigValidator.hasUnknownFields(pqAuthSig)) {
       throw new ValidateSignatureException("pq_auth_sig contains unknown fields");
     }

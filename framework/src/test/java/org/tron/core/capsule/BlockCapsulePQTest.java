@@ -205,9 +205,7 @@ public class BlockCapsulePQTest extends BaseTest {
     byte[] parentHash = new byte[32];
     BlockCapsule block = buildUnsignedBlock(parentHash);
     byte[] digest = block.getRawHashBytes();
-    // Valid scheme/key/signature, but a nested unknown field (#99) is smuggled
-    // into the header's pq_auth_sig. The block path must reject it outright,
-    // matching the tx consensus path and the ingress gates.
+    // Block consensus rejects nested unknown fields too.
     PQAuthSig withUnknown = buildPQAuthSig(signPQ(digest)).toBuilder()
         .setUnknownFields(UnknownFieldSet.newBuilder()
             .addField(99, UnknownFieldSet.Field.newBuilder()

@@ -179,8 +179,7 @@ public class WalletMockTest {
     field.setAccessible(true);
     field.set(wallet, tronNetDelegateMock);
 
-    // The admission count cap reads totalSignNum; each tx below carries a single
-    // signature, well within the cap, so it proceeds to the length check.
+    // Single-signature cases should reach the length gate.
     injectTotalSignNum(wallet, 5);
 
     // signature shorter than 65 bytes → SIGERROR
@@ -231,13 +230,13 @@ public class WalletMockTest {
     field.setAccessible(true);
     field.set(wallet, tronNetDelegateMock);
 
-    // Each tx below carries a single pq_auth_sig, within the admission cap.
+    // Single PQ signatures should reach the PQ size gate.
     injectTotalSignNum(wallet, 5);
 
     int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
     int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
 
-    // known fields legal, but a large nested unknown field smuggled in → SIGERROR
+    // Known fields are legal, but nested unknown fields are rejected.
     UnknownFieldSet unknown = UnknownFieldSet.newBuilder()
         .addField(99, UnknownFieldSet.Field.newBuilder()
             .addLengthDelimited(ByteString.copyFrom(new byte[4096])).build())
@@ -269,10 +268,7 @@ public class WalletMockTest {
     Mockito.verify(tronNetDelegateMock, Mockito.never()).isBlockUnsolidified();
   }
 
-  /**
-   * Inject a chainBaseManager whose dynamic store reports the given totalSignNum,
-   * so broadcastTransaction's admission count cap can be exercised.
-   */
+  /** Inject the signature-count cap used by broadcastTransaction. */
   private static void injectTotalSignNum(Wallet wallet, int totalSignNum) throws Exception {
     ChainBaseManager chainBaseManagerMock = mock(ChainBaseManager.class);
     DynamicPropertiesStore dynamicPropertiesStoreMock = mock(DynamicPropertiesStore.class);
@@ -292,9 +288,7 @@ public class WalletMockTest {
     field.set(wallet, tronNetDelegateMock);
     injectTotalSignNum(wallet, 5);
 
-    // Six empty/default pq_auth_sig entries: each passes the per-entry size gate
-    // (an empty PQAuthSig is within bounds), but the total count exceeds the
-    // totalSignNum admission cap, so the flood is rejected before the loops.
+    // Empty PQ entries are bounded by the total signature count cap.
     Protocol.Transaction.Builder builder = Protocol.Transaction.newBuilder();
     for (int i = 0; i < 6; i++) {
       builder.addPqAuthSig(Protocol.PQAuthSig.getDefaultInstance());

@@ -26,9 +26,7 @@ public class TronMessageFactory {
     boolean isException = false;
     try {
       byte type = data[0];
-      // Reject an oversized hello before copying out its body, so a bloated
-      // hello never costs a subarray allocation (the constructor re-checks
-      // defensively before parsing).
+      // Reject oversized hellos before copying the body.
       if (type == MessageTypes.P2P_HELLO.asByte()
           && data.length - 1 > HelloMessage.MAX_HELLO_MESSAGE_SIZE) {
         throw new P2pException(P2pException.TypeEnum.BAD_MESSAGE,

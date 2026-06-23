@@ -343,7 +343,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidSigLength() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
-    // check() reads totalSignNum for the admission cap; wire the real store.
+    // check() reads totalSignNum for the admission cap.
     ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
@@ -430,7 +430,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidPqAuthSigRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
-    // check() reads totalSignNum for the admission cap; wire the real store.
+    // check() reads totalSignNum for the admission cap.
     ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
@@ -445,7 +445,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
       int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
       int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
 
-      // known fields legal, but a large nested unknown field smuggled in.
+      // Known fields are legal, but nested unknown fields are rejected.
       UnknownFieldSet unknown = UnknownFieldSet.newBuilder()
           .addField(99, UnknownFieldSet.Field.newBuilder()
               .addLengthDelimited(ByteString.copyFrom(new byte[4096])).build())
@@ -504,7 +504,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testTooManyPqAuthSigRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
-    // check() reads totalSignNum for the admission cap; wire the real store.
+    // check() reads totalSignNum for the admission cap.
     ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
@@ -516,9 +516,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
           .setToAddress(ByteString.copyFrom(ByteArray.fromHexString("232323a9cf")))
           .build();
 
-      // More pq_auth_sig entries than totalSignNum (default 5). Each empty entry
-      // passes the per-entry size gate, but the admission count cap rejects the
-      // flood before the per-entry loops.
+      // Empty PQ entries are bounded by the total signature count cap.
       Protocol.Transaction.Builder builder = Protocol.Transaction.newBuilder()
           .setRawData(Protocol.Transaction.raw.newBuilder()
               .setRefBlockNum(3)

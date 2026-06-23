@@ -511,12 +511,7 @@ public class Wallet {
     trx.setTime(System.currentTimeMillis());
     Sha256Hash txID = trx.getTransactionId();
     try {
-      // Admission cap, mirroring the consensus check in validatePubSignature:
-      // the total signature entries (legacy + pq) can never exceed totalSignNum
-      // since each must map to a distinct permission key, so reject a flood up
-      // front before the per-entry length loops. This also bounds pq entries,
-      // which — unlike an empty ECDSA sig that isValidLength rejects — would
-      // otherwise pass the per-entry size gate even when empty/default.
+      // Bound signature entry count before per-entry validation.
       int totalSignCount = signedTransaction.getSignatureCount()
           + signedTransaction.getPqAuthSigCount();
       if (totalSignCount > 0

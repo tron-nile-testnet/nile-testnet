@@ -25,17 +25,7 @@ public class HelloMessage extends TronMessage {
   @Getter
   private Protocol.HelloMessage helloMessage;
 
-  /**
-   * Hard upper bound on the raw size of an inbound hello, enforced before
-   * parsing. A legitimate hello is at most a few KB (block ids + address +
-   * codeVersion + a single ~3.75KB pq_auth_sig), so 16KB leaves ample headroom
-   * for forward-compatible field additions. This is the only guard that truly
-   * bounds the message: per-field/unknown-field checks on the parsed object do
-   * not cap the raw {@code data}, which can still bloat via repeated singular
-   * fields (parser merges them) or unbounded bytes sub-fields of {@code from}
-   * (Endpoint). The raw {@code data} is what gets retained per peer, so it is
-   * the real memory cost.
-   */
+  /** Raw inbound hello size cap, enforced before parsing. */
   public static final int MAX_HELLO_MESSAGE_SIZE = 16 * 1024;
 
   public HelloMessage(byte type, byte[] rawData) throws Exception {
@@ -180,9 +170,7 @@ public class HelloMessage extends TronMessage {
   }
 
   public boolean valid() {
-    // Defensive re-check of the raw size; the inbound constructor already
-    // rejects oversized hellos before parsing, but valid() may run on messages
-    // built through other paths.
+    // valid() can run on messages built outside the inbound constructor.
     if (this.data != null && this.data.length > MAX_HELLO_MESSAGE_SIZE) {
       return false;
     }
@@ -218,14 +206,7 @@ public class HelloMessage extends TronMessage {
       return false;
     }
 
-    // pq_auth_sig carries lattice public key + signature, far larger than the
-    // legacy 200B fields, so it needs its own bound. Cap to the declared
-    // scheme's legal maximum when registered; for an unknown/future scheme fall
-    // back to the global maximum so memory stays bounded without rejecting
-    // forward-compatible peers (the exact per-scheme length is re-checked later
-    // in RelayService#verifyPqAuthSig before any signature verification).
-    // Shared size gate (bounds public_key/signature per scheme and rejects
-    // nested unknown fields), also applied at the transaction entry points.
+    // PQ signatures are bounded by scheme and reject nested unknown fields.
     if (this.helloMessage.hasPqAuthSig()
         && !PQAuthSigValidator.isLengthWithinBounds(this.helloMessage.getPqAuthSig())) {
       return false;

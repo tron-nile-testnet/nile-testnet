@@ -746,10 +746,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     Set<ByteString> signedAddresses = new HashSet<>(approveList);
 
     List<PQAuthSig> pqAuthSigList = transaction.getPqAuthSigList();
-    // Bound the pq_auth_sig count, mirroring the legacy ECDSA checkWeight: each
-    // signature must map to a distinct permission key, so more entries than the
-    // permission has keys can never satisfy the threshold and only wastes
-    // verification work.
+    // A PQ signer must map to a distinct permission key.
     if (pqAuthSigList.size() > permission.getKeysCount()) {
       throw new PermissionException(
           "pq_auth_sig count is " + pqAuthSigList.size()
@@ -758,9 +755,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
 
     long weight = 0L;
     for (PQAuthSig witness : pqAuthSigList) {
-      // Reject nested unknown fields here too, not just at the ingress gates, so
-      // the fixed (scheme/public_key/signature) field set is enforced uniformly
-      // on the consensus path that a block-included tx flows through.
+      // Keep consensus and ingress handling of PQAuthSig wire fields aligned.
       if (PQAuthSigValidator.hasUnknownFields(witness)) {
         throw new SignatureFormatException("pq_auth_sig contains unknown fields");
       }
