@@ -176,7 +176,12 @@ public class TransactionResultTest extends BaseTest {
     Assert.assertEquals(ByteArray.toJsonHex(new byte[] {27}), transactionResult.getV());
     Assert.assertNotNull(transactionResult.getPqAuthSigList());
     Assert.assertEquals(1, transactionResult.getPqAuthSigList().size());
-    Assert.assertEquals(pqAuthSig, transactionResult.getPqAuthSigList().get(0));
+    TransactionResult.PQAuthSigResult result = transactionResult.getPqAuthSigList().get(0);
+    Assert.assertEquals(pqAuthSig.getScheme().name(), result.getScheme());
+    Assert.assertEquals(ByteArray.toJsonHex(pqAuthSig.getPublicKey().toByteArray()),
+        result.getPublicKey());
+    Assert.assertEquals(ByteArray.toJsonHex(pqAuthSig.getSignature().toByteArray()),
+        result.getSignature());
   }
 
 }
