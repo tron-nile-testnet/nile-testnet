@@ -5,6 +5,8 @@ import static org.tron.core.services.jsonrpc.JsonRpcApiUtil.getTransactionAmount
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.google.protobuf.ByteString;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.ToString;
 import org.tron.common.crypto.Rsv;
@@ -13,6 +15,7 @@ import org.tron.core.Wallet;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.capsule.TransactionCapsule;
 import org.tron.protos.Protocol;
+import org.tron.protos.Protocol.PQAuthSig;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
@@ -55,20 +58,46 @@ public class TransactionResult {
   @Getter
   private String s;
 
-  private void parseSignature(Transaction tx) {
+  @Getter
+  private List<PQAuthSigResult> pqAuthSigList;
 
+  @JsonPropertyOrder(alphabetic = true)
+  @ToString
+  public static class PQAuthSigResult {
+
+    @Getter
+    private final String scheme;
+    @Getter
+    private final String publicKey;
+    @Getter
+    private final String signature;
+
+    public PQAuthSigResult(PQAuthSig pqAuthSig) {
+      this.scheme = pqAuthSig.getScheme().name();
+      this.publicKey = ByteArray.toJsonHex(pqAuthSig.getPublicKey().toByteArray());
+      this.signature = ByteArray.toJsonHex(pqAuthSig.getSignature().toByteArray());
+    }
+  }
+
+  private void parseSignature(Transaction tx) {
     if (tx.getSignatureCount() == 0) {
       v = ByteArray.toJsonHex(new byte[1]);
       r = ByteArray.toJsonHex(new byte[32]);
       s = ByteArray.toJsonHex(new byte[32]);
-      return;
+    } else {
+      ByteString signature = tx.getSignature(0); // r[32] + s[32] + v[1]
+      Rsv rsv = Rsv.fromSignature(signature.toByteArray());
+      r = ByteArray.toJsonHex(rsv.getR());
+      s = ByteArray.toJsonHex(rsv.getS());
+      v = ByteArray.toJsonHex(rsv.getV());
     }
 
-    ByteString signature = tx.getSignature(0); // r[32] + s[32] + v[1]
-    Rsv rsv = Rsv.fromSignature(signature.toByteArray());
-    r = ByteArray.toJsonHex(rsv.getR());
-    s = ByteArray.toJsonHex(rsv.getS());
-    v = ByteArray.toJsonHex(rsv.getV());
+    if (tx.getPqAuthSigCount() > 0) {
+      pqAuthSigList = new ArrayList<>();
+      for (PQAuthSig pqAuthSig : tx.getPqAuthSigList()) {
+        pqAuthSigList.add(new PQAuthSigResult(pqAuthSig));
+      }
+    }
   }
 
   private String parseInput(Transaction tx) {
