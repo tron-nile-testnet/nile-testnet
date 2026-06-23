@@ -29,6 +29,7 @@ import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.pqc.FNDSA512;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Utils;
 import org.tron.core.ChainBaseManager;
@@ -446,6 +447,28 @@ public class TransactionUtilTest extends BaseTest {
         builder.build().getSerializedSize() - builder2.build().getSerializedSize(), 0L, true);
     long actual = TransactionUtil.estimateConsumeBandWidthSize(dps, balance);
     Assert.assertEquals(expected, actual);
+  }
+
+  @Test
+  public void estimateConsumeBandWidthSizeWithPqScheme() {
+    DynamicPropertiesStore dps = chainBaseManager.getDynamicPropertiesStore();
+    long balance = 100;
+
+    long ecdsaEstimate = TransactionUtil.estimateConsumeBandWidthSize(dps, balance);
+    // null / UNKNOWN_PQ_SCHEME keeps the ECDSA-sized estimate unchanged.
+    Assert.assertEquals(ecdsaEstimate,
+        TransactionUtil.estimateConsumeBandWidthSize(dps, balance, PQScheme.UNKNOWN_PQ_SCHEME));
+    Assert.assertEquals(ecdsaEstimate,
+        TransactionUtil.estimateConsumeBandWidthSize(dps, balance, null));
+
+    for (PQScheme scheme : new PQScheme[] {PQScheme.FN_DSA_512, PQScheme.ML_DSA_44}) {
+      long pqEstimate = TransactionUtil.estimateConsumeBandWidthSize(dps, balance, scheme);
+      // The PQAuthSig wire size is reserved on top of the ECDSA-sized base.
+      Assert.assertEquals(ecdsaEstimate + PQSchemeRegistry.computePQAuthSigWireSize(scheme),
+          pqEstimate);
+      // A PQAuthSig is far larger than an ECDSA signature, so the reserve grows noticeably.
+      Assert.assertTrue(pqEstimate > ecdsaEstimate);
+    }
   }
 
   @Test

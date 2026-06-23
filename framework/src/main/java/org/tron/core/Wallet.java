@@ -228,6 +228,7 @@ import org.tron.protos.Protocol.MarketOrderList;
 import org.tron.protos.Protocol.MarketOrderPairList;
 import org.tron.protos.Protocol.MarketPrice;
 import org.tron.protos.Protocol.MarketPriceList;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Permission.PermissionType;
 import org.tron.protos.Protocol.Proposal;
@@ -953,11 +954,18 @@ public class Wallet {
   public GrpcAPI.CanDelegatedMaxSizeResponseMessage getCanDelegatedMaxSize(
           ByteString ownerAddress,
           int resourceType) {
+    return getCanDelegatedMaxSize(ownerAddress, resourceType, PQScheme.UNKNOWN_PQ_SCHEME);
+  }
+
+  public GrpcAPI.CanDelegatedMaxSizeResponseMessage getCanDelegatedMaxSize(
+          ByteString ownerAddress,
+          int resourceType,
+          PQScheme pqScheme) {
     long canDelegatedMaxSize = 0L;
     GrpcAPI.CanDelegatedMaxSizeResponseMessage.Builder builder =
           GrpcAPI.CanDelegatedMaxSizeResponseMessage.newBuilder();
     if (Common.ResourceCode.BANDWIDTH.getNumber() == resourceType) {
-      canDelegatedMaxSize = this.calcCanDelegatedBandWidthMaxSize(ownerAddress);
+      canDelegatedMaxSize = this.calcCanDelegatedBandWidthMaxSize(ownerAddress, pqScheme);
     } else if (Common.ResourceCode.ENERGY.getNumber() == resourceType) {
       canDelegatedMaxSize = this.calcCanDelegatedEnergyMaxSize(ownerAddress);
     }
@@ -992,6 +1000,11 @@ public class Wallet {
 
   public long calcCanDelegatedBandWidthMaxSize(
           ByteString ownerAddress) {
+    return calcCanDelegatedBandWidthMaxSize(ownerAddress, PQScheme.UNKNOWN_PQ_SCHEME);
+  }
+
+  public long calcCanDelegatedBandWidthMaxSize(
+          ByteString ownerAddress, PQScheme pqScheme) {
     AccountStore accountStore = chainBaseManager.getAccountStore();
     DynamicPropertiesStore dynamicStore = chainBaseManager.getDynamicPropertiesStore();
     AccountCapsule ownerCapsule = accountStore.get(ownerAddress.toByteArray());
@@ -1004,7 +1017,7 @@ public class Wallet {
 
     long accountNetUsage = ownerCapsule.getNetUsage();
     accountNetUsage += TransactionUtil.estimateConsumeBandWidthSize(dynamicStore,
-            ownerCapsule.getFrozenV2BalanceForBandwidth());
+            ownerCapsule.getFrozenV2BalanceForBandwidth(), pqScheme);
 
     long netUsage = (long) (accountNetUsage * TRX_PRECISION * ((double)
             (dynamicStore.getTotalNetWeight()) / dynamicStore.getTotalNetLimit()));

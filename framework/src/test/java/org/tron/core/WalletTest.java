@@ -51,6 +51,7 @@ import org.tron.api.GrpcAPI.ProposalList;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Utils;
@@ -88,6 +89,7 @@ import org.tron.protos.Protocol.Block;
 import org.tron.protos.Protocol.BlockHeader;
 import org.tron.protos.Protocol.BlockHeader.raw;
 import org.tron.protos.Protocol.Exchange;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Proposal;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
@@ -1429,6 +1431,51 @@ public class WalletTest extends BaseTest {
         BANDWIDTH.getNumber());
     Assert.assertEquals(frozenBalance / TRX_PRECISION - 279,
         message.getMaxSize() / TRX_PRECISION);
+    chainBaseManager.getDynamicPropertiesStore().saveMaxDelegateLockPeriod(DELEGATE_PERIOD / 3000);
+  }
+
+  /**
+   * A PQ delegate transaction carries a large PQAuthSig, so it consumes much more bandwidth than an
+   * ECDSA one. When a PQ scheme hint is supplied, getCanDelegatedMaxSize must reserve room for that
+   * PQAuthSig wire size and therefore return a strictly smaller max size, otherwise the queried
+   * amount could not actually be delegated by a PQ account.
+   */
+  @Test
+  public void testGetCanDelegatedMaxSizeBandWidthWithPqScheme() {
+    long frozenBalance = 100_000_000_000L;
+    AccountCapsule ownerCapsule =
+        dbManager.getAccountStore().get(ByteArray.fromHexString(OWNER_ADDRESS));
+    ownerCapsule.addFrozenBalanceForBandwidthV2(frozenBalance);
+    ownerCapsule.setNetUsage(0L);
+    ownerCapsule.setEnergyUsage(0L);
+    dbManager.getDynamicPropertiesStore().saveTotalNetWeight(0L);
+    dbManager.getDynamicPropertiesStore().saveTotalEnergyWeight(0L);
+    dbManager.getDynamicPropertiesStore().addTotalNetWeight(
+        frozenBalance / TRX_PRECISION + 43100000000L);
+    dbManager.getAccountStore().put(ownerCapsule.getAddress().toByteArray(), ownerCapsule);
+
+    ByteString owner = ByteString.copyFrom(ByteArray.fromHexString(OWNER_ADDRESS));
+
+    long ecdsaMax = wallet.getCanDelegatedMaxSize(owner, BANDWIDTH.getNumber()).getMaxSize();
+    // UNKNOWN_PQ_SCHEME must behave exactly like the ECDSA (no-scheme) path.
+    long unknownMax = wallet.getCanDelegatedMaxSize(
+        owner, BANDWIDTH.getNumber(), PQScheme.UNKNOWN_PQ_SCHEME).getMaxSize();
+    Assert.assertEquals(ecdsaMax, unknownMax);
+
+    long fnDsaMax = wallet.getCanDelegatedMaxSize(
+        owner, BANDWIDTH.getNumber(), PQScheme.FN_DSA_512).getMaxSize();
+    long mlDsaMax = wallet.getCanDelegatedMaxSize(
+        owner, BANDWIDTH.getNumber(), PQScheme.ML_DSA_44).getMaxSize();
+
+    // Both PQ schemes reserve extra bandwidth, so they yield a smaller max than ECDSA.
+    Assert.assertTrue(fnDsaMax < ecdsaMax);
+    Assert.assertTrue(mlDsaMax < ecdsaMax);
+    // ML_DSA_44 has a larger PQAuthSig than FN_DSA_512, so it reserves more and delegates less.
+    Assert.assertTrue(
+        PQSchemeRegistry.computePQAuthSigWireSize(PQScheme.ML_DSA_44)
+            > PQSchemeRegistry.computePQAuthSigWireSize(PQScheme.FN_DSA_512));
+    Assert.assertTrue(mlDsaMax < fnDsaMax);
+
     chainBaseManager.getDynamicPropertiesStore().saveMaxDelegateLockPeriod(DELEGATE_PERIOD / 3000);
   }
 

@@ -38,6 +38,7 @@ import org.tron.api.GrpcAPI.Return.response_code;
 import org.tron.api.GrpcAPI.TransactionExtention;
 import org.tron.api.GrpcAPI.TransactionSignWeight;
 import org.tron.api.GrpcAPI.TransactionSignWeight.Result;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.Sha256Hash;
@@ -47,6 +48,7 @@ import org.tron.core.capsule.TransactionCapsule;
 import org.tron.core.exception.PermissionException;
 import org.tron.core.exception.SignatureFormatException;
 import org.tron.core.store.DynamicPropertiesStore;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Permission.PermissionType;
 import org.tron.protos.Protocol.Transaction;
@@ -294,6 +296,18 @@ public class TransactionUtil {
   }
 
   public static long estimateConsumeBandWidthSize(DynamicPropertiesStore dps, long balance) {
+    return estimateConsumeBandWidthSize(dps, balance, PQScheme.UNKNOWN_PQ_SCHEME);
+  }
+
+  /**
+   * Estimate the bandwidth a delegate-resource transaction consumes. The base cost
+   * ({@link org.tron.core.config.Parameter.ChainConstant#DELEGATE_COST_BASE_SIZE}) assumes an
+   * ECDSA signature. When {@code pqScheme} is a registered post-quantum scheme, the much larger
+   * PQAuthSig wire size is added on top so the estimate stays an upper bound for PQ accounts;
+   * {@code null} / {@code UNKNOWN_PQ_SCHEME} keeps the ECDSA-sized estimate unchanged.
+   */
+  public static long estimateConsumeBandWidthSize(DynamicPropertiesStore dps, long balance,
+      PQScheme pqScheme) {
     DelegateResourceContract.Builder builder;
     if (dps.supportMaxDelegateLockPeriod()) {
       builder = DelegateResourceContract.newBuilder()
@@ -311,6 +325,11 @@ public class TransactionUtil {
     long builder2Size = builder2.build().getSerializedSize();
     long addSize = max(builderSize - builder2Size, 0L, dps.disableJavaLangMath());
 
-    return DELEGATE_COST_BASE_SIZE + addSize;
+    long pqOverhead = 0L;
+    if (PQSchemeRegistry.contains(pqScheme)) {
+      pqOverhead = PQSchemeRegistry.computePQAuthSigWireSize(pqScheme);
+    }
+
+    return DELEGATE_COST_BASE_SIZE + addSize + pqOverhead;
   }
 }
