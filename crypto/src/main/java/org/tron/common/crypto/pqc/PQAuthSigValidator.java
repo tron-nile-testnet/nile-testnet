@@ -16,7 +16,7 @@ import org.tron.protos.Protocol.PQScheme;
  *
  * <p><b>Unknown fields are rejected uniformly</b> across the ingress gates and
  * the consensus verify paths ({@code TransactionCapsule#validatePQSignatureGetWeight},
- * {@code BlockCapsule#validatePQSignature}) via {@link #hasNoUnknownFields}.
+ * {@code BlockCapsule#validatePQSignature}) via {@link #hasUnknownFields}.
  * Keeping the rule identical at every layer removes the asymmetry where a
  * relay/RPC gate would reject a {@code PQAuthSig} that consensus would still
  * accept. {@code PQAuthSig}'s field set is fixed (scheme/public_key/signature);
@@ -30,15 +30,15 @@ public final class PQAuthSigValidator {
   }
 
   /**
-   * Returns {@code true} iff the {@link PQAuthSig} carries no nested unknown
-   * fields. Generated {@code PQAuthSig} retains and re-serializes unknown
-   * fields, so bounding only public_key/signature would let a caller smuggle a
-   * large (or simply unexpected) unknown length-delimited field while both
-   * known fields stay within bounds. This is the single primitive every entry
-   * point and consensus verify path uses to enforce the fixed field set.
+   * Returns {@code true} iff the {@link PQAuthSig} carries any nested unknown
+   * field. Generated {@code PQAuthSig} retains and re-serializes unknown fields,
+   * so bounding only public_key/signature would let a caller smuggle a large (or
+   * simply unexpected) unknown length-delimited field while both known fields
+   * stay within bounds. This is the single primitive every entry point and
+   * consensus verify path uses to enforce the fixed field set.
    */
-  public static boolean hasNoUnknownFields(PQAuthSig pqAuthSig) {
-    return pqAuthSig.getUnknownFields().getSerializedSize() == 0;
+  public static boolean hasUnknownFields(PQAuthSig pqAuthSig) {
+    return pqAuthSig.getUnknownFields().getSerializedSize() != 0;
   }
 
   /**
@@ -56,7 +56,7 @@ public final class PQAuthSigValidator {
    * (scheme/public_key/signature), so rejecting unknown fields is safe.
    */
   public static boolean isLengthWithinBounds(PQAuthSig pqAuthSig) {
-    if (!hasNoUnknownFields(pqAuthSig)) {
+    if (hasUnknownFields(pqAuthSig)) {
       return false;
     }
     PQScheme scheme = pqAuthSig.getScheme();

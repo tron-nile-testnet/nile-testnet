@@ -237,31 +237,19 @@ public final class PQSchemeRegistry {
   }
 
   /**
-   * Largest public-key length across all registered schemes. Used by callers
-   * (e.g. the p2p handshake) that must bound an inbound {@code pq_auth_sig}
-   * before the scheme is known or trusted — an unknown/future scheme falls back
-   * to this global upper bound so memory stays capped without breaking
-   * forward-compatibility.
+   * Largest public-key length across all registered schemes; the global upper
+   * bound for an unknown/future scheme.
    */
   public static int getMaxPublicKeyLength() {
-    int max = 0;
-    for (SchemeInfo info : SCHEMES.values()) {
-      max = Math.max(max, info.publicKeyLength);
-    }
-    return max;
+    return SCHEMES.values().stream().mapToInt(info -> info.publicKeyLength).max().orElse(0);
   }
 
   /**
-   * Largest signature length across all registered schemes (the per-scheme
-   * upper bound for variable-length schemes). Companion to
-   * {@link #getMaxPublicKeyLength()}.
+   * Largest signature length across all registered schemes; the global upper
+   * bound for an unknown/future scheme.
    */
   public static int getMaxSignatureLength() {
-    int max = 0;
-    for (SchemeInfo info : SCHEMES.values()) {
-      max = Math.max(max, info.signatureLength);
-    }
-    return max;
+    return SCHEMES.values().stream().mapToInt(info -> info.signatureLength).max().orElse(0);
   }
 
   public static int getSeedLength(PQScheme scheme) {

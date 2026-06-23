@@ -517,18 +517,16 @@ public class Wallet {
       // front before the per-entry length loops. This also bounds pq entries,
       // which — unlike an empty ECDSA sig that isValidLength rejects — would
       // otherwise pass the per-entry size gate even when empty/default.
-      int sigCount = signedTransaction.getSignatureCount();
-      int pqAuthSigCount = signedTransaction.getPqAuthSigCount();
-      if (sigCount + pqAuthSigCount > 0) {
-        int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
-        if (sigCount + pqAuthSigCount > totalSignNum) {
-          String info = "total signature count " + (sigCount + pqAuthSigCount)
-              + " exceeds " + totalSignNum;
-          logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
-          return builder.setResult(false).setCode(response_code.SIGERROR)
-              .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
-              .build();
-        }
+      int totalSignCount = signedTransaction.getSignatureCount()
+          + signedTransaction.getPqAuthSigCount();
+      if (totalSignCount > 0
+          && totalSignCount > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
+        String info = "total signature count " + totalSignCount + " exceeds "
+            + chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+        logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+        return builder.setResult(false).setCode(response_code.SIGERROR)
+            .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+            .build();
       }
 
       for (ByteString sig : signedTransaction.getSignatureList()) {

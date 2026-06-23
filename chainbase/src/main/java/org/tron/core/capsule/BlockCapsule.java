@@ -266,7 +266,7 @@ public class BlockCapsule implements ProtoCapsule<Block> {
     // Enforce the fixed (scheme/public_key/signature) field set on the block
     // path too, matching the ingress gates and the tx consensus path so unknown
     // fields cannot ride along inside a block header's pq_auth_sig.
-    if (!PQAuthSigValidator.hasNoUnknownFields(pqAuthSig)) {
+    if (PQAuthSigValidator.hasUnknownFields(pqAuthSig)) {
       throw new ValidateSignatureException("pq_auth_sig contains unknown fields");
     }
 

@@ -761,7 +761,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
       // Reject nested unknown fields here too, not just at the ingress gates, so
       // the fixed (scheme/public_key/signature) field set is enforced uniformly
       // on the consensus path that a block-included tx flows through.
-      if (!PQAuthSigValidator.hasNoUnknownFields(witness)) {
+      if (PQAuthSigValidator.hasUnknownFields(witness)) {
         throw new SignatureFormatException("pq_auth_sig contains unknown fields");
       }
       PQScheme scheme = witness.getScheme();
