@@ -48,6 +48,7 @@ import org.tron.common.crypto.ECKey.ECDSASignature;
 import org.tron.common.crypto.Rsv;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.math.StrictMathWrapper;
@@ -242,7 +243,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     long currentWeight = 0;
     if (sigs.size() > permission.getKeysCount()) {
       throw new PermissionException(
-          "Signature count is " + (sigs.size()) + " more than key counts of permission : "
+          "Signature count " + sigs.size() + " exceeds permission key count "
               + permission.getKeysCount());
     }
     HashMap addMap = new HashMap();
@@ -684,7 +685,8 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
       if (signatureCount == 0 || this.transaction.getRawData().getContractCount() <= 0) {
         throw new ValidateSignatureException("miss sig or contract");
       }
-      if (signatureCount > dynamicPropertiesStore.getTotalSignNum()) {
+      int totalSignNum = dynamicPropertiesStore.getTotalSignNum();
+      if (signatureCount > totalSignNum) {
         throw new ValidateSignatureException("too many signatures");
       }
 
@@ -744,8 +746,20 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
 
     Set<ByteString> signedAddresses = new HashSet<>(approveList);
 
+    List<PQAuthSig> pqAuthSigList = transaction.getPqAuthSigList();
+    // A PQ signer must map to a distinct permission key.
+    if (pqAuthSigList.size() > permission.getKeysCount()) {
+      throw new PermissionException(
+          "pq_auth_sig count " + pqAuthSigList.size()
+              + " exceeds permission key count " + permission.getKeysCount());
+    }
+
     long weight = 0L;
-    for (PQAuthSig witness : transaction.getPqAuthSigList()) {
+    for (PQAuthSig witness : pqAuthSigList) {
+      // Keep consensus and ingress handling of PQAuthSig wire fields aligned.
+      if (PQAuthSigValidator.hasUnknownFields(witness)) {
+        throw new SignatureFormatException("pq_auth_sig contains unknown fields");
+      }
       PQScheme scheme = witness.getScheme();
       if (!dynamicPropertiesStore.isPqSchemeAllowed(scheme)) {
         throw new PermissionException(scheme + " is not allowed");
