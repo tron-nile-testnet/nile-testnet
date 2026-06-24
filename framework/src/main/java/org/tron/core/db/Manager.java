@@ -969,7 +969,8 @@ public class Manager {
 
   public void consumeMultiSignFee(TransactionCapsule trx, TransactionTrace trace)
       throws AccountResourceInsufficientException {
-    if (trx.getInstance().getSignatureCount() > 1) {
+    // Count BOTH signature channels
+    if (trx.getTotalSignatureCount() > 1) {
       long fee = getDynamicPropertiesStore().getMultiSignFee();
       boolean disableJavaLangMath = getDynamicPropertiesStore().disableJavaLangMath();
       List<Contract> contracts = trx.getInstance().getRawData().getContractList();
@@ -1228,21 +1229,28 @@ public class Manager {
       return false;
     }
 
-    if (tx1.getInstance().getSignatureCount() != tx2.getInstance().getSignatureCount()) {
+    Transaction t1 = tx1.getInstance();
+    Transaction t2 = tx2.getInstance();
+
+    // Both channels (ECDSA + post-quantum) must match, regardless post-quantum open or not
+    if (t1.getSignatureCount() != t2.getSignatureCount()
+        || t1.getPqAuthSigCount() != t2.getPqAuthSigCount()) {
       return false;
     }
 
-    boolean flag = true;
-    for (int i = 0; i < tx1.getInstance().getSignatureCount(); i++) {
-      ByteString sig1 = tx1.getInstance().getSignature(i);
-      ByteString sig2 = tx2.getInstance().getSignature(i);
-      if (!sig1.equals(sig2)) {
-        flag = false;
-        break;
+    for (int i = 0; i < t1.getSignatureCount(); i++) {
+      if (!t1.getSignature(i).equals(t2.getSignature(i))) {
+        return false;
       }
     }
 
-    return flag;
+    for (int i = 0; i < t1.getPqAuthSigCount(); i++) {
+      if (!t1.getPqAuthSig(i).equals(t2.getPqAuthSig(i))) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   public List<TransactionCapsule> getVerifyTxs(BlockCapsule block) {

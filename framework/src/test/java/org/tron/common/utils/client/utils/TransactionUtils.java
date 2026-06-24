@@ -18,7 +18,6 @@ import static org.tron.core.capsule.TransactionCapsule.getBase64FromByteString;
 
 import com.google.protobuf.ByteString;
 import java.security.SignatureException;
-import java.util.Arrays;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -124,37 +123,6 @@ public class TransactionUtils {
    * 3. check sign
    * 4. check balance
    */
-
-  /**
-   * constructor.
-   */
-
-  public static boolean validTransaction(Transaction signedTransaction) {
-    assert (signedTransaction.getSignatureCount()
-        == signedTransaction.getRawData().getContractCount());
-    List<Transaction.Contract> listContract = signedTransaction.getRawData().getContractList();
-    byte[] hash = Sha256Hash.hash(CommonParameter
-        .getInstance().isECKeyCryptoEngine(), signedTransaction.getRawData().toByteArray());
-    int count = signedTransaction.getSignatureCount();
-    if (count == 0) {
-      return false;
-    }
-    for (int i = 0; i < count; ++i) {
-      try {
-        Transaction.Contract contract = listContract.get(i);
-        byte[] owner = getOwner(contract);
-        byte[] address = ECKey
-            .signatureToAddress(hash, getBase64FromByteString(signedTransaction.getSignature(i)));
-        if (!Arrays.equals(owner, address)) {
-          return false;
-        }
-      } catch (SignatureException e) {
-        e.printStackTrace();
-        return false;
-      }
-    }
-    return true;
-  }
 
   /**
    * constructor.

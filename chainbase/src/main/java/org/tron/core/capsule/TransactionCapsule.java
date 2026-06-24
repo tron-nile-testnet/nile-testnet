@@ -80,7 +80,6 @@ import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
 import org.tron.protos.Protocol.Transaction.Result;
 import org.tron.protos.Protocol.Transaction.Result.contractResult;
-import org.tron.protos.Protocol.Transaction.raw;
 import org.tron.protos.contract.AccountContract.AccountCreateContract;
 import org.tron.protos.contract.AssetIssueContractOuterClass.AssetIssueContract;
 import org.tron.protos.contract.AssetIssueContractOuterClass.ParticipateAssetIssueContract;
@@ -203,11 +202,6 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
 
   public TransactionCapsule(ParticipateAssetIssueContract participateAssetIssueContract) {
     createTransaction(participateAssetIssueContract, ContractType.ParticipateAssetIssueContract);
-  }
-
-  public TransactionCapsule(raw rawData, List<ByteString> signatureList) {
-    this.transaction = Transaction.newBuilder().setRawData(rawData).addAllSignature(signatureList)
-        .build();
   }
 
   @Deprecated
@@ -671,16 +665,13 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
       DynamicPropertiesStore dynamicPropertiesStore)
       throws ValidateSignatureException {
     if (!isVerified) {
-      int signatureCount = this.transaction.getSignatureCount();
-      int pqCount = this.transaction.getPqAuthSigCount();
-      if (pqCount > 0) {
-        if (dynamicPropertiesStore.isAnyPqSchemeAllowed()) {
-          signatureCount += pqCount;
-        } else {
-          throw new ValidateSignatureException(
-              "pq_auth_sig not allowed: no post-quantum scheme is activated");
-        }
+
+      if (this.transaction.getPqAuthSigCount() > 0 &&
+          !dynamicPropertiesStore.isAnyPqSchemeAllowed()) {
+        throw new ValidateSignatureException(
+            "pq_auth_sig not allowed: no post-quantum scheme is activated");
       }
+      int signatureCount = getTotalSignatureCount();
 
       if (signatureCount == 0 || this.transaction.getRawData().getContractCount() <= 0) {
         throw new ValidateSignatureException("miss sig or contract");
@@ -717,8 +708,9 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
   void logSlowSigVerify(long startNs) {
     long costMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
     if (costMs > SLOW_SIG_VERIFY_MS) {
-      logger.warn("slow verify: txId={}, sigCount={}, cost={} ms",
-          getTransactionId(), this.transaction.getSignatureCount(), costMs);
+      logger.warn("slow verify: txId={}, sigCount={}, pqSigCount={}, cost={} ms",
+          getTransactionId(), this.transaction.getSignatureCount(),
+          this.transaction.getPqAuthSigCount(), costMs);
     }
   }
 
@@ -839,6 +831,10 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     return this.id;
   }
 
+  public int getTotalSignatureCount() {
+    return this.transaction.getSignatureCount() + this.transaction.getPqAuthSigCount();
+  }
+
   private void setRawData(Transaction.raw rawData) {
     this.transaction = this.transaction.toBuilder().setRawData(rawData).build();
     // invalidate trxId
@@ -930,6 +926,10 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
               this.transaction.getSignature(i.getAndIncrement()))).append("\n");
         }
       });
+      for (PQAuthSig pqAuthSig : this.transaction.getPqAuthSigList()) {
+        toStringBuff.append("pq_sign(").append(pqAuthSig.getScheme()).append(")=")
+            .append(ByteArray.toHexString(pqAuthSig.getSignature().toByteArray())).append("\n");
+      }
       toStringBuff.append("}\n");
     } else {
       toStringBuff.append("contract list is empty\n");

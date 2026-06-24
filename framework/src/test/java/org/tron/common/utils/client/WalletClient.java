@@ -1,7 +1,6 @@
 package org.tron.common.utils.client;
 
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigObject;
 
@@ -202,19 +201,6 @@ public class WalletClient {
     AccountUpdateContract contract = createAccountUpdateContract(accountNameBytes,
         addressBytes);
     return rpcCli.createTransaction(contract);
-  }
-
-  /**
-   * constructor.
-   */
-
-  public static boolean broadcastTransaction(byte[] transactionBytes)
-      throws InvalidProtocolBufferException {
-    Transaction transaction = Transaction.parseFrom(transactionBytes);
-    if (false == TransactionUtils.validTransaction(transaction)) {
-      return false;
-    }
-    return rpcCli.broadcastTransaction(transaction);
   }
 
   /**

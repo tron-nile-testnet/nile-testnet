@@ -21,6 +21,7 @@ import org.tron.common.prometheus.MetricKeys;
 import org.tron.common.prometheus.Metrics;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.ChainBaseManager;
+import org.tron.core.capsule.TransactionCapsule;
 import org.tron.core.config.args.Args;
 import org.tron.core.exception.P2pException;
 import org.tron.core.exception.P2pException.TypeEnum;
@@ -156,8 +157,9 @@ public class TransactionsMsgHandler implements TronMsgHandler {
         throw new P2pException(TypeEnum.BAD_TRX,
             "tx " + item.getHash() + " contract size should be greater than 0");
       }
+      TransactionCapsule trxCap = new TransactionCapsule(trx);
       // Bound signature entry count before per-entry validation.
-      int sigCount = trx.getSignatureCount() + trx.getPqAuthSigCount();
+      int sigCount = trxCap.getTotalSignatureCount();
       int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
       if (sigCount > totalSignNum) {
         throw new P2pException(TypeEnum.BAD_TRX, "tx " + item.getHash()

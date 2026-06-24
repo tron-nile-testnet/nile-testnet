@@ -189,6 +189,9 @@ public class TransactionUtil {
   }
 
   public static Transaction truncateSignatures(Transaction trx) {
+    // Only the legacy ECDSA signatures are length-normalised here. pq_auth_sig is
+    // intentionally left untouched (clearSignature() does not clear it): PQ
+    // signatures are fixed/banded length and must not be truncated.
     Transaction.Builder builder = trx.toBuilder().clearSignature();
     for (ByteString sig : trx.getSignatureList()) {
       if (sig.size() > PER_SIGN_LENGTH) {
