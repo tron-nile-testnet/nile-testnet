@@ -111,6 +111,7 @@ import org.tron.api.GrpcAPI.WitnessList;
 import org.tron.common.crypto.Hash;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.runtime.ProgramResult;
 import org.tron.common.runtime.vm.LogInfo;
@@ -228,6 +229,7 @@ import org.tron.protos.Protocol.MarketOrderList;
 import org.tron.protos.Protocol.MarketOrderPairList;
 import org.tron.protos.Protocol.MarketPrice;
 import org.tron.protos.Protocol.MarketPriceList;
+import org.tron.protos.Protocol.PQAuthSig;
 import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Permission.PermissionType;
@@ -510,9 +512,31 @@ public class Wallet {
     trx.setTime(System.currentTimeMillis());
     Sha256Hash txID = trx.getTransactionId();
     try {
+      // Bound signature entry count before per-entry validation.
+      int totalSignCount = signedTransaction.getSignatureCount()
+          + signedTransaction.getPqAuthSigCount();
+      int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      if (totalSignCount > totalSignNum) {
+        String info = "total signature count " + totalSignCount + " exceeds " + totalSignNum;
+        logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+        return builder.setResult(false).setCode(response_code.SIGERROR)
+            .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+            .build();
+      }
+
       for (ByteString sig : signedTransaction.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           String info = "Signature size is " + sig.size();
+          logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+          return builder.setResult(false).setCode(response_code.SIGERROR)
+              .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+              .build();
+        }
+      }
+
+      for (PQAuthSig pqAuthSig : signedTransaction.getPqAuthSigList()) {
+        if (!PQAuthSigValidator.isLengthWithinBounds(pqAuthSig)) {
+          String info = "pq_auth_sig size is out of bounds";
           logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
           return builder.setResult(false).setCode(response_code.SIGERROR)
               .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
@@ -633,8 +657,8 @@ public class Wallet {
     TransactionApprovedList.Builder tswBuilder = TransactionApprovedList.newBuilder();
     TransactionApprovedList.Result.Builder resultBuilder = TransactionApprovedList.Result
         .newBuilder();
-    if (trx.getSignatureCount() + trx.getPqAuthSigCount()
-        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
+    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+    if (trx.getSignatureCount() + trx.getPqAuthSigCount() > totalSignNum) {
       resultBuilder.setCode(TransactionApprovedList.Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);

@@ -203,8 +203,8 @@ public class TransactionUtil {
   public TransactionSignWeight getTransactionSignWeight(Transaction trx) {
     TransactionSignWeight.Builder tswBuilder = TransactionSignWeight.newBuilder();
     Result.Builder resultBuilder = Result.newBuilder();
-    if (trx.getSignatureCount() + trx.getPqAuthSigCount()
-        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
+    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+    if (trx.getSignatureCount() + trx.getPqAuthSigCount() > totalSignNum) {
       resultBuilder.setCode(Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);

@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.prometheus.MetricKeys;
 import org.tron.common.prometheus.Metrics;
@@ -32,6 +33,7 @@ import org.tron.core.net.peer.Item;
 import org.tron.core.net.peer.PeerConnection;
 import org.tron.core.net.service.adv.AdvService;
 import org.tron.protos.Protocol.Inventory.InventoryType;
+import org.tron.protos.Protocol.PQAuthSig;
 import org.tron.protos.Protocol.ReasonCode;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
@@ -154,10 +156,23 @@ public class TransactionsMsgHandler implements TronMsgHandler {
         throw new P2pException(TypeEnum.BAD_TRX,
             "tx " + item.getHash() + " contract size should be greater than 0");
       }
+      // Bound signature entry count before per-entry validation.
+      int sigCount = trx.getSignatureCount() + trx.getPqAuthSigCount();
+      int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      if (sigCount > totalSignNum) {
+        throw new P2pException(TypeEnum.BAD_TRX, "tx " + item.getHash()
+            + " total signature count is " + sigCount + " exceeds " + totalSignNum);
+      }
       for (ByteString sig : trx.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           throw new P2pException(TypeEnum.BAD_TRX,
               "tx " + item.getHash() + " signature size is " + sig.size());
+        }
+      }
+      for (PQAuthSig pqAuthSig : trx.getPqAuthSigList()) {
+        if (!PQAuthSigValidator.isLengthWithinBounds(pqAuthSig)) {
+          throw new P2pException(TypeEnum.BAD_TRX,
+              "tx " + item.getHash() + " pq_auth_sig size is out of bounds");
         }
       }
     }

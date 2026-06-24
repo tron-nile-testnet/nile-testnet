@@ -34,6 +34,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.tron.common.bloom.Bloom;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
@@ -259,9 +260,11 @@ public class BlockCapsule implements ProtoCapsule<Block> {
   private boolean validatePQSignature(DynamicPropertiesStore dynamicPropertiesStore,
       byte[] witnessPermissionAddress, PQAuthSig pqAuthSig)
       throws ValidateSignatureException {
-    /*
-      Verify the PQ scheme is supported and proposal opened
-     */
+    // Keep consensus and ingress handling of PQAuthSig wire fields aligned.
+    if (PQAuthSigValidator.hasUnknownFields(pqAuthSig)) {
+      throw new ValidateSignatureException("pq_auth_sig contains unknown fields");
+    }
+
     PQScheme scheme = pqAuthSig.getScheme();
     if (!dynamicPropertiesStore.isPqSchemeAllowed(scheme)) {
       throw new ValidateSignatureException("pq_auth_sig scheme " + scheme + " is not allowed");

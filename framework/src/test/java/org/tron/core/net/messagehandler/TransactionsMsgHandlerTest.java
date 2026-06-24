@@ -2,6 +2,7 @@ package org.tron.core.net.messagehandler;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.UnknownFieldSet;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.runtime.TvmTestUtils;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.ReflectUtils;
@@ -50,6 +52,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
     TransactionsMsgHandler transactionsMsgHandler = new TransactionsMsgHandler();
     try {
       transactionsMsgHandler.init();
+      injectChainBaseManager(transactionsMsgHandler);
 
       PeerConnection peer = Mockito.mock(PeerConnection.class);
       TronNetDelegate tronNetDelegate = Mockito.mock(TronNetDelegate.class);
@@ -156,6 +159,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   @Test
   public void testRejectedExecution() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    injectChainBaseManager(handler);
     try {
       ExecutorService mockPool = Mockito.mock(ExecutorService.class);
       Mockito.when(mockPool.submit(Mockito.any(Runnable.class)))
@@ -179,6 +183,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   @Test
   public void testCloseDuringProcessing() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    injectChainBaseManager(handler);
     try {
       Field closedField = TransactionsMsgHandler.class.getDeclaredField("isClosed");
       closedField.setAccessible(true);
@@ -232,6 +237,10 @@ public class TransactionsMsgHandlerTest extends BaseTest {
       advInvRequest.put(item, 0L);
     }
     Mockito.when(peer.getAdvInvRequest()).thenReturn(advInvRequest);
+  }
+
+  private void injectChainBaseManager(TransactionsMsgHandler handler) {
+    ReflectUtils.setFieldValue(handler, "chainBaseManager", chainBaseManager);
   }
 
   @Test
@@ -295,6 +304,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testDuplicateTransactionRejected() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
+    injectChainBaseManager(handler);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -341,6 +351,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
   public void testInvalidSigLength() throws Exception {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
+    injectChainBaseManager(handler);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -417,6 +428,117 @@ public class TransactionsMsgHandlerTest extends BaseTest {
       paddedList.add(paddedSigTrx);
       stubAdvInvRequest(peer, new TransactionsMessage(paddedList));
       handler.processMessage(peer, new TransactionsMessage(paddedList));
+    } finally {
+      handler.close();
+    }
+  }
+
+  @Test
+  public void testInvalidPqAuthSigRejected() throws Exception {
+    TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    handler.init();
+    injectChainBaseManager(handler);
+    try {
+      PeerConnection peer = Mockito.mock(PeerConnection.class);
+
+      BalanceContract.TransferContract transferContract = BalanceContract.TransferContract
+          .newBuilder()
+          .setAmount(10)
+          .setOwnerAddress(ByteString.copyFrom(ByteArray.fromHexString("121212a9cf")))
+          .setToAddress(ByteString.copyFrom(ByteArray.fromHexString("232323a9cf")))
+          .build();
+
+      int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
+      int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
+
+      // Known fields are legal, but nested unknown fields are rejected.
+      UnknownFieldSet unknown = UnknownFieldSet.newBuilder()
+          .addField(99, UnknownFieldSet.Field.newBuilder()
+              .addLengthDelimited(ByteString.copyFrom(new byte[4096])).build())
+          .build();
+      Protocol.PQAuthSig smuggled = Protocol.PQAuthSig.newBuilder()
+          .setScheme(Protocol.PQScheme.FN_DSA_512)
+          .setPublicKey(ByteString.copyFrom(new byte[pk]))
+          .setSignature(ByteString.copyFrom(new byte[sig]))
+          .setUnknownFields(unknown)
+          .build();
+      Protocol.Transaction smuggledTrx = Protocol.Transaction.newBuilder()
+          .setRawData(Protocol.Transaction.raw.newBuilder()
+              .setRefBlockNum(1)
+              .addContract(Protocol.Transaction.Contract.newBuilder()
+                  .setType(Protocol.Transaction.Contract.ContractType.TransferContract)
+                  .setParameter(Any.pack(transferContract)).build())
+              .build())
+          .addPqAuthSig(smuggled)
+          .build();
+      List<Protocol.Transaction> smuggledList = new ArrayList<>();
+      smuggledList.add(smuggledTrx);
+      stubAdvInvRequest(peer, new TransactionsMessage(smuggledList));
+      P2pException ex = Assert.assertThrows(P2pException.class,
+          () -> handler.processMessage(peer, new TransactionsMessage(smuggledList)));
+      Assert.assertEquals(TypeEnum.BAD_TRX, ex.getType());
+      Assert.assertTrue(ex.getMessage().contains("pq_auth_sig size is out of bounds"));
+
+      // oversized public_key for the declared scheme → also rejected.
+      Protocol.PQAuthSig oversized = Protocol.PQAuthSig.newBuilder()
+          .setScheme(Protocol.PQScheme.FN_DSA_512)
+          .setPublicKey(ByteString.copyFrom(new byte[pk + 1]))
+          .setSignature(ByteString.copyFrom(new byte[sig]))
+          .build();
+      Protocol.Transaction oversizedTrx = Protocol.Transaction.newBuilder()
+          .setRawData(Protocol.Transaction.raw.newBuilder()
+              .setRefBlockNum(2)
+              .addContract(Protocol.Transaction.Contract.newBuilder()
+                  .setType(Protocol.Transaction.Contract.ContractType.TransferContract)
+                  .setParameter(Any.pack(transferContract)).build())
+              .build())
+          .addPqAuthSig(oversized)
+          .build();
+      List<Protocol.Transaction> oversizedList = new ArrayList<>();
+      oversizedList.add(oversizedTrx);
+      stubAdvInvRequest(peer, new TransactionsMessage(oversizedList));
+      P2pException ex2 = Assert.assertThrows(P2pException.class,
+          () -> handler.processMessage(peer, new TransactionsMessage(oversizedList)));
+      Assert.assertEquals(TypeEnum.BAD_TRX, ex2.getType());
+      Assert.assertTrue(ex2.getMessage().contains("pq_auth_sig size is out of bounds"));
+    } finally {
+      handler.close();
+    }
+  }
+
+  @Test
+  public void testTooManyPqAuthSigRejected() throws Exception {
+    TransactionsMsgHandler handler = new TransactionsMsgHandler();
+    handler.init();
+    injectChainBaseManager(handler);
+    try {
+      PeerConnection peer = Mockito.mock(PeerConnection.class);
+
+      BalanceContract.TransferContract transferContract = BalanceContract.TransferContract
+          .newBuilder()
+          .setAmount(10)
+          .setOwnerAddress(ByteString.copyFrom(ByteArray.fromHexString("121212a9cf")))
+          .setToAddress(ByteString.copyFrom(ByteArray.fromHexString("232323a9cf")))
+          .build();
+
+      // Empty PQ entries are bounded by the total signature count cap.
+      Protocol.Transaction.Builder builder = Protocol.Transaction.newBuilder()
+          .setRawData(Protocol.Transaction.raw.newBuilder()
+              .setRefBlockNum(3)
+              .addContract(Protocol.Transaction.Contract.newBuilder()
+                  .setType(Protocol.Transaction.Contract.ContractType.TransferContract)
+                  .setParameter(Any.pack(transferContract)).build())
+              .build());
+      for (int i = 0; i < 6; i++) {
+        builder.addPqAuthSig(Protocol.PQAuthSig.getDefaultInstance());
+      }
+      List<Protocol.Transaction> floodList = new ArrayList<>();
+      floodList.add(builder.build());
+      stubAdvInvRequest(peer, new TransactionsMessage(floodList));
+      P2pException ex = Assert.assertThrows(P2pException.class,
+          () -> handler.processMessage(peer, new TransactionsMessage(floodList)));
+      Assert.assertEquals(TypeEnum.BAD_TRX, ex.getType());
+      Assert.assertTrue(ex.getMessage().contains("total signature count"));
     } finally {
       handler.close();
     }
