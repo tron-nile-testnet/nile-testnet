@@ -235,34 +235,32 @@ public class PrecompiledContracts {
   private static final DataWord kzgPointEvaluationAddr = new DataWord(
       "000000000000000000000000000000000000000000000000000000000002000a");
 
-  // EIP-8052 0x16: FN-DSA / Falcon-512 verify (FIPS-206 draft). Input layout:
+  // EIP-8052 0x02000016: FN-DSA / Falcon-512 verify (FIPS-206 draft). Input layout:
   // [msg 32B | sig 666B (headerless salt‖s2 slot, zero-padded; body ends at last
   // non-zero byte) | pk 896B]. Total 1594 B. The slot holds the EIP-8052 headerless
   // signature (no 0x39 byte); the precompile re-inserts the header before verifying.
   private static final DataWord verifyFnDsa512Addr = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000016");
+      "0000000000000000000000000000000000000000000000000000000002000016");
 
-  // 0x17: batch independent Falcon-512 verify — bitmap of (sig, pk, addr)
-  // matches; mixed-algorithm contracts call 0x0A and 0x18 separately and OR
-  // the bitmaps client-side.
+  // 0x02000017: batch independent Falcon-512 verify — bitmap of (sig, pk, addr) matches.
   private static final DataWord batchValidateFnDsa512Addr = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000017");
+      "0000000000000000000000000000000000000000000000000000000002000017");
 
-  // 0x18: ML-DSA-44 single verify (FIPS 204 / Dilithium-2).
+  // 0x02000018: ML-DSA-44 single verify (FIPS 204 / Dilithium-2).
   private static final DataWord verifyMlDsa44Addr = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000018");
+      "0000000000000000000000000000000000000000000000000000000002000018");
 
-  // 0x19: batch independent ML-DSA-44 verify — bitmap output, same shape as 0x18.
+  // 0x02000019: batch independent ML-DSA-44 verify — bitmap output, same shape as 0x02000017.
   private static final DataWord batchValidateMlDsa44Addr = new DataWord(
-      "0000000000000000000000000000000000000000000000000000000000000019");
+      "0000000000000000000000000000000000000000000000000000000002000019");
 
-  // 0x1a: algorithm-agnostic Permission multi-sign — accepts ECDSA and any
+  // 0x0200001a: algorithm-agnostic Permission multi-sign — accepts ECDSA and any
   // registered PQ scheme (Falcon-512, ML-DSA-44, ...) against the same
   // Permission.keys[] in one call, dispatched by an explicit per-entry scheme
-  // tag. Replaces the earlier Falcon-only 0x17 and Dilithium-only draft, which
+  // tag. Replaces the earlier Falcon-only 0x02000017 and Dilithium-only draft, which
   // were never activated.
   private static final DataWord validateMultiPqSigAddr = new DataWord(
-      "000000000000000000000000000000000000000000000000000000000000001a");
+      "000000000000000000000000000000000000000000000000000000000200001a");
 
   public static PrecompiledContract getOptimizedContractForConstant(PrecompiledContract contract) {
     try {
@@ -352,7 +350,7 @@ public class PrecompiledContracts {
       return p256Verify;
     }
 
-    // 0x1a ValidateMultiPQSig is algorithm-agnostic and dispatches per entry,
+    // 0x0200001a ValidateMultiPQSig is algorithm-agnostic and dispatches per entry,
     // so it is available whenever ANY registered PQ scheme is active. Per-entry
     // runtime checks inside the precompile still reject scheme tags whose
     // proposal hasn't passed.
@@ -597,7 +595,7 @@ public class PrecompiledContracts {
    * fixed slot {@code data[from..to)}: the offset of the last non-zero byte
    * (exclusive). Canonical Falcon encodings always end in a non-zero byte
    * ({@code compressed_s2}'s unary terminator), so anything beyond is zero
-   * padding. Returns 0 if the slot is all zero. Shared by 0x16, 0x18, and 0x1a
+   * padding. Returns 0 if the slot is all zero. Shared by 0x02000016, 0x02000017, and 0x0200001a
    * because every precompile slot for Falcon sigs is the same 666-byte slot.
    */
   static int recoverFalconSigLen(byte[] data, int from, int to) {
@@ -617,7 +615,7 @@ public class PrecompiledContracts {
    * the logical body ends at the last non-zero byte. Returns
    * {@code 0x39 ‖ body} so BC's {@code FalconSigner} (which requires the header)
    * can verify it, or {@code null} if the recovered body length is out of range.
-   * Shared by 0x16, 0x18, and 0x1a.
+   * Shared by 0x02000016, 0x02000017, and 0x0200001a.
    */
   static byte[] falconSlotToHeaderedSig(byte[] data, int from, int to) {
     int bodyLen = recoverFalconSigLen(data, from, to);
@@ -2687,7 +2685,7 @@ public class PrecompiledContracts {
 
 
   /**
-   * 0x17 BatchValidateFnDsa512 — independent per-element Falcon-512 verify.
+   * 0x02000017 BatchValidateFnDsa512 — independent per-element Falcon-512 verify.
    *
    * <p>Returns a 256-bit bitmap (matching 0x09) where bit {@code i} is set iff
    * {@code derive(pk_i) == expectedAddr_i} AND {@code FNDSA512.verify(pk_i, hash, sig_i)}.
@@ -2704,7 +2702,7 @@ public class PrecompiledContracts {
    *   ) returns (bytes32)
    * </pre>
    *
-   * <p>Falcon sigs are pinned to the 666-byte slot from {@code VerifyFnDsa512} (0x16)
+   * <p>Falcon sigs are pinned to the 666-byte slot from {@code VerifyFnDsa512} (0x02000016)
    * for cross-precompile consistency; {@link #falconSlotToHeaderedSig} recovers the
    * headerless body and re-inserts the {@code 0x39} header before BC verification.
    *
@@ -2882,7 +2880,7 @@ public class PrecompiledContracts {
    * (precomputed {@code A_hat = ExpandA(rho)}). BC 1.84's {@code MLDSASigner}
    * only accepts the standard form; we pay the per-call {@code ExpandA}
    * cost so 1312 B Dilithium-2 keys work unchanged. The EIP-8051 expanded-pk
-   * variant is implemented separately at 0x12 — 0x19 stays as-is.
+   * variant is implemented separately at 0x12 — 0x02000019 stays as-is.
    */
   public static class VerifyMlDsa44 extends PrecompiledContract {
 
@@ -2915,7 +2913,7 @@ public class PrecompiledContracts {
   }
 
   /**
-   * 0x1a ValidateMultiPQSig — algorithm-agnostic Permission multi-sign. Accepts
+   * 0x0200001a ValidateMultiPQSig — algorithm-agnostic Permission multi-sign. Accepts
    * ECDSA plus any registered post-quantum scheme (FN-DSA-512, ML-DSA-44, ...)
    * against {@link Permission}{@code .keys[]} in a single call, dispatched per
    * entry by an explicit {@code uint8[]} scheme tag array (PQScheme number).
@@ -2934,7 +2932,7 @@ public class PrecompiledContracts {
    * </pre>
    *
    * <p>Falcon sigs follow the EIP-8052 666-byte headerless slot convention
-   * (matches 0x16/0x18): the slot holds {@code salt ‖ s2_compressed} with no
+   * (matches 0x02000016/0x02000017): the slot holds {@code salt ‖ s2_compressed} with no
    * leading {@code 0x39}, zero-padded, the body ending at the last non-zero byte
    * (Falcon's {@code compressed_s2} always ends with a non-zero terminator);
    * {@link #falconSlotToHeaderedSig} re-inserts the header before verification.
@@ -2946,7 +2944,7 @@ public class PrecompiledContracts {
    * cannot underpay by encoding a tag the dispatcher will then reject.
    *
    * <p>Per-entry runtime gate: a Falcon entry returns {@code DATA_FALSE} when
-   * {@code allowFnDsa512()} is false even though 0x1a itself is registered as
+   * {@code allowFnDsa512()} is false even though 0x0200001a itself is registered as
    * long as one PQ proposal is active. Same for ML-DSA-44.
    */
   public static class ValidateMultiPQSig extends PrecompiledContract {
@@ -2955,6 +2953,8 @@ public class PrecompiledContracts {
     private static final int FN_DSA_512_ENERGY = 220;
     private static final int ML_DSA_44_ENERGY = 470;
     private static final int WORST_PQ_ENERGY = ML_DSA_44_ENERGY;
+    private static final int WORST_ENERGY_PER_SIGN =
+        StrictMathWrapper.max(ECDSA_ENERGY_PER_SIGN, WORST_PQ_ENERGY);
     private static final int MAX_SIZE = 5;
     // address, permissionId, data, ecdsaOff, schemeOff, pqSigOff, pqPkOff.
     private static final int ABI_HEAD_WORDS = 7;
@@ -2986,7 +2986,7 @@ public class PrecompiledContracts {
         }
         return energy;
       } catch (Throwable t) {
-        return (long) MAX_SIZE * WORST_PQ_ENERGY;
+        return (long) MAX_SIZE * WORST_ENERGY_PER_SIGN;
       }
     }
 
@@ -3075,7 +3075,7 @@ public class PrecompiledContracts {
             return Pair.of(true, DATA_FALSE);
           }
           // Per-entry runtime gate: the scheme's proposal must be active even
-          // though 0x1a was registered under (allowFnDsa512 || allowMlDsa44).
+          // though 0x0200001a was registered under (allowFnDsa512 || allowMlDsa44).
           if (scheme == PQScheme.FN_DSA_512 && !VMConfig.allowFnDsa512()) {
             return Pair.of(true, DATA_FALSE);
           }
@@ -3138,10 +3138,10 @@ public class PrecompiledContracts {
   }
 
   /**
-   * 0x19 BatchValidateMlDsa44 — independent per-element ML-DSA-44 verify.
+   * 0x02000019 BatchValidateMlDsa44 — independent per-element ML-DSA-44 verify.
    * Returns a 256-bit bitmap where bit {@code i} is set iff
    * {@code derive(pk_i) == expectedAddr_i} AND {@code MLDSA44.verify(pk_i, hash, sig_i)}.
-   * Same ABI shape as 0x17, with sigs 2420 B and pks 1312 B.
+   * Same ABI shape as 0x02000017, with sigs 2420 B and pks 1312 B.
    * {@code MAX_SIZE = 16}; energy is {@code cnt × 470}.
    */
   public static class BatchValidateMlDsa44 extends PrecompiledContract {

@@ -37,7 +37,7 @@ import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.PQScheme;
 
 /**
- * Unit tests for the unified 0x1a algorithm-agnostic Permission multi-sign
+ * Unit tests for the unified 0x0200001a algorithm-agnostic Permission multi-sign
  * precompile. Replaces the per-scheme {@code ValidateMultiFnDsa512Test} and
  * {@code ValidateMultiMlDsa44Test}: a single call may now mix ECDSA, FN-DSA-512
  * and ML-DSA-44 entries against the same {@code Permission.keys[]}, dispatched
@@ -46,8 +46,8 @@ import org.tron.protos.Protocol.PQScheme;
 @Slf4j
 public class ValidateMultiPQSigTest extends BaseTest {
 
-  private static final DataWord ADDR_0X1A = new DataWord(
-      "000000000000000000000000000000000000000000000000000000000000001a");
+  private static final DataWord ADDR_0X0200001A = new DataWord(
+      "000000000000000000000000000000000000000000000000000000000200001a");
 
   private static final String METHOD_SIGN =
       "validatemultipqsign(address,uint256,bytes32,bytes[],uint8[],bytes[],bytes[])";
@@ -85,13 +85,13 @@ public class ValidateMultiPQSigTest extends BaseTest {
   public void bothSwitchesOff_returnsNull() {
     VMConfig.initAllowFnDsa512(0L);
     VMConfig.initAllowMlDsa44(0L);
-    Assert.assertNull(PrecompiledContracts.getContractForAddress(ADDR_0X1A));
+    Assert.assertNull(PrecompiledContracts.getContractForAddress(ADDR_0X0200001A));
   }
 
   @Test
   public void onlyFalconSwitchOn_returnsContract() {
     VMConfig.initAllowMlDsa44(0L);
-    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X1A);
+    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X0200001A);
     Assert.assertNotNull(pc);
     Assert.assertTrue(pc instanceof ValidateMultiPQSig);
   }
@@ -99,14 +99,14 @@ public class ValidateMultiPQSigTest extends BaseTest {
   @Test
   public void onlyDilithiumSwitchOn_returnsContract() {
     VMConfig.initAllowFnDsa512(0L);
-    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X1A);
+    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X0200001A);
     Assert.assertNotNull(pc);
     Assert.assertTrue(pc instanceof ValidateMultiPQSig);
   }
 
   @Test
   public void bothSwitchesOn_returnsContract() {
-    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X1A);
+    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(ADDR_0X0200001A);
     Assert.assertNotNull(pc);
     Assert.assertTrue(pc instanceof ValidateMultiPQSig);
   }
@@ -367,7 +367,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
   @Test
   public void falconEntryWhileFalconDisabled_returnsZero() {
-    // 0x1a stays registered because ML-DSA is still active, but a Falcon entry
+    // 0x0200001a stays registered because ML-DSA is still active, but a Falcon entry
     // must be rejected per-entry when its proposal isn't passed.
     VMConfig.initAllowFnDsa512(0L);
     FNDSA512 falcon = new FNDSA512();
@@ -809,7 +809,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     Repository deposit = RepositoryImpl.createRoot(StoreFactory.getInstance());
     contract.setRepository(deposit);
     Pair<Boolean, byte[]> ret = contract.execute(input);
-    logger.info("0x1a result: {}", Hex.toHexString(ret.getRight()));
+    logger.info("0x0200001a result: {}", Hex.toHexString(ret.getRight()));
     return ret;
   }
 
