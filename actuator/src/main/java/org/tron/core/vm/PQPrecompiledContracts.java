@@ -30,7 +30,7 @@ import org.tron.common.utils.ByteUtil;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.capsule.TransactionCapsule;
-import org.tron.core.vm.VMConstant;
+import org.tron.core.Constant;
 import org.tron.core.vm.config.VMConfig;
 import org.tron.core.vm.program.Program;
 import org.tron.core.vm.program.Program.OutOfTimeException;
@@ -715,7 +715,7 @@ public class PQPrecompiledContracts {
         }
         byte[] address = words[0].toTronAddress();
         int permissionId = words[1].intValueSafe();
-        if (permissionId > VMConstant.MAX_PERMISSION_ID) {
+        if (permissionId > Constant.MAX_PERMISSION_CNT - 1) {
           return Pair.of(false, EMPTY_BYTE_ARRAY);
         }
         byte[] data = words[2].getData();
