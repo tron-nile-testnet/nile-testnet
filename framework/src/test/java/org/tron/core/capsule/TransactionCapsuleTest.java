@@ -128,6 +128,32 @@ public class TransactionCapsuleTest extends BaseTest {
     }
   }
 
+  @Test
+  public void toStringRendersPqSignPqOnly() {
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0).toBuilder()
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setSignature(ByteString.copyFrom("pq-sig-bytes".getBytes()))
+            .build())
+        .build();
+    String s = new TransactionCapsule(tx).toString();
+    Assert.assertTrue(s, s.contains("pq_sign(FN_DSA_512)="));
+  }
+
+  @Test
+  public void toStringRendersPqSignWithEcdsa() {
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0).toBuilder()
+        .addSignature(ByteString.copyFrom(new byte[65]))
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setSignature(ByteString.copyFrom("pq-sig-bytes".getBytes()))
+            .build())
+        .build();
+    String s = new TransactionCapsule(tx).toString();
+    Assert.assertTrue("toString should contain both sign= and pq_sign(): " + s,
+        s.contains("sign=") && s.contains("pq_sign(FN_DSA_512)="));
+  }
+
   // --------------------- FN-DSA pq_auth_sig verification (V2) ---------------------
 
   private static final String PQ_OWNER_HEX = "41abd4b9367799eaa3197fecb144eb71de1e049abc";
@@ -239,6 +265,30 @@ public class TransactionCapsuleTest extends BaseTest {
     TransactionCapsule cap = new TransactionCapsule(signed);
     Assert.assertTrue(cap.validatePubSignature(dbManager.getAccountStore(),
         dbManager.getDynamicPropertiesStore()));
+  }
+
+  @Test
+  public void totalSignatureCountCountsBothChannels() throws Exception {
+    FNDSA512 kp = new FNDSA512();
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txId(tx));
+    PQAuthSig pq = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+        .setSignature(ByteString.copyFrom(sig)).build();
+
+    Transaction ecdsaOnly = tx.toBuilder()
+        .addSignature(ByteString.copyFrom(new byte[65])).build();
+    Assert.assertEquals(1, new TransactionCapsule(ecdsaOnly).getTotalSignatureCount());
+
+    Transaction pqOnly = tx.toBuilder().addPqAuthSig(pq).build();
+    Assert.assertEquals(1, new TransactionCapsule(pqOnly).getTotalSignatureCount());
+
+    // 1 ECDSA + 2 PQ -> 3 (the case getSignatureCount() alone mis-counts as 1).
+    Transaction mixed = tx.toBuilder()
+        .addSignature(ByteString.copyFrom(new byte[65]))
+        .addPqAuthSig(pq).addPqAuthSig(pq).build();
+    Assert.assertEquals(3, new TransactionCapsule(mixed).getTotalSignatureCount());
   }
 
   @Test

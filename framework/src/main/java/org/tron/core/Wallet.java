@@ -513,8 +513,7 @@ public class Wallet {
     Sha256Hash txID = trx.getTransactionId();
     try {
       // Bound signature entry count before per-entry validation.
-      int totalSignCount = signedTransaction.getSignatureCount()
-          + signedTransaction.getPqAuthSigCount();
+      int totalSignCount = trx.getTotalSignatureCount();
       int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
       if (totalSignCount > totalSignNum) {
         String info = "total signature count " + totalSignCount + " exceeds " + totalSignNum;
@@ -657,8 +656,10 @@ public class Wallet {
     TransactionApprovedList.Builder tswBuilder = TransactionApprovedList.newBuilder();
     TransactionApprovedList.Result.Builder resultBuilder = TransactionApprovedList.Result
         .newBuilder();
-    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
-    if (trx.getSignatureCount() + trx.getPqAuthSigCount() > totalSignNum) {
+
+    TransactionCapsule trxCap = new TransactionCapsule(trx);
+    if (trxCap.getTotalSignatureCount()
+        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
       resultBuilder.setCode(TransactionApprovedList.Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);
@@ -701,13 +702,17 @@ public class Wallet {
           }
         }
 
+        List<ByteString> approveList = new ArrayList<>();
         if (trx.getSignatureCount() > 0) {
-          List<ByteString> approveList = new ArrayList<>();
           byte[] hash = Sha256Hash.hash(CommonParameter
               .getInstance().isECKeyCryptoEngine(), trx.getRawData().toByteArray());
           TransactionCapsule.checkWeight(permission, trx.getSignatureList(), hash, approveList);
-          tswBuilder.addAllApprovedList(approveList);
         }
+        if (trx.getPqAuthSigCount() > 0) {
+          TransactionCapsule.validatePQSignatureGetWeight(trx, permission,
+              chainBaseManager.getDynamicPropertiesStore(), approveList);
+        }
+        tswBuilder.addAllApprovedList(approveList);
         resultBuilder.setCode(TransactionApprovedList.Result.response_code.SUCCESS);
       } catch (SignatureFormatException signEx) {
         resultBuilder.setCode(TransactionApprovedList.Result.response_code.SIGNATURE_FORMAT_ERROR);
