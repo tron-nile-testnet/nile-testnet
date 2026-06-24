@@ -159,7 +159,7 @@ public class BatchValidateMlDsa44Test {
   }
 
   @Test
-  public void mismatchedArrayLengths_returnsZero() {
+  public void mismatchedArrayLengths_reverts() {
     contract.setConstantCall(true);
     MLDSA44 k = new MLDSA44();
     List<String> sigs = Collections1(Hex.toHexString(k.sign(HASH)));
@@ -167,8 +167,8 @@ public class BatchValidateMlDsa44Test {
         Hex.toHexString(k.getPublicKey()), Hex.toHexString(k.getPublicKey()));
     List<String> addrs = Collections1(addrAsBytes32Hex(k.getPublicKey()));
 
-    byte[] res = run(HASH, sigs, pks, addrs).getRight();
-    Assert.assertArrayEquals(new byte[32], res);
+    Pair<Boolean, byte[]> result = run(HASH, sigs, pks, addrs);
+    Assert.assertFalse(result.getLeft());
   }
 
   @Test
@@ -185,8 +185,8 @@ public class BatchValidateMlDsa44Test {
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
-    byte[] res = run(HASH, sigs, pks, addrs).getRight();
-    Assert.assertArrayEquals(new byte[32], res);
+    Pair<Boolean, byte[]> result = run(HASH, sigs, pks, addrs);
+    Assert.assertFalse(result.getLeft());
   }
 
   @Test
@@ -207,10 +207,11 @@ public class BatchValidateMlDsa44Test {
   }
 
   @Test
-  public void emptyArrays_returnsAllZero() {
+  public void emptyArrays_reverts() {
     contract.setConstantCall(true);
-    byte[] res = run(HASH, new ArrayList<>(), new ArrayList<>(), new ArrayList<>()).getRight();
-    Assert.assertArrayEquals(new byte[32], res);
+    Pair<Boolean, byte[]> result =
+        run(HASH, new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+    Assert.assertFalse(result.getLeft());
   }
 
   @Test

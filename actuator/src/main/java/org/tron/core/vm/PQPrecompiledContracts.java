@@ -30,6 +30,7 @@ import org.tron.common.utils.ByteUtil;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.capsule.TransactionCapsule;
+import org.tron.core.vm.VMConstant;
 import org.tron.core.vm.config.VMConfig;
 import org.tron.core.vm.program.Program;
 import org.tron.core.vm.program.Program.OutOfTimeException;
@@ -258,7 +259,8 @@ public class PQPrecompiledContracts {
       try {
         DataWord[] words = DataWord.parseArray(data);
         int cnt = words[words[1].intValueSafe() / WORD_SIZE].intValueSafe();
-        return (long) cnt * ENERGY_PER_SIGN;
+        int effectiveCnt = cnt > MAX_SIZE ? MAX_SIZE : cnt;
+        return (long) effectiveCnt * ENERGY_PER_SIGN;
       } catch (Throwable t) {
         return (long) MAX_SIZE * ENERGY_PER_SIGN;
       }
@@ -275,7 +277,7 @@ public class PQPrecompiledContracts {
         if (t instanceof InterruptedException) {
           Thread.currentThread().interrupt();
         }
-        return Pair.of(true, new byte[WORD_SIZE]);
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
     }
 
@@ -303,7 +305,7 @@ public class PQPrecompiledContracts {
       if (sigArraySize > MAX_SIZE || pkArraySize > MAX_SIZE
           || addrArraySize > MAX_SIZE
           || sigArraySize != pkArraySize || sigArraySize != addrArraySize) {
-        return Pair.of(true, DATA_FALSE);
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
 
       byte[][] signatures = extractBytesArrayChecked(words, sigArrayWord, data);
@@ -312,7 +314,7 @@ public class PQPrecompiledContracts {
 
       int cnt = signatures.length;
       if (cnt == 0 || publicKeys.length != cnt || addresses.length != cnt) {
-        return Pair.of(true, DATA_FALSE);
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
 
       byte[] res = new byte[WORD_SIZE];
@@ -477,7 +479,8 @@ public class PQPrecompiledContracts {
       try {
         DataWord[] words = DataWord.parseArray(data);
         int cnt = words[words[1].intValueSafe() / WORD_SIZE].intValueSafe();
-        return (long) cnt * ENERGY_PER_SIGN;
+        int effectiveCnt = cnt > MAX_SIZE ? MAX_SIZE : cnt;
+        return (long) effectiveCnt * ENERGY_PER_SIGN;
       } catch (Throwable t) {
         return (long) MAX_SIZE * ENERGY_PER_SIGN;
       }
@@ -494,7 +497,7 @@ public class PQPrecompiledContracts {
         if (t instanceof InterruptedException) {
           Thread.currentThread().interrupt();
         }
-        return Pair.of(true, new byte[WORD_SIZE]);
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
     }
 
@@ -521,7 +524,7 @@ public class PQPrecompiledContracts {
 
       if (sigArraySize > MAX_SIZE || pkArraySize > MAX_SIZE || addrArraySize > MAX_SIZE
           || sigArraySize != pkArraySize || sigArraySize != addrArraySize) {
-        return Pair.of(true, DATA_FALSE);
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
 
       byte[][] signatures = extractBytesArrayChecked(words, sigArrayWord, data);
@@ -530,7 +533,7 @@ public class PQPrecompiledContracts {
 
       int cnt = signatures.length;
       if (cnt == 0 || publicKeys.length != cnt || addresses.length != cnt) {
-        return Pair.of(true, DATA_FALSE);
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
 
       byte[] res = new byte[WORD_SIZE];
@@ -678,13 +681,17 @@ public class PQPrecompiledContracts {
         int ecdsaCnt = words[words[3].intValueSafe() / WORD_SIZE].intValueSafe();
         int schemeOff = words[4].intValueSafe() / WORD_SIZE;
         int pqCnt = words[schemeOff].intValueSafe();
+        // Neither count is negative (intValueSafe clamps negatives to MAX_VALUE),
+        // but MAX_VALUE + MAX_VALUE overflows int. Use long for the sum.
+        long totalCnt = (long) ecdsaCnt + (long) pqCnt;
+        if (totalCnt > MAX_SIZE) {
+          return (long) MAX_SIZE * WORST_ENERGY_PER_SIGN;
+        }
         long energy = (long) ecdsaCnt * ECDSA_ENERGY_PER_SIGN;
         for (int i = 0; i < pqCnt; i++) {
           int tag = words[schemeOff + 1 + i].intValueSafe();
           PQScheme s = PQScheme.forNumber(tag);
           Integer cost = s == null ? null : PQ_ENERGY.get(s);
-          // Unknown / unregistered tag → charge worst case so a caller can't
-          // encode a junk tag to underpay before execute() rejects it.
           energy += cost == null ? WORST_PQ_ENERGY : cost;
         }
         return energy;
@@ -708,6 +715,9 @@ public class PQPrecompiledContracts {
         }
         byte[] address = words[0].toTronAddress();
         int permissionId = words[1].intValueSafe();
+        if (permissionId > VMConstant.MAX_PERMISSION_ID) {
+          return Pair.of(false, EMPTY_BYTE_ARRAY);
+        }
         byte[] data = words[2].getData();
 
         byte[] combine = ByteUtil.merge(address, ByteArray.fromInt(permissionId),
@@ -725,15 +735,13 @@ public class PQPrecompiledContracts {
         int pqSigCnt = words[pqSigArrayWord].intValueSafe();
         int pqPkCnt = words[pqPkArrayWord].intValueSafe();
 
-        // Per-variable bounds first to defeat int overflow in the sum below
-        // (e.g. Integer.MAX_VALUE + 1 wraps to Integer.MIN_VALUE and slips past
-        // a naive `> MAX_SIZE` check).
-        if (ecdsaCnt < 0 || schemeCnt < 0
-            || ecdsaCnt > MAX_SIZE || schemeCnt > MAX_SIZE
+        // Use long for the sum to defeat int overflow (e.g.
+        // Integer.MAX_VALUE + 1 wraps to Integer.MIN_VALUE).
+        long totalCnt = (long) ecdsaCnt + (long) schemeCnt;
+        if (ecdsaCnt > MAX_SIZE || schemeCnt > MAX_SIZE
             || schemeCnt != pqSigCnt || schemeCnt != pqPkCnt
-            || ecdsaCnt + schemeCnt == 0
-            || ecdsaCnt + schemeCnt > MAX_SIZE) {
-          return Pair.of(true, DATA_FALSE);
+            || totalCnt == 0 || totalCnt > MAX_SIZE) {
+          return Pair.of(false, EMPTY_BYTE_ARRAY);
         }
 
         byte[][] ecdsaSigs = PrecompiledContracts.extractSigArray(words,
@@ -741,7 +749,7 @@ public class PQPrecompiledContracts {
         byte[][] pqSigs = extractBytesArrayChecked(words, pqSigArrayWord, rawData);
         byte[][] pqPks = extractBytesArrayChecked(words, pqPkArrayWord, rawData);
         if (pqSigs.length != schemeCnt || pqPks.length != schemeCnt) {
-          return Pair.of(true, DATA_FALSE);
+          return Pair.of(false, EMPTY_BYTE_ARRAY);
         }
         int[] schemes = new int[schemeCnt];
         for (int i = 0; i < schemeCnt; i++) {
@@ -777,7 +785,7 @@ public class PQPrecompiledContracts {
           PQScheme scheme = PQScheme.forNumber(schemes[i]);
           if (scheme == null || scheme == PQScheme.UNKNOWN_PQ_SCHEME
               || !PQSchemeRegistry.contains(scheme)) {
-            return Pair.of(true, DATA_FALSE);
+            return Pair.of(false, EMPTY_BYTE_ARRAY);
           }
           // Per-entry runtime gate: the scheme's proposal must be active even
           // though 0x0200001a was registered under (allowFnDsa512 || allowMlDsa44).
@@ -795,23 +803,21 @@ public class PQPrecompiledContracts {
               : PQSchemeRegistry.getSignatureLength(scheme);
           if (pk == null || pk.length != expectedPkLen
               || sig == null || sig.length != expectedSigSlot) {
-            // Slot lengths are exact here (Falcon = 666, Dilithium = 2420) —
-            // a Falcon sig mislabelled as Dilithium fails this check.
-            return Pair.of(true, DATA_FALSE);
+            return Pair.of(false, EMPTY_BYTE_ARRAY);
           }
           if (scheme == PQScheme.FN_DSA_512) {
             // The Falcon slot is the EIP-8052 headerless body; rebuild the
             // BC-headered sig (re-inserts 0x39) before verification.
             sig = falconSlotToHeaderedSig(sig, 0, sig.length);
             if (sig == null) {
-              return Pair.of(true, DATA_FALSE);
+              return Pair.of(false, EMPTY_BYTE_ARRAY);
             }
           }
           byte[] derivedAddr;
           try {
             derivedAddr = PQSchemeRegistry.computeAddress(scheme, pk);
           } catch (Throwable t) {
-            return Pair.of(true, DATA_FALSE);
+            return Pair.of(false, EMPTY_BYTE_ARRAY);
           }
           // Both Falcon and Dilithium signing are randomized → the same key
           // can produce many valid sigs for one message, so dedup keys on the
@@ -837,6 +843,7 @@ public class PQPrecompiledContracts {
         if (t instanceof OutOfTimeException) {
           throw t;
         }
+        return Pair.of(false, EMPTY_BYTE_ARRAY);
       }
       return Pair.of(true, DATA_FALSE);
     }

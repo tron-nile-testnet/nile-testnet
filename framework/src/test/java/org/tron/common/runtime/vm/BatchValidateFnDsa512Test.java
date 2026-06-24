@@ -159,7 +159,7 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void mismatchedArrayLengths_returnsZero() {
+  public void mismatchedArrayLengths_reverts() {
     contract.setConstantCall(true);
     FNDSA512 k = new FNDSA512();
     List<String> sigs = Collections1(Hex.toHexString(padSlot(k.sign(HASH))));
@@ -167,12 +167,12 @@ public class BatchValidateFnDsa512Test {
         Hex.toHexString(k.getPublicKey()), Hex.toHexString(k.getPublicKey()));
     List<String> addrs = Collections1(addrAsBytes32Hex(k.getPublicKey()));
 
-    byte[] res = run(HASH, sigs, pks, addrs).getRight();
-    Assert.assertArrayEquals(new byte[32], res);
+    Pair<Boolean, byte[]> result = run(HASH, sigs, pks, addrs);
+    Assert.assertFalse(result.getLeft());
   }
 
   @Test
-  public void overMaxSize_returnsZero() {
+  public void overMaxSize_reverts() {
     contract.setConstantCall(true);
     contract.setVmShouldEndInUs(System.nanoTime() / 1000 + 30_000_000L);
     int n = 17;
@@ -185,8 +185,8 @@ public class BatchValidateFnDsa512Test {
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
-    byte[] res = run(HASH, sigs, pks, addrs).getRight();
-    Assert.assertArrayEquals(new byte[32], res);
+    Pair<Boolean, byte[]> result = run(HASH, sigs, pks, addrs);
+    Assert.assertFalse(result.getLeft());
   }
 
   @Test
@@ -207,10 +207,11 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void emptyArrays_returnsAllZero() {
+  public void emptyArrays_reverts() {
     contract.setConstantCall(true);
-    byte[] res = run(HASH, new ArrayList<>(), new ArrayList<>(), new ArrayList<>()).getRight();
-    Assert.assertArrayEquals(new byte[32], res);
+    Pair<Boolean, byte[]> result =
+        run(HASH, new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+    Assert.assertFalse(result.getLeft());
   }
 
   @Test
@@ -344,8 +345,8 @@ public class BatchValidateFnDsa512Test {
     setWord(input, 10, 1);              // addrs count = 1
 
     Pair<Boolean, byte[]> result = contract.execute(input);
-    Assert.assertTrue(result.getLeft());
-    Assert.assertArrayEquals(DataWord.ZERO().getData(), result.getRight());
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
   }
 
   @Test
@@ -366,8 +367,8 @@ public class BatchValidateFnDsa512Test {
     setWord(input, 11, 1);               // sigs[0] bytesLen, payload starts at EOF
 
     Pair<Boolean, byte[]> result = contract.execute(input);
-    Assert.assertTrue(result.getLeft());
-    Assert.assertArrayEquals(DataWord.ZERO().getData(), result.getRight());
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
   }
 
   @Test
@@ -385,8 +386,8 @@ public class BatchValidateFnDsa512Test {
     setWord(input, 10, 1);               // addrs count = 1
 
     Pair<Boolean, byte[]> result = contract.execute(input);
-    Assert.assertTrue(result.getLeft());
-    Assert.assertArrayEquals(DataWord.ZERO().getData(), result.getRight());
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
   }
 
   @Test
@@ -405,8 +406,8 @@ public class BatchValidateFnDsa512Test {
     setWord(input, 10, 1);
 
     Pair<Boolean, byte[]> result = contract.execute(input);
-    Assert.assertTrue(result.getLeft());
-    Assert.assertArrayEquals(DataWord.ZERO().getData(), result.getRight());
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
   }
 
   @Test
@@ -422,8 +423,8 @@ public class BatchValidateFnDsa512Test {
     setWord(input, 4, 8);   // count = 8; 4 + 8 + 1 = 13 > 12 = words.length
 
     Pair<Boolean, byte[]> result = contract.execute(input);
-    Assert.assertTrue(result.getLeft());
-    Assert.assertArrayEquals(DataWord.ZERO().getData(), result.getRight());
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
   }
 
   // -------- helpers --------
