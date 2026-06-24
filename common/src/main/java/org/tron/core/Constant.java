@@ -65,7 +65,7 @@ public class Constant {
   public static final String LOCAL_HOST = "127.0.0.1";
 
   // JSON parsing (DoS protection)
-  public static final int MAX_NESTING_DEPTH = 100;
+  public static final int MAX_NESTING_DEPTH = 20;
   public static final int MAX_TOKEN_COUNT = 100_000;
 
 }
