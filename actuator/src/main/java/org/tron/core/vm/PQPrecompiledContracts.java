@@ -40,6 +40,21 @@ import org.tron.protos.Protocol.Permission;
 @Slf4j(topic = "VM")
 public class PQPrecompiledContracts {
 
+  /** Message slot shared by the single-shot verify precompiles (0x02000016, 0x02000018). */
+  static final int MSG_LEN = 32;
+
+  /**
+   * FN-DSA-512 / Falcon-512 EIP-8052 headerless signature slot length
+   * ({@code salt ‖ s2_compressed}, no leading {@code 0x39}). Shared by every
+   * Falcon precompile slot.
+   */
+  static final int FNDSA512_SIG_SLOT_LEN =
+      FNDSA512.SIGNATURE_MAX_LENGTH - FNDSA512.SIGNATURE_HEADER_LENGTH;
+
+  /** Per-signature energy, shared by the batch validators and the multi-sign precompile. */
+  static final int FNDSA512_ENERGY_PER_SIGN = 220;
+  static final int MLDSA44_ENERGY_PER_SIGN = 470;
+
   /**
    * Best-effort cancellation of all submitted batch-verify tasks. Tasks that
    * have not yet started execution are removed from the worker queue; tasks
@@ -172,11 +187,8 @@ public class PQPrecompiledContracts {
    */
   public static class VerifyFnDsa512 extends PrecompiledContracts.PrecompiledContract {
 
-    private static final int MSG_LEN = 32;
-    private static final int SIG_SLOT_LEN =
-        FNDSA512.SIGNATURE_MAX_LENGTH - FNDSA512.SIGNATURE_HEADER_LENGTH;
-    private static final int PK_LEN = FNDSA512.PUBLIC_KEY_LENGTH;
-    private static final int INPUT_LEN = MSG_LEN + SIG_SLOT_LEN + PK_LEN;
+    private static final int INPUT_LEN =
+        MSG_LEN + FNDSA512_SIG_SLOT_LEN + FNDSA512.PUBLIC_KEY_LENGTH;
     private static final long ENERGY = 170;
 
     @Override
@@ -192,7 +204,7 @@ public class PQPrecompiledContracts {
       try {
         byte[] msg = copyOfRange(data, 0, MSG_LEN);
         int sigStart = MSG_LEN;
-        int sigEnd = MSG_LEN + SIG_SLOT_LEN;
+        int sigEnd = MSG_LEN + FNDSA512_SIG_SLOT_LEN;
         // The slot carries the EIP-8052 headerless body (salt ‖ s2); reconstruct
         // the BC-headered form (re-inserts 0x39) BC's FalconSigner requires.
         byte[] sig = falconSlotToHeaderedSig(data, sigStart, sigEnd);
@@ -246,11 +258,7 @@ public class PQPrecompiledContracts {
           Runtime.getRuntime().availableProcessors() / 2 + 1);
     }
 
-    private static final int ENERGY_PER_SIGN = 220;
     private static final int MAX_SIZE = 16;
-    private static final int PK_LEN = FNDSA512.PUBLIC_KEY_LENGTH;
-    private static final int SIG_SLOT_LEN =
-        FNDSA512.SIGNATURE_MAX_LENGTH - FNDSA512.SIGNATURE_HEADER_LENGTH;
     // hash, sigArrayOffset, pkArrayOffset, addrArrayOffset.
     private static final int ABI_HEAD_WORDS = 4;
 
@@ -260,9 +268,9 @@ public class PQPrecompiledContracts {
         DataWord[] words = DataWord.parseArray(data);
         int cnt = words[words[1].intValueSafe() / WORD_SIZE].intValueSafe();
         int effectiveCnt = cnt > MAX_SIZE ? MAX_SIZE : cnt;
-        return (long) effectiveCnt * ENERGY_PER_SIGN;
+        return (long) effectiveCnt * FNDSA512_ENERGY_PER_SIGN;
       } catch (Throwable t) {
-        return (long) MAX_SIZE * ENERGY_PER_SIGN;
+        return (long) MAX_SIZE * FNDSA512_ENERGY_PER_SIGN;
       }
     }
 
@@ -357,7 +365,8 @@ public class PQPrecompiledContracts {
 
     private static boolean verifyOne(byte[] sig, byte[] pk, byte[] hash,
         byte[] expectedAddr) {
-      if (pk == null || pk.length != PK_LEN || sig == null || sig.length != SIG_SLOT_LEN) {
+      if (pk == null || pk.length != FNDSA512.PUBLIC_KEY_LENGTH
+          || sig == null || sig.length != FNDSA512_SIG_SLOT_LEN) {
         return false;
       }
       // The slot is the EIP-8052 headerless body; rebuild the BC-headered sig.
@@ -421,10 +430,8 @@ public class PQPrecompiledContracts {
    */
   public static class VerifyMlDsa44 extends PrecompiledContracts.PrecompiledContract {
 
-    private static final int MSG_LEN = 32;
-    private static final int SIG_LEN = MLDSA44.SIGNATURE_LENGTH;
-    private static final int PK_LEN = MLDSA44.PUBLIC_KEY_LENGTH;
-    private static final int INPUT_LEN = MSG_LEN + SIG_LEN + PK_LEN;
+    private static final int INPUT_LEN =
+        MSG_LEN + MLDSA44.SIGNATURE_LENGTH + MLDSA44.PUBLIC_KEY_LENGTH;
     private static final long ENERGY = 420;
 
     @Override
@@ -439,8 +446,8 @@ public class PQPrecompiledContracts {
       }
       try {
         byte[] msg = copyOfRange(data, 0, MSG_LEN);
-        byte[] sig = copyOfRange(data, MSG_LEN, MSG_LEN + SIG_LEN);
-        byte[] pk = copyOfRange(data, MSG_LEN + SIG_LEN, INPUT_LEN);
+        byte[] sig = copyOfRange(data, MSG_LEN, MSG_LEN + MLDSA44.SIGNATURE_LENGTH);
+        byte[] pk = copyOfRange(data, MSG_LEN + MLDSA44.SIGNATURE_LENGTH, INPUT_LEN);
         boolean ok = MLDSA44.verify(pk, msg, sig);
         return Pair.of(true,
             ok ? DataWord.ONE().getData() : DataWord.ZERO().getData());
@@ -467,10 +474,7 @@ public class PQPrecompiledContracts {
           Runtime.getRuntime().availableProcessors() / 2 + 1);
     }
 
-    private static final int ENERGY_PER_SIGN = 470;
     private static final int MAX_SIZE = 16;
-    private static final int PK_LEN = MLDSA44.PUBLIC_KEY_LENGTH;
-    private static final int SIG_LEN = MLDSA44.SIGNATURE_LENGTH;
     // hash, sigArrayOffset, pkArrayOffset, addrArrayOffset.
     private static final int ABI_HEAD_WORDS = 4;
 
@@ -480,9 +484,9 @@ public class PQPrecompiledContracts {
         DataWord[] words = DataWord.parseArray(data);
         int cnt = words[words[1].intValueSafe() / WORD_SIZE].intValueSafe();
         int effectiveCnt = cnt > MAX_SIZE ? MAX_SIZE : cnt;
-        return (long) effectiveCnt * ENERGY_PER_SIGN;
+        return (long) effectiveCnt * MLDSA44_ENERGY_PER_SIGN;
       } catch (Throwable t) {
-        return (long) MAX_SIZE * ENERGY_PER_SIGN;
+        return (long) MAX_SIZE * MLDSA44_ENERGY_PER_SIGN;
       }
     }
 
@@ -574,7 +578,8 @@ public class PQPrecompiledContracts {
     }
 
     private static boolean verifyOne(byte[] sig, byte[] pk, byte[] hash, byte[] expectedAddr) {
-      if (pk == null || pk.length != PK_LEN || sig == null || sig.length != SIG_LEN) {
+      if (pk == null || pk.length != MLDSA44.PUBLIC_KEY_LENGTH
+          || sig == null || sig.length != MLDSA44.SIGNATURE_LENGTH) {
         return false;
       }
       try {
@@ -656,9 +661,8 @@ public class PQPrecompiledContracts {
   public static class ValidateMultiPQSig extends PrecompiledContracts.PrecompiledContract {
 
     private static final int ECDSA_ENERGY_PER_SIGN = 1500;
-    private static final int FN_DSA_512_ENERGY = 220;
-    private static final int ML_DSA_44_ENERGY = 470;
-    private static final int WORST_PQ_ENERGY = ML_DSA_44_ENERGY;
+    private static final int WORST_PQ_ENERGY =
+        StrictMathWrapper.max(FNDSA512_ENERGY_PER_SIGN, MLDSA44_ENERGY_PER_SIGN);
     private static final int WORST_ENERGY_PER_SIGN =
         StrictMathWrapper.max(ECDSA_ENERGY_PER_SIGN, WORST_PQ_ENERGY);
     private static final int MAX_SIZE = 5;
@@ -669,8 +673,8 @@ public class PQPrecompiledContracts {
 
     static {
       EnumMap<PQScheme, Integer> m = new EnumMap<>(PQScheme.class);
-      m.put(PQScheme.FN_DSA_512, FN_DSA_512_ENERGY);
-      m.put(PQScheme.ML_DSA_44, ML_DSA_44_ENERGY);
+      m.put(PQScheme.FN_DSA_512, FNDSA512_ENERGY_PER_SIGN);
+      m.put(PQScheme.ML_DSA_44, MLDSA44_ENERGY_PER_SIGN);
       PQ_ENERGY = m;
     }
 
@@ -799,7 +803,7 @@ public class PQPrecompiledContracts {
           byte[] pk = pqPks[i];
           int expectedPkLen = PQSchemeRegistry.getPublicKeyLength(scheme);
           int expectedSigSlot = scheme == PQScheme.FN_DSA_512
-              ? FNDSA512.SIGNATURE_MAX_LENGTH - FNDSA512.SIGNATURE_HEADER_LENGTH
+              ? FNDSA512_SIG_SLOT_LEN
               : PQSchemeRegistry.getSignatureLength(scheme);
           if (pk == null || pk.length != expectedPkLen
               || sig == null || sig.length != expectedSigSlot) {
