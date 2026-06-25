@@ -51,7 +51,20 @@ public class PQPrecompiledContracts {
   static final int FNDSA512_SIG_SLOT_LEN =
       FNDSA512.SIGNATURE_MAX_LENGTH - FNDSA512.SIGNATURE_HEADER_LENGTH;
 
-  /** Per-signature energy, shared by the batch validators and the multi-sign precompile. */
+  /**
+   * Per-signature energy for the two batch validators
+   * ({@code BatchValidateFnDsa512}, {@code BatchValidateMlDsa44}).
+   * The values are calibrated from a JMH benchmark of the full precompile path against
+   * {@code ECRecover} as the ECDSA baseline:
+   * {@code ceil10(pq_µs / 816.876 µs × 3000)}, where ECRecover = 816.876 µs = 3000
+   * energy.
+   * <pre>
+   *   BatchValidateFnDsa512 per-entry:  57.5 µs → ceil10(211.3) = 220
+   *   BatchValidateMlDsa44  per-entry: 126.6 µs → ceil10(464.9) = 470
+   * </pre>
+   * {@code ValidateMultiPQSig} reuses these directly since its per-entry crypto
+   * is identical.
+   */
   static final int FNDSA512_ENERGY_PER_SIGN = 220;
   static final int MLDSA44_ENERGY_PER_SIGN = 470;
 
@@ -108,9 +121,10 @@ public class PQPrecompiledContracts {
 
   /**
    * Structural pre-check for ABI head: word-aligned length and room for the
-   * fixed head. The PQ precompiles cannot reuse the ABI encoding check from {@code PrecompiledContracts}
-   * because their {@code bytes[]} entries (PQ signatures, 1..752 bytes) are
-   * variable-length, so the trailing divisibility check does not apply.
+   * fixed head. The PQ precompiles cannot reuse the ABI encoding check from
+   * {@code PrecompiledContracts} because their {@code bytes[]} entries
+   * (PQ signatures, 1..752 bytes) are variable-length, so the trailing
+   * divisibility check does not apply.
    */
   static boolean isValidAbiHead(byte[] data, int headWords) {
     return data != null
@@ -189,6 +203,8 @@ public class PQPrecompiledContracts {
 
     private static final int INPUT_LEN =
         MSG_LEN + FNDSA512_SIG_SLOT_LEN + FNDSA512.PUBLIC_KEY_LENGTH;
+    // JMH single-verify path = 44.811 µs → ceil10(44.811 / 816.876 × 3000) = 170.
+    // (ECRecover baseline: 816.876 µs = 3000 energy.)
     private static final long ENERGY = 170;
 
     @Override
@@ -432,6 +448,8 @@ public class PQPrecompiledContracts {
 
     private static final int INPUT_LEN =
         MSG_LEN + MLDSA44.SIGNATURE_LENGTH + MLDSA44.PUBLIC_KEY_LENGTH;
+    // JMH single-verify path = 114.182 µs → ceil10(114.182 / 816.876 × 3000) = 420.
+    // (ECRecover baseline: 816.876 µs = 3000 energy.)
     private static final long ENERGY = 420;
 
     @Override
