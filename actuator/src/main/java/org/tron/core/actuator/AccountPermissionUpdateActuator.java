@@ -1,6 +1,7 @@
 package org.tron.core.actuator;
 
 import static java.util.stream.Collectors.toList;
+import static org.tron.core.Constant.MAX_ACTIVE_PERMISSION_CNT;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -203,7 +204,7 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
     if (accountPermissionUpdateContract.getActivesCount() == 0) {
       throw new ContractValidateException("active permission is missed");
     }
-    if (accountPermissionUpdateContract.getActivesCount() > 8) {
+    if (accountPermissionUpdateContract.getActivesCount() > MAX_ACTIVE_PERMISSION_CNT) {
       throw new ContractValidateException("active permission is too many");
     }
 

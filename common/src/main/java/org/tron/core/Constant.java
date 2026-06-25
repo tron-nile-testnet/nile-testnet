@@ -61,6 +61,11 @@ public class Constant {
   // Crypto engine
   public static final String ECKey_ENGINE = "ECKey";
 
+  // Account permission
+  // 0=owner, 1=witness, 2-9=active (up to 8 active permissions)
+  public static final int MAX_ACTIVE_PERMISSION_CNT = 8;
+  public static final int MAX_PERMISSION_CNT = 1 + 1 + MAX_ACTIVE_PERMISSION_CNT;
+
   // Network
   public static final String LOCAL_HOST = "127.0.0.1";
 

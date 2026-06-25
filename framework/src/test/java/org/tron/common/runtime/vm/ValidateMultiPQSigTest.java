@@ -27,9 +27,9 @@ import org.tron.common.utils.client.utils.AbiUtil;
 import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.config.args.Args;
 import org.tron.core.store.StoreFactory;
+import org.tron.core.vm.PQPrecompiledContracts.ValidateMultiPQSig;
 import org.tron.core.vm.PrecompiledContracts;
 import org.tron.core.vm.PrecompiledContracts.PrecompiledContract;
-import org.tron.core.vm.PrecompiledContracts.ValidateMultiPQSig;
 import org.tron.core.vm.config.VMConfig;
 import org.tron.core.vm.repository.Repository;
 import org.tron.core.vm.repository.RepositoryImpl;
@@ -315,9 +315,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(padFalconSig(falcon.sign(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -338,9 +338,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(padFalconSig(falcon.sign(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -360,9 +360,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(padFalconSig(falcon.sign(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -480,9 +480,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(shortSlot));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -502,9 +502,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(zeros));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -523,9 +523,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(wrongLen));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(d1.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -546,9 +546,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(padFalconSig(falcon.sign(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(d1.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   @Test
@@ -567,9 +567,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(d1.sign(toSign)));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(truncatedPk));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertFalse(ret.getLeft());
   }
 
   // ---------- dedup / failure semantics ----------
@@ -618,9 +618,10 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(forged));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(d1.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertTrue(ret.getLeft());
+    Assert.assertArrayEquals(DataWord.ZERO().getData(), ret.getRight());
   }
 
   @Test
@@ -639,13 +640,14 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(outsider.sign(toSign)));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(outsider.getPublicKey()));
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), schemes, pqSigs, pqPks).getRight());
+    Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), schemes, pqSigs, pqPks);
+    Assert.assertTrue(ret.getLeft());
+    Assert.assertArrayEquals(DataWord.ZERO().getData(), ret.getRight());
   }
 
   @Test
-  public void totalCountOverMaxSize_returnsZero() {
+  public void totalCountOverMaxSize_reverts() {
     ECKey owner = new ECKey();
     List<byte[]> ecdsaAddrs = new ArrayList<>();
     List<Integer> ecdsaWeights = new ArrayList<>();
@@ -666,14 +668,13 @@ public class ValidateMultiPQSigTest extends BaseTest {
       ecdsaSigs.add(Hex.toHexString(k.sign(toSign).toByteArray()));
     }
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data, ecdsaSigs,
-            Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyList()).getRight());
+    Assert.assertFalse(runContract(owner.getAddress(), 2, data, ecdsaSigs,
+        Collections.emptyList(), Collections.emptyList(),
+        Collections.emptyList()).getLeft());
   }
 
   @Test
-  public void bothArraysEmpty_returnsZero() {
+  public void bothArraysEmpty_reverts() {
     ECKey k1 = new ECKey();
     ECKey owner = new ECKey();
     setupPermission(owner, Collections.singletonList(k1.getAddress()),
@@ -682,10 +683,9 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
 
-    Assert.assertArrayEquals(DataWord.ZERO().getData(),
-        runContract(owner.getAddress(), 2, data,
-            Collections.emptyList(), Collections.emptyList(),
-            Collections.emptyList(), Collections.emptyList()).getRight());
+    Assert.assertFalse(runContract(owner.getAddress(), 2, data,
+        Collections.emptyList(), Collections.emptyList(),
+        Collections.emptyList(), Collections.emptyList()).getLeft());
   }
 
   @Test
