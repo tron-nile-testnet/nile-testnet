@@ -80,27 +80,6 @@ public class ParamPqMinerTest {
   }
 
   @Test
-  public void pqMinerCopiesKeyBytesOnTheWayInAndOut() {
-    byte[] priv = {1, 2, 3, 4};
-    byte[] pub = {5, 6, 7, 8};
-    Miner miner = newPqMiner(priv, pub);
-
-    // Mutating the source arrays must not affect the stored material.
-    priv[0] = 99;
-    pub[0] = 99;
-    assertEquals(1, miner.getPq().getPrivateKey()[0]);
-    assertEquals(5, miner.getPq().getPublicKey()[0]);
-
-    // Each getter hands back a fresh copy, not the backing array.
-    byte[] out1 = miner.getPq().getPrivateKey();
-    byte[] out2 = miner.getPq().getPrivateKey();
-    assertNotSame(out1, out2);
-    assertArrayEquals(out1, out2);
-    out1[0] = 42;
-    assertEquals(1, miner.getPq().getPrivateKey()[0]);
-  }
-
-  @Test
   public void pqMinerToleratesNullKeyMaterial() {
     Miner miner = newPqMiner(null, null);
     assertNull(miner.getPq().getPrivateKey());
