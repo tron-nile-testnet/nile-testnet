@@ -114,9 +114,10 @@ public class PqKeyNew implements Callable<Integer> {
         out.println("- privateKey takes priority at load time; seed is retained as a backup.");
         if (pqScheme == PQScheme.FN_DSA_512) {
           out.println();
-          out.println("NOTE (FN_DSA_512): The seed in this file is for reference only."
+          out.println(spec.commandLine().getColorScheme().ansi().string(
+              "@|red NOTE (FN_DSA_512): The seed in this file is for reference only."
               + " Falcon keygen is NOT bit-stable across JVM versions, so the stored"
-              + " privateKey + publicKey are always used.");
+              + " privateKey + publicKey are always used.|@"));
         }
       }
       return 0;
