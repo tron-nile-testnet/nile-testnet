@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -204,9 +205,12 @@ public class WitnessInitializer {
           PQ_KEYS_PATH, index, keyFilePath);
     }
     // When both are present (--all mode), privateKey takes priority; seed is treated as backup.
-    return hasPriv
+    PqKeypair keypair = hasPriv
         ? keypairFromKey(index, scheme, keyFile.getPrivateKey(), keyFile.getPublicKey())
         : keypairFromSeed(index, scheme, keyFile.getSeed());
+    // If the file declares an `address`, verify it matches the resolved public key.
+    verifyDeclaredAddress(index, scheme, keypair, keyFile.getAddress());
+    return keypair;
   }
 
   private static PqKeyFile readKeyFile(int index, String keyFilePath) {
@@ -336,6 +340,28 @@ public class WitnessInitializer {
     PQSignature derived = PQSchemeRegistry.fromSeed(scheme, seedBytes);
     return new PqKeypair(scheme, Hex.toHexString(derived.getPrivateKey()),
         Hex.toHexString(derived.getPublicKey()));
+  }
+
+  /**
+   * When the key file declares an {@code address}, verify it matches the address derived from the
+   * resolved keypair's public key via {@link PQSchemeRegistry#computeAddress(PQScheme, byte[])}.
+   * No-op when {@code rawAddress} is blank.
+   */
+  static void verifyDeclaredAddress(int index, PQScheme scheme, PqKeypair keypair,
+      String rawAddress) {
+    if (StringUtils.isBlank(rawAddress)) {
+      return;
+    }
+    byte[] expected = Commons.decodeFromBase58Check(rawAddress);
+    if (expected == null) {
+      throw witnessError("%s[%d].address format is incorrect: %s",
+          PQ_KEYS_PATH, index, rawAddress);
+    }
+    byte[] derived = PQSchemeRegistry.computeAddress(scheme, Hex.decode(keypair.getPublicKey()));
+    if (!Arrays.equals(expected, derived)) {
+      throw witnessError("%s[%d].address %s does not match the address derived from the %s "
+          + "public key", PQ_KEYS_PATH, index, rawAddress, scheme);
+    }
   }
 
   private static byte[] decodeHex(String hex, int index, PQScheme scheme, String field) {

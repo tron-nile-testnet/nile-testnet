@@ -22,6 +22,9 @@ import org.junit.After;
 import org.junit.Test;
 import org.mockito.MockedStatic;
 import org.tron.common.crypto.SignInterface;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
+import org.tron.common.crypto.pqc.PQSignature;
+import org.tron.common.crypto.pqc.PqKeypair;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.LocalWitnesses;
 import org.tron.common.utils.PublicMethod;
@@ -30,6 +33,7 @@ import org.tron.core.exception.TronError;
 import org.tron.core.exception.TronError.ErrCode;
 import org.tron.keystore.Credentials;
 import org.tron.keystore.WalletUtils;
+import org.tron.protos.Protocol.PQScheme;
 
 public class WitnessInitializerTest {
 
@@ -148,6 +152,32 @@ public class WitnessInitializerTest {
     multiKey.setPrivateKeys(keys);
     err = assertThrows(TronError.class,
         () -> WitnessInitializer.resolveWitnessAddress(multiKey, address));
+    assertEquals(ErrCode.WITNESS_INIT, err.getErrCode());
+  }
+
+  @Test
+  public void testVerifyDeclaredAddress() {
+    PQScheme scheme = PQScheme.FN_DSA_512;
+    byte[] seed = new byte[PQSchemeRegistry.getSeedLength(scheme)];
+    Arrays.fill(seed, (byte) 7);
+    PQSignature kp = PQSchemeRegistry.fromSeed(scheme, seed);
+    PqKeypair keypair = new PqKeypair(scheme,
+        Hex.toHexString(kp.getPrivateKey()), Hex.toHexString(kp.getPublicKey()));
+    String derivedAddress =
+        Base58.encode58Check(PQSchemeRegistry.computeAddress(scheme, kp.getPublicKey()));
+
+    WitnessInitializer.verifyDeclaredAddress(0, scheme, keypair, derivedAddress);
+    WitnessInitializer.verifyDeclaredAddress(0, scheme, keypair, null);
+    WitnessInitializer.verifyDeclaredAddress(0, scheme, keypair, "  ");
+
+    // malformed base58check address -> error
+    TronError err = assertThrows(TronError.class,
+        () -> WitnessInitializer.verifyDeclaredAddress(0, scheme, keypair, invalidAddress));
+    assertEquals(ErrCode.WITNESS_INIT, err.getErrCode());
+
+    // valid but mismatched address -> error
+    err = assertThrows(TronError.class,
+        () -> WitnessInitializer.verifyDeclaredAddress(0, scheme, keypair, address));
     assertEquals(ErrCode.WITNESS_INIT, err.getErrCode());
   }
 }
