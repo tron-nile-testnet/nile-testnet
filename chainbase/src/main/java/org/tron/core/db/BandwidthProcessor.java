@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Commons;
 import org.tron.common.utils.StringUtil;
@@ -147,7 +148,7 @@ public class BandwidthProcessor extends ResourceProcessor {
           if (trx.getInstance().getPqAuthSigCount() > 0) {
             long pqAuthSigBytes = 0L;
             for (PQAuthSig pqAuthSig : trx.getInstance().getPqAuthSigList()) {
-              pqAuthSigBytes += pqAuthSig.getSerializedSize();
+              pqAuthSigBytes += PQSchemeRegistry.computePQAuthSigWireSize(pqAuthSig.getScheme());
             }
             sigOverhead += pqAuthSigBytes;
           }
