@@ -300,6 +300,107 @@ public class BatchValidateMlDsa44Test {
     Assert.assertEquals(0, res[0]);
   }
 
+  @Test
+  public void oversizedBytesLen_reverts() {
+    // TB-03: element bytesLen = Integer.MAX_VALUE must not cause OOM.
+    // extractBytesArray must detect bytesLen > data.length and return [],
+    // so the precompile returns DATA_FALSE instead of crashing the JVM.
+    contract.setConstantCall(true);
+    byte[] input = new byte[12 * 32];
+    setWord(input, 1, 128);              // sigs array offset = word 4
+    setWord(input, 2, 224);              // pks array offset  = word 7
+    setWord(input, 3, 320);              // addrs array offset = word 10
+    setWord(input, 4, 1);               // sigs count = 1
+    setWord(input, 5, 32);              // sigs[0] relative offset (1 word past count)
+    setWord(input, 6, Integer.MAX_VALUE); // sigs[0] bytesLen attack vector
+    setWord(input, 7, 1);               // pks count = 1
+    setWord(input, 8, 32);              // pks[0] relative offset
+    setWord(input, 9, 1);               // pks[0] bytesLen (benign)
+    setWord(input, 10, 1);              // addrs count = 1
+
+    Pair<Boolean, byte[]> result = contract.execute(input);
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
+  }
+
+  @Test
+  public void payloadPastInput_reverts() {
+    // copyOfRange zero-pads when to > data.length; malformed bytes must not
+    // be accepted as if the missing tail were real zero bytes.
+    contract.setConstantCall(true);
+    byte[] input = new byte[12 * 32];
+    setWord(input, 1, 128);              // sigs array offset = word 4
+    setWord(input, 2, 224);              // pks array offset  = word 7
+    setWord(input, 3, 320);              // addrs array offset = word 10
+    setWord(input, 4, 1);                // sigs count = 1
+    setWord(input, 5, 192);              // sigs[0] relative offset = word 6
+    setWord(input, 7, 1);                // pks count = 1
+    setWord(input, 8, 32);               // pks[0] relative offset
+    setWord(input, 9, 1);                // pks[0] bytesLen (benign)
+    setWord(input, 10, 1);               // addrs count = 1
+    setWord(input, 11, 1);               // sigs[0] bytesLen, payload starts at EOF
+
+    Pair<Boolean, byte[]> result = contract.execute(input);
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
+  }
+
+  @Test
+  public void lengthWordPastInput_reverts() {
+    contract.setConstantCall(true);
+    byte[] input = new byte[12 * 32];
+    setWord(input, 1, 128);              // sigs array offset = word 4
+    setWord(input, 2, 224);              // pks array offset  = word 7
+    setWord(input, 3, 320);              // addrs array offset = word 10
+    setWord(input, 4, 1);                // sigs count = 1
+    setWord(input, 5, 224);              // sigs[0] length word would be word 12
+    setWord(input, 7, 1);                // pks count = 1
+    setWord(input, 8, 32);               // pks[0] relative offset
+    setWord(input, 9, 1);                // pks[0] bytesLen (benign)
+    setWord(input, 10, 1);               // addrs count = 1
+
+    Pair<Boolean, byte[]> result = contract.execute(input);
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
+  }
+
+  @Test
+  public void nonAlignedPointer_reverts() {
+    // bytesOffsetBytes % WORD_SIZE != 0 guard in extractBytesArrayChecked.
+    contract.setConstantCall(true);
+    byte[] input = new byte[12 * 32];
+    setWord(input, 1, 128);
+    setWord(input, 2, 224);
+    setWord(input, 3, 320);
+    setWord(input, 4, 1);   // sigs count = 1
+    setWord(input, 5, 15);  // pointer = 15: not a multiple of 32
+    setWord(input, 7, 1);
+    setWord(input, 8, 32);
+    setWord(input, 9, 1);
+    setWord(input, 10, 1);
+
+    Pair<Boolean, byte[]> result = contract.execute(input);
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
+  }
+
+  @Test
+  public void pointerWordsExceedInput_reverts() {
+    // (long)offset + len + 1 > words.length guard in extractBytesArrayChecked.
+    // All three arrays point to word 4 (count = 8); the 8 per-element pointer
+    // words would need words[5..12], but the buffer only has words[0..11].
+    contract.setConstantCall(true);
+    byte[] input = new byte[12 * 32];
+    setWord(input, 1, 128);  // sigArrayWord = pkArrayWord = addrArrayWord = 4
+    setWord(input, 2, 128);
+    setWord(input, 3, 128);
+    setWord(input, 4, 8);   // count = 8; 4 + 8 + 1 = 13 > 12 = words.length
+
+    Pair<Boolean, byte[]> result = contract.execute(input);
+    Assert.assertFalse(result.getLeft());
+    Assert.assertArrayEquals(new byte[0], result.getRight());
+  }
+
   // -------- helpers --------
 
   private Pair<Boolean, byte[]> run(byte[] hash, List<String> sigs,
@@ -349,5 +450,14 @@ public class BatchValidateMlDsa44Test {
     byte[] padded = new byte[32];
     System.arraycopy(addr21, 0, padded, 32 - addr21.length, addr21.length);
     return "0x" + Hex.toHexString(padded);
+  }
+
+  /** Write {@code value} as a big-endian int into the last 4 bytes of word {@code wordIdx}. */
+  private static void setWord(byte[] buf, int wordIdx, int value) {
+    int pos = wordIdx * 32 + 28;
+    buf[pos]     = (byte) (value >>> 24);
+    buf[pos + 1] = (byte) (value >>> 16);
+    buf[pos + 2] = (byte) (value >>> 8);
+    buf[pos + 3] = (byte)  value;
   }
 }
