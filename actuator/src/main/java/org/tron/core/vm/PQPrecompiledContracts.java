@@ -770,6 +770,9 @@ public class PQPrecompiledContracts {
 
         for (byte[] sign : ecdsaSigs) {
           byte[] recoveredAddr = PrecompiledContracts.recoverAddrBySign(sign, hash);
+          if (ByteArray.isEmpty(recoveredAddr)) {
+            return Pair.of(true, DATA_FALSE);
+          }
           if (ByteArray.matrixContains(seenAddrs, recoveredAddr)) {
             continue;
           }
