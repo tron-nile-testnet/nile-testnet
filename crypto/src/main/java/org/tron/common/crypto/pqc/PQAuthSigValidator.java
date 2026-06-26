@@ -30,7 +30,7 @@ public final class PQAuthSigValidator {
     if (!PQSchemeRegistry.contains(scheme)) {
       return false;
     }
-    return pqAuthSig.getPublicKey().size() <= PQSchemeRegistry.getPublicKeyLength(scheme)
-        && pqAuthSig.getSignature().size() <= PQSchemeRegistry.getSignatureLength(scheme);
+    return pqAuthSig.getPublicKey().size() == PQSchemeRegistry.getPublicKeyLength(scheme)
+        && PQSchemeRegistry.isValidSignatureLength(scheme, pqAuthSig.getSignature().size());
   }
 }

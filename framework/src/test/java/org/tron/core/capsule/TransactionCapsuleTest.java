@@ -120,6 +120,8 @@ public class TransactionCapsuleTest extends BaseTest {
           rendered.contains(cap.getTransactionId().toString()));
       Assert.assertTrue("WARN should include sigCount: " + rendered,
           rendered.contains("sigCount="));
+      Assert.assertTrue("WARN should include pqSigCount: " + rendered,
+          rendered.contains("pqSigCount="));
       Assert.assertTrue("WARN should include cost in ms: " + rendered,
           rendered.contains("cost="));
       Assert.assertTrue("WARN should render ms suffix: " + rendered,

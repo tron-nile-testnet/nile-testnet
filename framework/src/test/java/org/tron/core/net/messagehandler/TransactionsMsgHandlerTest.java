@@ -438,6 +438,9 @@ public class TransactionsMsgHandlerTest extends BaseTest {
     TransactionsMsgHandler handler = new TransactionsMsgHandler();
     handler.init();
     injectChainBaseManager(handler);
+    // Activate a PQ scheme so the not-allowed gate passes and the size checks run.
+    long prevAllow = chainBaseManager.getDynamicPropertiesStore().getAllowFnDsa512();
+    chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
     try {
       PeerConnection peer = Mockito.mock(PeerConnection.class);
 
@@ -502,6 +505,7 @@ public class TransactionsMsgHandlerTest extends BaseTest {
       Assert.assertEquals(TypeEnum.BAD_TRX, ex2.getType());
       Assert.assertTrue(ex2.getMessage().contains("pq_auth_sig size is out of bounds"));
     } finally {
+      chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(prevAllow);
       handler.close();
     }
   }

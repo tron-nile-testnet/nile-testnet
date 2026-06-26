@@ -171,6 +171,13 @@ public class TransactionsMsgHandler implements TronMsgHandler {
               "tx " + item.getHash() + " signature size is " + sig.size());
         }
       }
+
+      if (trx.getPqAuthSigCount() > 0
+          && !chainBaseManager.getDynamicPropertiesStore().isAnyPqSchemeAllowed()) {
+        String info = "pq_auth_sig not allowed: no post-quantum scheme is activated";
+        throw new P2pException(TypeEnum.BAD_TRX, "tx " + item.getHash() + " " + info);
+      }
+
       for (PQAuthSig pqAuthSig : trx.getPqAuthSigList()) {
         if (!PQAuthSigValidator.isLengthWithinBounds(pqAuthSig)) {
           throw new P2pException(TypeEnum.BAD_TRX,

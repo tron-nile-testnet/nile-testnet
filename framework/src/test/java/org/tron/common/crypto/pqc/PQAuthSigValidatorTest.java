@@ -38,6 +38,14 @@ public class PQAuthSigValidatorTest {
   }
 
   @Test
+  public void rejectsUndersizedPublicKeyForRegisteredScheme() {
+    // Public key length must match the scheme exactly; a shorter key is rejected.
+    int pk = PQSchemeRegistry.getPublicKeyLength(PQScheme.FN_DSA_512) - 1;
+    int s = PQSchemeRegistry.getSignatureLength(PQScheme.FN_DSA_512);
+    assertFalse(PQAuthSigValidator.isLengthWithinBounds(sig(PQScheme.FN_DSA_512, pk, s)));
+  }
+
+  @Test
   public void rejectsOversizedSignatureForRegisteredScheme() {
     int pk = PQSchemeRegistry.getPublicKeyLength(PQScheme.ML_DSA_44);
     int s = PQSchemeRegistry.getSignatureLength(PQScheme.ML_DSA_44) + 1;

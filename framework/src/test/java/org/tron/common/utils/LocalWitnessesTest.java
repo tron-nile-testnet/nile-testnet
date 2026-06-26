@@ -60,8 +60,8 @@ public class LocalWitnessesTest {
             new PqKeypair(PQScheme.FN_DSA_512, shortPriv, pub))));
     assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
     assertTrue(err.getMessage().contains("PQ private key"));
-    // FN-DSA-512 private key is 1280 bytes = 2560 hex chars.
-    assertTrue(err.getMessage().contains("2560"));
+    // FN-DSA-512 private key is 1280 bytes; validation reports the byte length.
+    assertTrue(err.getMessage().contains("1280"));
   }
 
   @Test
@@ -73,8 +73,34 @@ public class LocalWitnessesTest {
             new PqKeypair(PQScheme.FN_DSA_512, priv, shortPub))));
     assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
     assertTrue(err.getMessage().contains("PQ public key"));
-    // FN-DSA-512 public key is 896 bytes = 1792 hex chars.
-    assertTrue(err.getMessage().contains("1792"));
+    // FN-DSA-512 public key is 896 bytes; validation reports the byte length.
+    assertTrue(err.getMessage().contains("896"));
+  }
+
+  @Test
+  public void oddLengthPrivateKeyRejectedAsLengthError() {
+    LocalWitnesses lw = new LocalWitnesses();
+    // Drop a single nibble -> odd hex length. fromHexString would left-pad this
+    // to the right byte count, so without an explicit length check it would slip
+    // through and fail later as a keypair mismatch. It must fail here instead.
+    String oddPriv = priv.substring(1);
+    TronError err = assertThrows(TronError.class,
+        () -> lw.setPqKeypairs(Collections.singletonList(
+            new PqKeypair(PQScheme.FN_DSA_512, oddPriv, pub))));
+    assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
+    assertTrue(err.getMessage().contains("PQ private key"));
+    assertTrue(err.getMessage().contains("1280"));
+  }
+
+  @Test
+  public void nullPrivateKeyRejected() {
+    LocalWitnesses lw = new LocalWitnesses();
+    TronError err = assertThrows(TronError.class,
+        () -> lw.setPqKeypairs(Collections.singletonList(
+            new PqKeypair(PQScheme.FN_DSA_512, null, pub))));
+    assertEquals(TronError.ErrCode.WITNESS_INIT, err.getErrCode());
+    assertTrue(err.getMessage().contains("PQ private key"));
+    assertTrue(err.getMessage().contains("1280"));
   }
 
   @Test
