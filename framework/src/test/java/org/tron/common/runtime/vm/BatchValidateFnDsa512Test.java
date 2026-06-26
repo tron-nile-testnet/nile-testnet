@@ -327,7 +327,7 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void oversizedElementBytesLen_returnsDataFalse_noOom() {
+  public void oversizedBytesLen_reverts() {
     // TB-03: element bytesLen = Integer.MAX_VALUE must not cause OOM.
     // extractBytesArray must detect bytesLen > data.length and return [],
     // so the precompile returns DATA_FALSE instead of crashing the JVM.
@@ -350,7 +350,7 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void elementPayloadPastInput_returnsDataFalse_noZeroPadding() {
+  public void payloadPastInput_reverts() {
     // copyOfRange zero-pads when to > data.length; malformed bytes must not
     // be accepted as if the missing tail were real zero bytes.
     contract.setConstantCall(true);
@@ -372,7 +372,7 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void elementLengthWordPastInput_returnsDataFalse_noBoundsException() {
+  public void lengthWordPastInput_reverts() {
     contract.setConstantCall(true);
     byte[] input = new byte[12 * 32];
     setWord(input, 1, 128);              // sigs array offset = word 4
@@ -391,7 +391,7 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void nonAlignedElementPointer_returnsDataFalse() {
+  public void nonAlignedPointer_reverts() {
     // bytesOffsetBytes % WORD_SIZE != 0 guard in extractBytesArrayChecked.
     contract.setConstantCall(true);
     byte[] input = new byte[12 * 32];
@@ -411,7 +411,7 @@ public class BatchValidateFnDsa512Test {
   }
 
   @Test
-  public void pointerWordsExceedInput_returnsDataFalse() {
+  public void pointerWordsExceedInput_reverts() {
     // (long)offset + len + 1 > words.length guard in extractBytesArrayChecked.
     // All three arrays point to word 4 (count = 8); the 8 per-element pointer
     // words would need words[5..12], but the buffer only has words[0..11].
