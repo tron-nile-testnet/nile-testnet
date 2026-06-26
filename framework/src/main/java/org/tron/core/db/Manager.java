@@ -5,7 +5,6 @@ import static org.tron.common.math.Maths.max;
 import static org.tron.common.math.Maths.min;
 import static org.tron.common.utils.Commons.adjustBalance;
 import static org.tron.core.Constant.TRANSACTION_MAX_BYTE_SIZE;
-import static org.tron.core.exception.BadBlockException.TypeEnum.CALC_MERKLE_ROOT_FAILED;
 import static org.tron.protos.Protocol.Transaction.Contract.ContractType.TransferContract;
 import static org.tron.protos.Protocol.Transaction.Result.contractResult.SUCCESS;
 
@@ -50,7 +49,6 @@ import org.bouncycastle.util.encoders.Hex;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
-import org.tron.api.GrpcAPI;
 import org.tron.api.GrpcAPI.TransactionInfoList;
 import org.tron.common.args.GenesisBlock;
 import org.tron.common.bloom.Bloom;
@@ -936,6 +934,8 @@ public class Manager {
           }
           if (isPQTransaction(trx.getInstance())
                   && pqTransInPendingCounts.get() >= pqTransInPendingMaxCounts) {
+            logger.warn("pushTransaction {} rejected: PQ pending pool full ({}/{}).",
+                trx.getTransactionId(), pqTransInPendingCounts.get(), pqTransInPendingMaxCounts);
             return false;
           }
           if (!session.valid()) {
@@ -2176,6 +2176,11 @@ public class Manager {
 
   public boolean isTooManyPending() {
     return getCachedTransactionSize() > maxTransactionPendingSize;
+  }
+
+  public boolean isPqPendingFull(Protocol.Transaction transaction) {
+    return isPQTransaction(transaction)
+        && pqTransInPendingCounts.get() >= pqTransInPendingMaxCounts;
   }
 
   private void preValidateTransactionSign(List<TransactionCapsule> txs)

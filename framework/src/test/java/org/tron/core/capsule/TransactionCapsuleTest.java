@@ -10,6 +10,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -30,6 +31,8 @@ import org.tron.common.utils.Sha256Hash;
 import org.tron.common.utils.StringUtil;
 import org.tron.core.Wallet;
 import org.tron.core.config.args.Args;
+import org.tron.core.exception.PermissionException;
+import org.tron.core.exception.SignatureFormatException;
 import org.tron.core.exception.ValidateSignatureException;
 import org.tron.protos.Protocol.AccountType;
 import org.tron.protos.Protocol.Key;
@@ -153,8 +156,6 @@ public class TransactionCapsuleTest extends BaseTest {
     Assert.assertTrue("toString should contain both sign= and pq_sign(): " + s,
         s.contains("sign=") && s.contains("pq_sign(FN_DSA_512)="));
   }
-
-  // --------------------- FN-DSA pq_auth_sig verification (V2) ---------------------
 
   private static final String PQ_OWNER_HEX = "41abd4b9367799eaa3197fecb144eb71de1e049abc";
   private static final String PQ_TO_HEX = "41548794500882809695a8a687866e76d4271a1abc";
@@ -753,5 +754,123 @@ public class TransactionCapsuleTest extends BaseTest {
     Transaction empty = Transaction.newBuilder().setRawData(raw.newBuilder().build()).build();
     String rendered = new TransactionCapsule(empty).toString();
     Assert.assertTrue(rendered.contains("contract list is empty"));
+  }
+
+  @Test
+  public void pqWrongKeyLengthThrows() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    // Permission with one slot so count check passes; length check fires first.
+    Permission permission = Permission.newBuilder()
+        .setType(PermissionType.Owner).setThreshold(1)
+        .addKeys(Key.newBuilder()
+            .setAddress(ByteString.copyFrom(new byte[20])).setWeight(1))
+        .build();
+    PQAuthSig badLen = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(new byte[1]))   // 1 != 896
+        .setSignature(ByteString.copyFrom(new byte[1]))
+        .build();
+    Transaction withBad = tx.toBuilder().addPqAuthSig(badLen).build();
+    try {
+      TransactionCapsule.validatePQSignatureGetWeight(withBad, permission,
+          dbManager.getDynamicPropertiesStore(), new ArrayList<>());
+      Assert.fail("wrong pk length should throw SignatureFormatException");
+    } catch (SignatureFormatException e) {
+      Assert.assertTrue(e.getMessage().contains("length mismatch"));
+    }
+  }
+
+  @Test
+  public void pqWeightOverflowThrows() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    FNDSA512 kp1 = new FNDSA512();
+    FNDSA512 kp2 = new FNDSA512();
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] txid = txId(tx);
+    byte[] sig1 = FNDSA512.sign(kp1.getPrivateKey(), txid);
+    byte[] sig2 = FNDSA512.sign(kp2.getPrivateKey(), txid);
+    Permission permission = Permission.newBuilder()
+        .setType(PermissionType.Owner).setThreshold(1)
+        .addKeys(Key.newBuilder()
+            .setAddress(ByteString.copyFrom(
+                PQSchemeRegistry.computeAddress(PQScheme.FN_DSA_512, kp1.getPublicKey())))
+            .setWeight(Long.MAX_VALUE))
+        .addKeys(Key.newBuilder()
+            .setAddress(ByteString.copyFrom(
+                PQSchemeRegistry.computeAddress(PQScheme.FN_DSA_512, kp2.getPublicKey())))
+            .setWeight(Long.MAX_VALUE))
+        .build();
+    Transaction signed = tx.toBuilder()
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(kp1.getPublicKey()))
+            .setSignature(ByteString.copyFrom(sig1)))
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(kp2.getPublicKey()))
+            .setSignature(ByteString.copyFrom(sig2)))
+        .build();
+    try {
+      TransactionCapsule.validatePQSignatureGetWeight(signed, permission,
+          dbManager.getDynamicPropertiesStore(), new ArrayList<>());
+      Assert.fail("Long.MAX_VALUE + Long.MAX_VALUE should throw PermissionException");
+    } catch (PermissionException e) {
+      Assert.assertTrue(e.getMessage().contains("weight overflow"));
+    }
+  }
+
+  @Test
+  public void pqKeyNotInPermissionThrows() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    FNDSA512 knownKp = new FNDSA512();
+    FNDSA512 strangerKp = new FNDSA512();
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] sig = FNDSA512.sign(strangerKp.getPrivateKey(), txId(tx));
+    Permission permission = Permission.newBuilder()
+        .setType(PermissionType.Owner).setThreshold(1)
+        .addKeys(Key.newBuilder()
+            .setAddress(ByteString.copyFrom(
+                PQSchemeRegistry.computeAddress(PQScheme.FN_DSA_512, knownKp.getPublicKey())))
+            .setWeight(1))
+        .build();
+    Transaction signed = tx.toBuilder()
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(strangerKp.getPublicKey()))
+            .setSignature(ByteString.copyFrom(sig)))
+        .build();
+    try {
+      TransactionCapsule.validatePQSignatureGetWeight(signed, permission,
+          dbManager.getDynamicPropertiesStore(), new ArrayList<>());
+      Assert.fail("key not in permission should throw PermissionException");
+    } catch (PermissionException e) {
+      Assert.assertTrue(e.getMessage().contains("not contained of permission"));
+    }
+  }
+
+  @Test
+  public void pqKeyFoundReturnsWeight() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    FNDSA512 kp = new FNDSA512();
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txId(tx));
+    long expectedWeight = 7L;
+    Permission permission = Permission.newBuilder()
+        .setType(PermissionType.Owner).setThreshold(1)
+        .addKeys(Key.newBuilder()
+            .setAddress(ByteString.copyFrom(
+                PQSchemeRegistry.computeAddress(PQScheme.FN_DSA_512, kp.getPublicKey())))
+            .setWeight(expectedWeight))
+        .build();
+    Transaction signed = tx.toBuilder()
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+            .setSignature(ByteString.copyFrom(sig)))
+        .build();
+    long weight = TransactionCapsule.validatePQSignatureGetWeight(signed, permission,
+        dbManager.getDynamicPropertiesStore(), new ArrayList<>());
+    Assert.assertEquals(expectedWeight, weight);
   }
 }

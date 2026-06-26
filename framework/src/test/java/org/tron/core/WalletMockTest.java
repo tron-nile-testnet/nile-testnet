@@ -1,6 +1,7 @@
 package org.tron.core;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -566,6 +567,31 @@ public class WalletMockTest {
     Field field3 = wallet.getClass().getDeclaredField("trxCacheEnable");
     field3.setAccessible(true);
     field3.set(wallet, false);
+  }
+
+  @Test
+  public void testBroadcastTransactionPqPendingFull() throws Exception {
+    Wallet wallet = new Wallet();
+    injectTotalSignNum(wallet, 5);
+
+    TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
+    Manager managerMock = mock(Manager.class);
+    when(tronNetDelegateMock.isBlockUnsolidified()).thenReturn(false);
+    when(managerMock.isTooManyPending()).thenReturn(false);
+    when(managerMock.isPqPendingFull(any())).thenReturn(true);
+
+    Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
+    field.setAccessible(true);
+    field.set(wallet, tronNetDelegateMock);
+    Field field2 = wallet.getClass().getDeclaredField("dbManager");
+    field2.setAccessible(true);
+    field2.set(wallet, managerMock);
+
+    GrpcAPI.Return ret = wallet.broadcastTransaction(Protocol.Transaction.newBuilder().build());
+    assertEquals(GrpcAPI.Return.response_code.SERVER_BUSY, ret.getCode());
+    assertFalse(ret.getResult());
+    assertTrue(ret.getMessage().toStringUtf8().contains("PQ"));
+    Mockito.verify(managerMock, Mockito.never()).pushTransaction(any());
   }
 
   @Test
