@@ -345,22 +345,22 @@ public class WitnessInitializer {
   /**
    * When the key file declares an {@code address}, verify it matches the address derived from the
    * resolved keypair's public key via {@link PQSchemeRegistry#computeAddress(PQScheme, byte[])}.
-   * No-op when {@code rawAddress} is blank.
+   * No-op when {@code rawBase58Address} is blank.
    */
   static void verifyDeclaredAddress(int index, PQScheme scheme, PqKeypair keypair,
-      String rawAddress) {
-    if (StringUtils.isBlank(rawAddress)) {
+      String rawBase58Address) {
+    if (StringUtils.isBlank(rawBase58Address)) {
       return;
     }
-    byte[] expected = Commons.decodeFromBase58Check(rawAddress);
+    byte[] expected = Commons.decodeFromBase58Check(rawBase58Address);
     if (expected == null) {
       throw witnessError("%s[%d].address format is incorrect: %s",
-          PQ_KEYS_PATH, index, rawAddress);
+          PQ_KEYS_PATH, index, rawBase58Address);
     }
     byte[] derived = PQSchemeRegistry.computeAddress(scheme, Hex.decode(keypair.getPublicKey()));
     if (!Arrays.equals(expected, derived)) {
       throw witnessError("%s[%d].address %s does not match the address derived from the %s "
-          + "public key", PQ_KEYS_PATH, index, rawAddress, scheme);
+          + "public key", PQ_KEYS_PATH, index, rawBase58Address, scheme);
     }
   }
 
