@@ -67,6 +67,7 @@ import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.capsule.AssetIssueCapsule;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.capsule.BytesCapsule;
+import org.tron.core.capsule.ReceiptCapsule;
 import org.tron.core.capsule.TransactionCapsule;
 import org.tron.core.capsule.TransactionInfoCapsule;
 import org.tron.core.capsule.TransactionRetCapsule;
@@ -972,6 +973,56 @@ public class ManagerTest extends BaseMethodTest {
     Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, a, diffEcdsa));
     // Same ECDSA but differing pq_auth_sig count (1 vs 0) -> not same.
     Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, a, noPq));
+  }
+
+  private TransactionCapsule buildPqMultiSignTx(byte[] owner, int pqSigCount) {
+    TransferContract c = TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFrom(owner)).setAmount(1).build();
+    Transaction.Builder b = new TransactionCapsule(c, ContractType.TransferContract)
+        .getInstance().toBuilder();
+    for (int i = 0; i < pqSigCount; i++) {
+      b.addPqAuthSig(PQAuthSig.newBuilder().setScheme(PQScheme.FN_DSA_512)
+          .setSignature(ByteString.copyFrom(("pq-" + i).getBytes())).build());
+    }
+    return new TransactionCapsule(b.build());
+  }
+
+  @Test
+  public void consumeMultiSignFeeChargesPqOnlyMultiSign() throws Exception {
+    // A PQ-only multi-sign tx (0 ECDSA, 2 pq_auth_sig) must pay the multi-sign fee.
+    // The old gate getSignatureCount() > 1 saw 0 here and charged nothing; the fix
+    // counts both channels via getTotalSignatureCount().
+    byte[] owner = ByteArray.fromHexString("41abd4b9367799eaa3197fecb144eb71de1e049abc");
+    long fee = dbManager.getDynamicPropertiesStore().getMultiSignFee();
+    long initBalance = fee * 10;
+    AccountCapsule acc = new AccountCapsule(Account.newBuilder()
+        .setAddress(ByteString.copyFrom(owner)).setBalance(initBalance).build());
+    dbManager.getAccountStore().put(owner, acc);
+
+    TransactionTrace trace = mock(TransactionTrace.class);
+    when(trace.getReceipt()).thenReturn(mock(ReceiptCapsule.class));
+
+    dbManager.consumeMultiSignFee(buildPqMultiSignTx(owner, 2), trace);
+
+    Assert.assertEquals(initBalance - fee, dbManager.getAccountStore().get(owner).getBalance());
+  }
+
+  @Test
+  public void consumeMultiSignFeeSkipsSinglePqSig() throws Exception {
+    // One signature (1 pq_auth_sig) is not multi-sign -> no fee charged.
+    byte[] owner = ByteArray.fromHexString("41abd4b9367799eaa3197fecb144eb71de1e049abd");
+    long fee = dbManager.getDynamicPropertiesStore().getMultiSignFee();
+    long initBalance = fee * 10;
+    AccountCapsule acc = new AccountCapsule(Account.newBuilder()
+        .setAddress(ByteString.copyFrom(owner)).setBalance(initBalance).build());
+    dbManager.getAccountStore().put(owner, acc);
+
+    TransactionTrace trace = mock(TransactionTrace.class);
+    when(trace.getReceipt()).thenReturn(mock(ReceiptCapsule.class));
+
+    dbManager.consumeMultiSignFee(buildPqMultiSignTx(owner, 1), trace);
+
+    Assert.assertEquals(initBalance, dbManager.getAccountStore().get(owner).getBalance());
   }
 
   @Test

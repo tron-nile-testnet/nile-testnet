@@ -232,7 +232,9 @@ public class WalletMockTest {
     field.set(wallet, tronNetDelegateMock);
 
     // Single PQ signatures should reach the PQ size gate.
-    injectTotalSignNum(wallet, 5);
+    // A PQ scheme must be active, otherwise pq_auth_sig is rejected up front.
+    DynamicPropertiesStore dps = injectTotalSignNum(wallet, 5);
+    when(dps.isAnyPqSchemeAllowed()).thenReturn(true);
 
     int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
     int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
@@ -270,7 +272,8 @@ public class WalletMockTest {
   }
 
   /** Inject the signature-count cap used by broadcastTransaction. */
-  private static void injectTotalSignNum(Wallet wallet, int totalSignNum) throws Exception {
+  private static DynamicPropertiesStore injectTotalSignNum(Wallet wallet, int totalSignNum)
+      throws Exception {
     ChainBaseManager chainBaseManagerMock = mock(ChainBaseManager.class);
     DynamicPropertiesStore dynamicPropertiesStoreMock = mock(DynamicPropertiesStore.class);
     when(chainBaseManagerMock.getDynamicPropertiesStore()).thenReturn(dynamicPropertiesStoreMock);
@@ -278,6 +281,7 @@ public class WalletMockTest {
     Field field = wallet.getClass().getDeclaredField("chainBaseManager");
     field.setAccessible(true);
     field.set(wallet, chainBaseManagerMock);
+    return dynamicPropertiesStoreMock;
   }
 
   @Test
@@ -297,6 +301,38 @@ public class WalletMockTest {
     GrpcAPI.Return ret = wallet.broadcastTransaction(builder.build());
     assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
     assertTrue(ret.getMessage().toStringUtf8().contains("total signature count"));
+
+    // rejected up front: tronNetDelegate must not be consulted
+    Mockito.verify(tronNetDelegateMock, Mockito.never()).isBlockUnsolidified();
+  }
+
+  @Test
+  public void testBroadcastTxPqAuthSigSchemeNotActivated() throws Exception {
+    Wallet wallet = new Wallet();
+    TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
+    Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
+    field.setAccessible(true);
+    field.set(wallet, tronNetDelegateMock);
+
+    // No post-quantum scheme is activated.
+    DynamicPropertiesStore dps = injectTotalSignNum(wallet, 5);
+    when(dps.isAnyPqSchemeAllowed()).thenReturn(false);
+
+    // A well-formed pq_auth_sig must still be rejected solely because no scheme is active.
+    int pk = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
+    int sig = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
+    Protocol.Transaction tx = Protocol.Transaction.newBuilder()
+        .addPqAuthSig(Protocol.PQAuthSig.newBuilder()
+            .setScheme(Protocol.PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(new byte[pk]))
+            .setSignature(ByteString.copyFrom(new byte[sig]))
+            .build())
+        .build();
+
+    GrpcAPI.Return ret = wallet.broadcastTransaction(tx);
+    assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+    assertTrue(ret.getMessage().toStringUtf8()
+        .contains("pq_auth_sig not allowed: no post-quantum scheme is activated"));
 
     // rejected up front: tronNetDelegate must not be consulted
     Mockito.verify(tronNetDelegateMock, Mockito.never()).isBlockUnsolidified();

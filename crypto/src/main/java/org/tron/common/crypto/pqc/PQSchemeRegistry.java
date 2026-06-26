@@ -73,8 +73,12 @@ public final class PQSchemeRegistry {
   @AllArgsConstructor
   private static final class SchemeInfo {
 
+    // All *Length fields below are byte counts (not hex chars, not bits).
     final int privateKeyLength;
     final int publicKeyLength;
+    // Upper bound of the signature-length band: the exact length for
+    // fixed-length schemes (Dilithium), the maximum for variable-length
+    // schemes (Falcon, registered as SIGNATURE_MAX_LENGTH).
     final int signatureLength;
     // Lower bound of the signature-length band. Equal to signatureLength for
     // fixed-length schemes (Dilithium); strictly less for variable-length

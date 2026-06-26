@@ -517,7 +517,7 @@ public class Wallet {
       int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
       if (totalSignCount > totalSignNum) {
         String info = "total signature count " + totalSignCount + " exceeds " + totalSignNum;
-        logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+        logger.warn(BROADCAST_TRANS_FAILED, txID, info);
         return builder.setResult(false).setCode(response_code.SIGERROR)
             .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
             .build();
@@ -526,17 +526,26 @@ public class Wallet {
       for (ByteString sig : signedTransaction.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           String info = "Signature size is " + sig.size();
-          logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+          logger.warn(BROADCAST_TRANS_FAILED, txID, info);
           return builder.setResult(false).setCode(response_code.SIGERROR)
               .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
               .build();
         }
       }
 
+      if (signedTransaction.getPqAuthSigCount() > 0
+          && !chainBaseManager.getDynamicPropertiesStore().isAnyPqSchemeAllowed()) {
+        String info = "pq_auth_sig not allowed: no post-quantum scheme is activated";
+        logger.warn(BROADCAST_TRANS_FAILED, txID, info);
+        return builder.setResult(false).setCode(response_code.SIGERROR)
+            .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+            .build();
+      }
+
       for (PQAuthSig pqAuthSig : signedTransaction.getPqAuthSigList()) {
         if (!PQAuthSigValidator.isLengthWithinBounds(pqAuthSig)) {
           String info = "pq_auth_sig size is out of bounds";
-          logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+          logger.warn(BROADCAST_TRANS_FAILED, txID, info);
           return builder.setResult(false).setCode(response_code.SIGERROR)
               .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
               .build();

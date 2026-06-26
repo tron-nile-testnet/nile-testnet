@@ -72,8 +72,6 @@ public class MetricKeys {
      * Transaction fetch round-trip latency in seconds: from sending
      * {@code GET_DATA (FETCH_INV_DATA)} to receiving the full {@code TXS}
      * message.
-     * <p>Transactions pushed via gossip without a prior {@code GET_DATA}
-     * (i.e. not actively fetched by this node) are <b>not sampled</b>;
      * <p>Companion to {@link #BLOCK_FETCH_LATENCY} for the TX path.
      */
     public static final String TX_FETCH_LATENCY = "tron:tx_fetch_latency_seconds";

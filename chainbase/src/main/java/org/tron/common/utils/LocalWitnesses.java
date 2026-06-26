@@ -23,6 +23,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.bouncycastle.util.encoders.DecoderException;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
@@ -185,10 +186,10 @@ public class LocalWitnesses {
         throw new TronError("unsupported PQ signature scheme: " + scheme,
             TronError.ErrCode.WITNESS_INIT);
       }
-      int expectedPrivLen = PQSchemeRegistry.getPrivateKeyLength(scheme);
-      int expectedPubLen = PQSchemeRegistry.getPublicKeyLength(scheme);
-      validatePqKey(kp.getPrivateKey(), expectedPrivLen, "PQ private key");
-      validatePqKey(kp.getPublicKey(), expectedPubLen, "PQ public key");
+      int expectedPrivByteLen = PQSchemeRegistry.getPrivateKeyLength(scheme);
+      int expectedPubByteLen = PQSchemeRegistry.getPublicKeyLength(scheme);
+      validatePqKey(kp.getPrivateKey(), expectedPrivByteLen, "PQ private key");
+      validatePqKey(kp.getPublicKey(), expectedPubByteLen, "PQ public key");
       try {
         PQSchemeRegistry.fromKeypair(scheme,
             ByteArray.fromHexString(kp.getPrivateKey()),
@@ -201,19 +202,17 @@ public class LocalWitnesses {
     this.pqKeypairs = pqKeypairs;
   }
 
-  private static void validatePqKey(String key, int expectedLen, String label) {
-    String hex = key;
+  private static void validatePqKey(String key, int expectedByteLen, String label) {
     // Match downstream ByteArray.fromHexString, which only strips lowercase "0x".
-    if (StringUtils.startsWith(hex, "0x")) {
-      hex = hex.substring(2);
-    }
-    int expectedHexLen = expectedLen * 2;
-    if (StringUtils.isBlank(hex) || hex.length() != expectedHexLen) {
-      throw new TronError(String.format("%s must be %d hex chars, actual: %d",
-          label, expectedHexLen, StringUtils.isBlank(hex) ? 0 : hex.length()),
+    String hex = StringUtils.removeStart(key, "0x");
+    if (StringUtils.length(hex) != expectedByteLen * 2) {
+      throw new TronError(String.format("%s must be %d bytes", label, expectedByteLen),
           TronError.ErrCode.WITNESS_INIT);
     }
-    if (!StringUtil.isHexadecimal(hex)) {
+    try {
+      // Length is already correct; this validates the hex characters themselves.
+      ByteArray.fromHexString(key);
+    } catch (DecoderException e) {
       throw new TronError(label + " must be hex string", TronError.ErrCode.WITNESS_INIT);
     }
   }

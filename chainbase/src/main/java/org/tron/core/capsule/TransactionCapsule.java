@@ -466,7 +466,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     return ECDSASignature.fromComponents(rsv.getR(), rsv.getS(), rsv.getV()).toBase64();
   }
 
-  public static boolean validateSignature(Transaction transaction,
+  private static boolean validateSignature(Transaction transaction,
       byte[] hash, AccountStore accountStore, DynamicPropertiesStore dynamicPropertiesStore)
       throws PermissionException, SignatureException, SignatureFormatException {
     Transaction.Contract contract = transaction.getRawData().getContractList().get(0);
@@ -676,8 +676,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
       if (signatureCount == 0 || this.transaction.getRawData().getContractCount() <= 0) {
         throw new ValidateSignatureException("miss sig or contract");
       }
-      int totalSignNum = dynamicPropertiesStore.getTotalSignNum();
-      if (signatureCount > totalSignNum) {
+      if (signatureCount > dynamicPropertiesStore.getTotalSignNum()) {
         throw new ValidateSignatureException("too many signatures");
       }
 
@@ -806,8 +805,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
         if (!ArrayUtils.isEmpty(owner)) { //transfer from transparent address
           validatePubSignature(accountStore, dynamicPropertiesStore);
         } else { //transfer from shielded address
-          if (this.transaction.getSignatureCount() > 0
-              || (this.transaction.getPqAuthSigCount() > 0)) {
+          if (this.getTotalSignatureCount() > 0) {
             throw new ValidateSignatureException("there should be no signatures signed by "
                     + "transparent address when transfer from shielded address");
           }
