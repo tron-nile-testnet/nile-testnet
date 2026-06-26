@@ -3127,12 +3127,8 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
    * needed.
    */
   public boolean isAnyPqSchemeAllowed() {
-    for (PQScheme scheme : PQSchemeRegistry.registeredSchemes()) {
-      if (isPqSchemeAllowed(scheme)) {
-        return true;
-      }
-    }
-    return false;
+    return PQSchemeRegistry.registeredSchemes().stream()
+        .anyMatch(this::isPqSchemeAllowed);
   }
 
   /**
@@ -3147,10 +3143,6 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
       case FN_DSA_512: return allowFnDsa512();
       case ML_DSA_44: return allowMlDsa44();
       default:
-        if (PQSchemeRegistry.contains(scheme)) {
-          throw new IllegalStateException(
-              "Missing governance flag mapping for registered PQ scheme: " + scheme);
-        }
         return false;
     }
   }

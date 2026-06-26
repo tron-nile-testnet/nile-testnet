@@ -99,7 +99,7 @@ public class TransactionsMsgHandler implements TronMsgHandler {
       Item item = new Item(new TransactionMessage(trx).getMessageId(), InventoryType.TRX);
       // Observe end-to-end fetch latency (GET_DATA send → full TXS received)
       // before consuming the timestamp. Null means this tx wasn't actively
-      // fetched (e.g. pushed via gossip), in which case no sample is recorded.
+      // fetched, in which case no sample is recorded.
       Long requestTime = peer.getAdvInvRequest().remove(item);
       if (requestTime != null) {
         Metrics.histogramObserve(MetricKeys.Histogram.TX_FETCH_LATENCY,

@@ -74,13 +74,12 @@ public class Param {
      * set so the two miner kinds never share a slot.
      */
     @Getter
-    private final PQMiner pq;
+    private PQMiner pq;
 
     public Miner(byte[] privateKey, ByteString privateKeyAddress, ByteString witnessAddress) {
       this.privateKey = privateKey;
       this.privateKeyAddress = privateKeyAddress;
       this.witnessAddress = witnessAddress;
-      this.pq = null;
     }
 
     /**
@@ -123,16 +122,19 @@ public class Param {
 
     /**
      * Post-quantum identity bundle: scheme + key material + derived addresses.
-     * Immutable; key bytes are defensively copied on the way in and out so the
-     * stored material can't be mutated by callers.
+     * Fields are {@code final}; the key {@code byte[]} references are held
+     * directly (not copied), so callers must not mutate the arrays they pass in
+     * or get back.
      */
     public class PQMiner {
 
       @Getter
       private final PQScheme scheme;
 
+      @Getter
       private final byte[] privateKey;
 
+      @Getter
       private final byte[] publicKey;
 
       /** Address derived from the PQ public key (key-slot identity). */
@@ -151,14 +153,6 @@ public class Param {
         this.publicKey = publicKey == null ? null : publicKey.clone();
         this.privateKeyAddress = privateKeyAddress;
         this.witnessAddress = witnessAddress;
-      }
-
-      public byte[] getPrivateKey() {
-        return privateKey == null ? null : privateKey.clone();
-      }
-
-      public byte[] getPublicKey() {
-        return publicKey == null ? null : publicKey.clone();
       }
     }
   }
