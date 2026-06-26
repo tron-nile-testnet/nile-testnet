@@ -236,7 +236,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
   @Test
   public void energyChargesPerSchemeTag() {
-    // 1 × ECDSA (1500) + 1 × Falcon (220) + 1 × Dilithium (470) = 2190
+    // 1 × ECDSA (1500) + 1 × Falcon (2400) + 1 × Dilithium (2400) = 6300
     ECKey k1 = new ECKey();
     FNDSA512 falcon = new FNDSA512();
     MLDSA44 dilithium = new MLDSA44();
@@ -262,7 +262,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(dilithium.getPublicKey()));
 
     byte[] input = encodeInput(owner.getAddress(), 2, data, ecdsaSigs, schemes, pqSigs, pqPks);
-    Assert.assertEquals(2190L, contract.getEnergyForData(input));
+    Assert.assertEquals(6300L, contract.getEnergyForData(input));
   }
 
   @Test
@@ -293,8 +293,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(falcon.getPublicKey()));
 
     byte[] input = encodeInput(owner.getAddress(), 2, data, ecdsaSigs, schemes, pqSigs, pqPks);
-    // 1500 + 220 (Falcon) + 470 (junk priced at worst case) = 2190
-    Assert.assertEquals(2190L, contract.getEnergyForData(input));
+    // 1500 + 2400 (Falcon) + 2400 (junk priced at worst case) = 6300
+    Assert.assertEquals(6300L, contract.getEnergyForData(input));
   }
 
   // ---------- per-entry rejection ----------

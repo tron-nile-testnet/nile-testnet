@@ -59,7 +59,7 @@ public class MlDsa44PrecompileTest {
 
     Assert.assertTrue(result.getLeft());
     Assert.assertArrayEquals(DataWord.ONE().getData(), result.getRight());
-    Assert.assertEquals(420, pc.getEnergyForData(input));
+    Assert.assertEquals(3000, pc.getEnergyForData(input));
   }
 
   @Test
