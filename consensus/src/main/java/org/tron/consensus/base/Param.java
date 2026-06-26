@@ -122,8 +122,9 @@ public class Param {
 
     /**
      * Post-quantum identity bundle: scheme + key material + derived addresses.
-     * Immutable; key bytes are defensively copied on the way in and out so the
-     * stored material can't be mutated by callers.
+     * Fields are {@code final}; the key {@code byte[]} references are held
+     * directly (not copied), so callers must not mutate the arrays they pass in
+     * or get back.
      */
     public class PQMiner {
 
