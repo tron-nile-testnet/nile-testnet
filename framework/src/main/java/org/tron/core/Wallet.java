@@ -578,6 +578,12 @@ public class Wallet {
             .setMessage(ByteString.copyFromUtf8("Server busy.")).build();
       }
 
+      if (dbManager.isPqPendingFull(signedTransaction)) {
+        logger.warn("Broadcast transaction {} has failed, PQ pending pool full.", txID);
+        return builder.setResult(false).setCode(response_code.SERVER_BUSY)
+            .setMessage(ByteString.copyFromUtf8("PQ pending pool is full.")).build();
+      }
+
       if (trxCacheEnable) {
         if (dbManager.getTransactionIdCache().getIfPresent(txID) != null) {
           logger.warn("Broadcast transaction {} has failed, it already exists.", txID);

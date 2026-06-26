@@ -229,10 +229,6 @@ public class BlockCapsule implements ProtoCapsule<Block> {
     }
 
     if (hasPq) {
-      if (!dynamicPropertiesStore.isAnyPqSchemeAllowed()) {
-        throw new ValidateSignatureException(
-            "pq_auth_sig not allowed: no post-quantum scheme is activated");
-      }
       return validatePQSignature(dynamicPropertiesStore, witnessPermissionAddress,
           header.getPqAuthSig());
     }

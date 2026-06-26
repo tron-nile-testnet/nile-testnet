@@ -258,10 +258,6 @@ public class TransactionUtil {
                   .isECKeyCryptoEngine(), trx.getRawData().toByteArray()), approveList);
         }
         if (trx.getPqAuthSigCount() > 0) {
-          if (!chainBaseManager.getDynamicPropertiesStore().isAnyPqSchemeAllowed()) {
-            throw new PermissionException(
-                "pq_auth_sig not allowed: no post-quantum scheme is activated");
-          }
           try {
             long pqWeight = TransactionCapsule.validatePQSignatureGetWeight(trx, permission,
                 chainBaseManager.getDynamicPropertiesStore(), approveList);

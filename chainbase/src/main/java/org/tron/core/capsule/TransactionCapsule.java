@@ -496,7 +496,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
     List<ByteString> approveList = new ArrayList<>();
     long weight = checkWeight(permission, transaction.getSignatureList(), hash, approveList);
 
-    if (transaction.getPqAuthSigCount() > 0 && dynamicPropertiesStore.isAnyPqSchemeAllowed()) {
+    if (transaction.getPqAuthSigCount() > 0) {
       try {
         weight = StrictMathWrapper.addExact(weight,
             validatePQSignatureGetWeight(transaction, permission, dynamicPropertiesStore,
@@ -767,18 +767,12 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
       if (!signedAddresses.add(addrBs)) {
         throw new PermissionException(encode58Check(derivedAddr) + " has signed twice!");
       }
-      Key matched = null;
-      for (Key k : permission.getKeysList()) {
-        if (k.getAddress().equals(addrBs)) {
-          matched = k;
-          break;
-        }
-      }
-      if (matched == null) {
-        throw new PermissionException(
-            "pq_auth_sig public key derives to " + encode58Check(derivedAddr)
-                + " but it is not contained of permission.");
-      }
+      Key matched = permission.getKeysList().stream()
+          .filter(k -> k.getAddress().equals(addrBs))
+          .findFirst()
+          .orElseThrow(() -> new PermissionException(
+              "pq_auth_sig public key derives to " + encode58Check(derivedAddr)
+                  + " but it is not contained of permission."));
       if (!PQSchemeRegistry.verify(scheme, pk, digest, sig)) {
         throw new SignatureException("pq sig invalid");
       }
