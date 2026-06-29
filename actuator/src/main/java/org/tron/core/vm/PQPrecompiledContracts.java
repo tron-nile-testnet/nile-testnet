@@ -54,19 +54,11 @@ public class PQPrecompiledContracts {
   /**
    * Per-signature energy for the two batch validators
    * ({@code BatchValidateFnDsa512}, {@code BatchValidateMlDsa44}).
-   * The values are calibrated from a JMH benchmark of the full precompile path against
-   * {@code ECRecover} as the ECDSA baseline:
-   * {@code ceil10(pq_µs / 816.876 µs × 3000)}, where ECRecover = 816.876 µs = 3000
-   * energy.
-   * <pre>
-   *   BatchValidateFnDsa512 per-entry:  57.5 µs → ceil10(211.3) = 220
-   *   BatchValidateMlDsa44  per-entry: 126.6 µs → ceil10(464.9) = 470
-   * </pre>
    * {@code ValidateMultiPQSig} reuses these directly since its per-entry crypto
    * is identical.
    */
-  static final int FNDSA512_ENERGY_PER_SIGN = 220;
-  static final int MLDSA44_ENERGY_PER_SIGN = 470;
+  static final int FNDSA512_ENERGY_PER_SIGN = 2400;
+  static final int MLDSA44_ENERGY_PER_SIGN = 2400;
 
   /**
    * Best-effort cancellation of all submitted batch-verify tasks. Tasks that
@@ -203,9 +195,7 @@ public class PQPrecompiledContracts {
 
     private static final int INPUT_LEN =
         MSG_LEN + FNDSA512_SIG_SLOT_LEN + FNDSA512.PUBLIC_KEY_LENGTH;
-    // JMH single-verify path = 44.811 µs → ceil10(44.811 / 816.876 × 3000) = 170.
-    // (ECRecover baseline: 816.876 µs = 3000 energy.)
-    private static final long ENERGY = 170;
+    private static final long ENERGY = 3000;
 
     @Override
     public long getEnergyForData(byte[] data) {
@@ -262,7 +252,7 @@ public class PQPrecompiledContracts {
    *
    * <p>Uses a dedicated thread pool when not in a constant call and enforces
    * {@code getCPUTimeLeftInNanoSecond()} timeout. {@code MAX_SIZE = 16}. Energy is
-   * {@code cnt × 220}.
+   * {@code cnt × 2400}.
    */
   public static class BatchValidateFnDsa512 extends PrecompiledContracts.PrecompiledContract {
 
@@ -448,9 +438,7 @@ public class PQPrecompiledContracts {
 
     private static final int INPUT_LEN =
         MSG_LEN + MLDSA44.SIGNATURE_LENGTH + MLDSA44.PUBLIC_KEY_LENGTH;
-    // JMH single-verify path = 114.182 µs → ceil10(114.182 / 816.876 × 3000) = 420.
-    // (ECRecover baseline: 816.876 µs = 3000 energy.)
-    private static final long ENERGY = 420;
+    private static final long ENERGY = 3000;
 
     @Override
     public long getEnergyForData(byte[] data) {
@@ -480,7 +468,7 @@ public class PQPrecompiledContracts {
    * Returns a 256-bit bitmap where bit {@code i} is set iff
    * {@code derive(pk_i) == expectedAddr_i} AND {@code MLDSA44.verify(pk_i, hash, sig_i)}.
    * Same ABI shape as 0x02000017, with sigs 2420 B and pks 1312 B.
-   * {@code MAX_SIZE = 16}; energy is {@code cnt × 470}.
+   * {@code MAX_SIZE = 16}; energy is {@code cnt × 2400}.
    */
   public static class BatchValidateMlDsa44 extends PrecompiledContracts.PrecompiledContract {
 
@@ -668,8 +656,8 @@ public class PQPrecompiledContracts {
    * Dilithium sigs are exactly 2420 B and Dilithium pks 1312 B.
    *
    * <p>{@code MAX_SIZE = 5} across ECDSA + PQ entries combined. Energy is
-   * {@code ecdsaCnt × 1500 + sum_i pqEnergy(scheme_i)} with FN-DSA-512 = 220
-   * and ML-DSA-44 = 470. Unknown tags are charged at worst case so an attacker
+   * {@code ecdsaCnt × 1500 + sum_i pqEnergy(scheme_i)} with FN-DSA-512 = 2400
+   * and ML-DSA-44 = 2400. Unknown tags are charged at worst case so an attacker
    * cannot underpay by encoding a tag the dispatcher will then reject.
    *
    * <p>Per-entry runtime gate: a Falcon entry returns {@code DATA_FALSE} when

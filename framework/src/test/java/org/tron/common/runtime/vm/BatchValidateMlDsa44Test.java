@@ -203,7 +203,7 @@ public class BatchValidateMlDsa44Test {
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
     byte[] input = encode(HASH, sigs, pks, addrs);
-    Assert.assertEquals(3L * 470L, contract.getEnergyForData(input));
+    Assert.assertEquals(3L * 2400L, contract.getEnergyForData(input));
   }
 
   @Test
