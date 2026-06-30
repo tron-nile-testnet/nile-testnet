@@ -3,6 +3,7 @@ package org.tron.core.net.message.handshake;
 import com.google.protobuf.ByteString;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.DecodeUtil;
 import org.tron.common.utils.Sha256Hash;
@@ -10,6 +11,7 @@ import org.tron.common.utils.StringUtil;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.config.args.Args;
+import org.tron.core.exception.P2pException;
 import org.tron.core.net.message.MessageTypes;
 import org.tron.core.net.message.TronMessage;
 import org.tron.p2p.discover.Node;
@@ -23,14 +25,26 @@ public class HelloMessage extends TronMessage {
   @Getter
   private Protocol.HelloMessage helloMessage;
 
+  /** Raw inbound hello size cap, enforced before parsing. */
+  public static final int MAX_HELLO_MESSAGE_SIZE = 16 * 1024;
+
   public HelloMessage(byte type, byte[] rawData) throws Exception {
     super(type, rawData);
+    checkRawSize(rawData);
     this.helloMessage = Protocol.HelloMessage.parseFrom(rawData);
   }
 
   public HelloMessage(byte[] data) throws Exception {
     super(MessageTypes.P2P_HELLO.asByte(), data);
+    checkRawSize(data);
     this.helloMessage = Protocol.HelloMessage.parseFrom(data);
+  }
+
+  private static void checkRawSize(byte[] rawData) throws P2pException {
+    if (rawData != null && rawData.length > MAX_HELLO_MESSAGE_SIZE) {
+      throw new P2pException(P2pException.TypeEnum.BAD_MESSAGE,
+          "hello message size " + rawData.length + " exceeds " + MAX_HELLO_MESSAGE_SIZE);
+    }
   }
 
   public HelloMessage(Node from, long timestamp, ChainBaseManager chainBaseManager) {
@@ -184,6 +198,12 @@ public class HelloMessage extends TronMessage {
 
     ByteString codeVersion = this.helloMessage.getCodeVersion();
     if (!codeVersion.isEmpty() && codeVersion.toByteArray().length > maxByteSize) {
+      return false;
+    }
+
+    // PQ signatures are bounded by scheme and reject nested unknown fields.
+    if (this.helloMessage.hasPqAuthSig()
+        && !PQAuthSigValidator.isLengthWithinBounds(this.helloMessage.getPqAuthSig())) {
       return false;
     }
 

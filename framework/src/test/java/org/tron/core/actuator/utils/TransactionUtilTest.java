@@ -28,6 +28,8 @@ import org.tron.api.GrpcAPI.TransactionSignWeight;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
+import org.tron.common.crypto.pqc.FNDSA512;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Utils;
 import org.tron.core.ChainBaseManager;
@@ -40,6 +42,8 @@ import org.tron.core.store.DynamicPropertiesStore;
 import org.tron.core.utils.TransactionUtil;
 import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.AccountType;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
@@ -446,6 +450,28 @@ public class TransactionUtilTest extends BaseTest {
   }
 
   @Test
+  public void estimateConsumeBandWidthSizeWithPqScheme() {
+    DynamicPropertiesStore dps = chainBaseManager.getDynamicPropertiesStore();
+    long balance = 100;
+
+    long ecdsaEstimate = TransactionUtil.estimateConsumeBandWidthSize(dps, balance);
+    // null / UNKNOWN_PQ_SCHEME keeps the ECDSA-sized estimate unchanged.
+    Assert.assertEquals(ecdsaEstimate,
+        TransactionUtil.estimateConsumeBandWidthSize(dps, balance, PQScheme.UNKNOWN_PQ_SCHEME));
+    Assert.assertEquals(ecdsaEstimate,
+        TransactionUtil.estimateConsumeBandWidthSize(dps, balance, null));
+
+    for (PQScheme scheme : new PQScheme[] {PQScheme.FN_DSA_512, PQScheme.ML_DSA_44}) {
+      long pqEstimate = TransactionUtil.estimateConsumeBandWidthSize(dps, balance, scheme);
+      // The PQAuthSig wire size is reserved on top of the ECDSA-sized base.
+      Assert.assertEquals(ecdsaEstimate + PQSchemeRegistry.computePQAuthSigWireSize(scheme),
+          pqEstimate);
+      // A PQAuthSig is far larger than an ECDSA signature, so the reserve grows noticeably.
+      Assert.assertTrue(pqEstimate > ecdsaEstimate);
+    }
+  }
+
+  @Test
   public void testConcurrentToString() throws InterruptedException {
     Transaction.Builder builder = Transaction.newBuilder();
     TransactionCapsule trx = new TransactionCapsule(builder.build());
@@ -488,8 +514,7 @@ public class TransactionUtilTest extends BaseTest {
     assertEquals(65, validSig.size());
 
     // Pad the 65-byte signature with trailing junk bytes.
-    ByteString oversized = validSig.concat(
-        ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5}));
+    ByteString oversized = validSig.concat(ByteString.copyFrom(new byte[] {1, 2, 3, 4, 5}));
     assertEquals(70, oversized.size());
 
     TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(
@@ -535,11 +560,44 @@ public class TransactionUtilTest extends BaseTest {
       overLimit.addSignature(oneSig);
     }
 
-    TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(
-        overLimit.build());
+    TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(overLimit.build());
     assertEquals(TransactionSignWeight.Result.response_code.OTHER_ERROR,
         reply.getResult().getCode());
     Assert.assertTrue(reply.getResult().getMessage().contains("too many signatures"));
     assertEquals(0, reply.getApprovedListCount());
+  }
+
+  @Test
+  public void testSignWeightTooManyPqSigs_dos() {
+    // DOS-1 / TB-01: the guard must count pq_auth_sig entries regardless of
+    // whether any PQ scheme is activated. 0 ECDSA + N PQ entries must be
+    // rejected before any expensive verification runs.
+    FNDSA512 kp = new FNDSA512();
+    PQAuthSig dummySig = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+        .setSignature(ByteString.copyFrom(kp.sign(new byte[32])))
+        .build();
+
+    Transaction unsigned = Transaction.newBuilder().setRawData(
+        Transaction.raw.newBuilder().addContract(
+            Contract.newBuilder().setType(ContractType.TransferContract)
+                .setParameter(Any.pack(TransferContract.newBuilder().setAmount(1)
+                    .setOwnerAddress(ByteString.copyFrom(
+                        ByteArray.fromHexString(OWNER_ADDRESS)))
+                    .setToAddress(ByteString.copyFrom(
+                        ByteArray.fromHexString(OWNER_ADDRESS)))
+                    .build())).build()).build()).build();
+
+    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+    Transaction.Builder overLimit = unsigned.toBuilder();
+    for (int i = 0; i < totalSignNum + 1; i++) {
+      overLimit.addPqAuthSig(dummySig);
+    }
+
+    TransactionSignWeight reply = transactionUtil.getTransactionSignWeight(overLimit.build());
+    assertEquals(TransactionSignWeight.Result.response_code.OTHER_ERROR,
+        reply.getResult().getCode());
+    Assert.assertTrue(reply.getResult().getMessage().contains("too many signatures"));
   }
 }

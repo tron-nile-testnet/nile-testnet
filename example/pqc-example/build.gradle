@@ -1,0 +1,13 @@
+description = "pqc-example – demo programs for post-quantum cryptography on TRON."
+
+apply plugin: 'application'
+
+mainClassName = project.hasProperty('mainClass') ? project.mainClass
+    : 'org.tron.example.pqc.PQWitnessNode'
+
+dependencies {
+    api project(":framework")
+    // config-test.conf lives in framework's test resources; pull it onto the
+    // runtime classpath so Args.setParam can locate it when running demos.
+    runtimeOnly files(project(':framework').sourceSets.test.resources.srcDirs)
+}

@@ -111,6 +111,7 @@ import org.tron.api.GrpcAPI.WitnessList;
 import org.tron.common.crypto.Hash;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.runtime.ProgramResult;
 import org.tron.common.runtime.vm.LogInfo;
@@ -202,6 +203,7 @@ import org.tron.core.store.StoreFactory;
 import org.tron.core.store.VotesStore;
 import org.tron.core.store.WitnessStore;
 import org.tron.core.utils.TransactionUtil;
+import org.tron.core.vm.config.VMConfig;
 import org.tron.core.vm.program.Program;
 import org.tron.core.zen.ShieldedTRC20ParametersBuilder;
 import org.tron.core.zen.ShieldedTRC20ParametersBuilder.ShieldedTRC20ParametersType;
@@ -228,6 +230,8 @@ import org.tron.protos.Protocol.MarketOrderList;
 import org.tron.protos.Protocol.MarketOrderPairList;
 import org.tron.protos.Protocol.MarketPrice;
 import org.tron.protos.Protocol.MarketPriceList;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Permission.PermissionType;
 import org.tron.protos.Protocol.Proposal;
@@ -509,10 +513,40 @@ public class Wallet {
     trx.setTime(System.currentTimeMillis());
     Sha256Hash txID = trx.getTransactionId();
     try {
+      // Bound signature entry count before per-entry validation.
+      int totalSignCount = trx.getTotalSignatureCount();
+      int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      if (totalSignCount > totalSignNum) {
+        String info = "total signature count " + totalSignCount + " exceeds " + totalSignNum;
+        logger.warn(BROADCAST_TRANS_FAILED, txID, info);
+        return builder.setResult(false).setCode(response_code.SIGERROR)
+            .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+            .build();
+      }
+
       for (ByteString sig : signedTransaction.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           String info = "Signature size is " + sig.size();
-          logger.warn("Broadcast transaction {} has failed, {}.", txID, info);
+          logger.warn(BROADCAST_TRANS_FAILED, txID, info);
+          return builder.setResult(false).setCode(response_code.SIGERROR)
+              .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+              .build();
+        }
+      }
+
+      if (signedTransaction.getPqAuthSigCount() > 0
+          && !chainBaseManager.getDynamicPropertiesStore().isAnyPqSchemeAllowed()) {
+        String info = "pq_auth_sig not allowed: no post-quantum scheme is activated";
+        logger.warn(BROADCAST_TRANS_FAILED, txID, info);
+        return builder.setResult(false).setCode(response_code.SIGERROR)
+            .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
+            .build();
+      }
+
+      for (PQAuthSig pqAuthSig : signedTransaction.getPqAuthSigList()) {
+        if (!PQAuthSigValidator.isLengthWithinBounds(pqAuthSig)) {
+          String info = "pq_auth_sig size is out of bounds";
+          logger.warn(BROADCAST_TRANS_FAILED, txID, info);
           return builder.setResult(false).setCode(response_code.SIGERROR)
               .setMessage(ByteString.copyFromUtf8("Validate signature error: " + info))
               .build();
@@ -552,6 +586,12 @@ public class Wallet {
         logger.warn("Broadcast transaction {} has failed, too many pending.", txID);
         return builder.setResult(false).setCode(response_code.SERVER_BUSY)
             .setMessage(ByteString.copyFromUtf8("Server busy.")).build();
+      }
+
+      if (dbManager.isPqPendingFull(signedTransaction)) {
+        logger.warn("Broadcast transaction {} has failed, PQ pending pool full.", txID);
+        return builder.setResult(false).setCode(response_code.SERVER_BUSY)
+            .setMessage(ByteString.copyFromUtf8("PQ pending pool is full.")).build();
       }
 
       if (trxCacheEnable) {
@@ -632,8 +672,10 @@ public class Wallet {
     TransactionApprovedList.Builder tswBuilder = TransactionApprovedList.newBuilder();
     TransactionApprovedList.Result.Builder resultBuilder = TransactionApprovedList.Result
         .newBuilder();
-    if (trx.getSignatureCount() > chainBaseManager.getDynamicPropertiesStore()
-        .getTotalSignNum()) {
+
+    TransactionCapsule trxCap = new TransactionCapsule(trx);
+    if (trxCap.getTotalSignatureCount()
+        > chainBaseManager.getDynamicPropertiesStore().getTotalSignNum()) {
       resultBuilder.setCode(TransactionApprovedList.Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);
@@ -676,13 +718,17 @@ public class Wallet {
           }
         }
 
+        List<ByteString> approveList = new ArrayList<>();
         if (trx.getSignatureCount() > 0) {
-          List<ByteString> approveList = new ArrayList<>();
           byte[] hash = Sha256Hash.hash(CommonParameter
               .getInstance().isECKeyCryptoEngine(), trx.getRawData().toByteArray());
           TransactionCapsule.checkWeight(permission, trx.getSignatureList(), hash, approveList);
-          tswBuilder.addAllApprovedList(approveList);
         }
+        if (trx.getPqAuthSigCount() > 0) {
+          TransactionCapsule.validatePQSignatureGetWeight(trx, permission,
+              chainBaseManager.getDynamicPropertiesStore(), approveList);
+        }
+        tswBuilder.addAllApprovedList(approveList);
         resultBuilder.setCode(TransactionApprovedList.Result.response_code.SUCCESS);
       } catch (SignatureFormatException signEx) {
         resultBuilder.setCode(TransactionApprovedList.Result.response_code.SIGNATURE_FORMAT_ERROR);
@@ -953,11 +999,18 @@ public class Wallet {
   public GrpcAPI.CanDelegatedMaxSizeResponseMessage getCanDelegatedMaxSize(
           ByteString ownerAddress,
           int resourceType) {
+    return getCanDelegatedMaxSize(ownerAddress, resourceType, PQScheme.UNKNOWN_PQ_SCHEME);
+  }
+
+  public GrpcAPI.CanDelegatedMaxSizeResponseMessage getCanDelegatedMaxSize(
+          ByteString ownerAddress,
+          int resourceType,
+          PQScheme pqScheme) {
     long canDelegatedMaxSize = 0L;
     GrpcAPI.CanDelegatedMaxSizeResponseMessage.Builder builder =
           GrpcAPI.CanDelegatedMaxSizeResponseMessage.newBuilder();
     if (Common.ResourceCode.BANDWIDTH.getNumber() == resourceType) {
-      canDelegatedMaxSize = this.calcCanDelegatedBandWidthMaxSize(ownerAddress);
+      canDelegatedMaxSize = this.calcCanDelegatedBandWidthMaxSize(ownerAddress, pqScheme);
     } else if (Common.ResourceCode.ENERGY.getNumber() == resourceType) {
       canDelegatedMaxSize = this.calcCanDelegatedEnergyMaxSize(ownerAddress);
     }
@@ -992,6 +1045,11 @@ public class Wallet {
 
   public long calcCanDelegatedBandWidthMaxSize(
           ByteString ownerAddress) {
+    return calcCanDelegatedBandWidthMaxSize(ownerAddress, PQScheme.UNKNOWN_PQ_SCHEME);
+  }
+
+  public long calcCanDelegatedBandWidthMaxSize(
+          ByteString ownerAddress, PQScheme pqScheme) {
     AccountStore accountStore = chainBaseManager.getAccountStore();
     DynamicPropertiesStore dynamicStore = chainBaseManager.getDynamicPropertiesStore();
     AccountCapsule ownerCapsule = accountStore.get(ownerAddress.toByteArray());
@@ -1004,7 +1062,7 @@ public class Wallet {
 
     long accountNetUsage = ownerCapsule.getNetUsage();
     accountNetUsage += TransactionUtil.estimateConsumeBandWidthSize(dynamicStore,
-            ownerCapsule.getFrozenV2BalanceForBandwidth());
+            ownerCapsule.getFrozenV2BalanceForBandwidth(), pqScheme);
 
     long netUsage = (long) (accountNetUsage * TRX_PRECISION * ((double)
             (dynamicStore.getTotalNetWeight()) / dynamicStore.getTotalNetLimit()));
@@ -1521,6 +1579,16 @@ public class Wallet {
     builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
         .setKey("getAllowHardenExchangeCalculation")
         .setValue(dbManager.getDynamicPropertiesStore().getAllowHardenExchangeCalculation())
+        .build());
+
+    builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
+        .setKey("getAllowFnDsa512")
+        .setValue(dbManager.getDynamicPropertiesStore().getAllowFnDsa512())
+        .build());
+
+    builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
+        .setKey("getAllowMlDsa44")
+        .setValue(dbManager.getDynamicPropertiesStore().getAllowMlDsa44())
         .build());
 
     return builder.build();
@@ -3157,8 +3225,14 @@ public class Wallet {
         StoreFactory.getInstance(), true, false);
     VMActuator vmActuator = new VMActuator(true);
 
-    vmActuator.validate(context);
-    vmActuator.execute(context);
+    try {
+      vmActuator.validate(context);
+      vmActuator.execute(context);
+    } finally {
+      // constant call runs on a pooled RPC worker; drop its thread-local VM config view so it
+      // can never leak into a later (block/broadcast) execution on the same thread.
+      VMConfig.clearLocalSnapshot();
+    }
 
     ProgramResult result = context.getProgramResult();
     if (!isEstimating && result.getException() != null

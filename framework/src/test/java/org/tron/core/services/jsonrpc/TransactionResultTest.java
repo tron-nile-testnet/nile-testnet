@@ -79,4 +79,109 @@ public class TransactionResultTest extends BaseTest {
     assertQuantity(transactionResult.getNonce());
   }
 
+  private Protocol.Transaction buildBaseTransaction() {
+    SmartContractOuterClass.TriggerSmartContract.Builder builder =
+        SmartContractOuterClass.TriggerSmartContract.newBuilder()
+            .setOwnerAddress(ByteString.copyFrom(ByteArray.fromHexString(OWNER_ADDRESS)))
+            .setContractAddress(ByteString.copyFrom(ByteArray.fromHexString(CONTRACT_ADDRESS)));
+    return new TransactionCapsule(builder.build(),
+        Protocol.Transaction.Contract.ContractType.TriggerSmartContract).getInstance();
+  }
+
+  // r[0..32] + s[32..64] + v[64], v stored as revId 0 so parseSignature normalizes it to 27.
+  private byte[] buildSignature() {
+    byte[] sign = new byte[65];
+    for (int i = 0; i < 32; i++) {
+      sign[i] = (byte) (i + 1); // r
+    }
+    for (int i = 32; i < 64; i++) {
+      sign[i] = (byte) (i + 1); // s
+    }
+    sign[64] = 0;
+    return sign;
+  }
+
+  private Protocol.PQAuthSig buildPqAuthSig() {
+    return Protocol.PQAuthSig.newBuilder()
+        .setScheme(Protocol.PQScheme.ML_DSA_44)
+        .setPublicKey(ByteString.copyFrom(new byte[] {1, 2, 3}))
+        .setSignature(ByteString.copyFrom(new byte[] {4, 5, 6}))
+        .build();
+  }
+
+  @Test
+  public void testParseSignatureWithNoSignature() {
+    TransactionResult transactionResult =
+        new TransactionResult(buildBaseTransaction(), wallet);
+    // No ECDSA signature and no PQ signature: v/r/s fall back to zero padding.
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[1]), transactionResult.getV());
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[32]), transactionResult.getR());
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[32]), transactionResult.getS());
+    Assert.assertNull(transactionResult.getPqAuthSigList());
+  }
+
+  @Test
+  public void testParseSignatureWithEcdsaSignatureOnly() {
+    byte[] sign = buildSignature();
+    Protocol.Transaction transaction = buildBaseTransaction().toBuilder()
+        .addSignature(ByteString.copyFrom(sign))
+        .build();
+
+    TransactionResult transactionResult = new TransactionResult(transaction, wallet);
+    Assert.assertEquals(ByteArray.toJsonHex(java.util.Arrays.copyOfRange(sign, 0, 32)),
+        transactionResult.getR());
+    Assert.assertEquals(ByteArray.toJsonHex(java.util.Arrays.copyOfRange(sign, 32, 64)),
+        transactionResult.getS());
+    // revId 0 is normalized to 27 (0x1b).
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[] {27}), transactionResult.getV());
+    Assert.assertNull(transactionResult.getPqAuthSigList());
+  }
+
+  @Test
+  public void testParseSignatureWithPqAuthSigOnly() {
+    Protocol.PQAuthSig pqAuthSig = buildPqAuthSig();
+    Protocol.Transaction transaction = buildBaseTransaction().toBuilder()
+        .addPqAuthSig(pqAuthSig)
+        .build();
+
+    TransactionResult transactionResult = new TransactionResult(transaction, wallet);
+    // No ECDSA signature: v/r/s fall back to zero padding.
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[1]), transactionResult.getV());
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[32]), transactionResult.getR());
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[32]), transactionResult.getS());
+    Assert.assertNotNull(transactionResult.getPqAuthSigList());
+    Assert.assertEquals(1, transactionResult.getPqAuthSigList().size());
+    TransactionResult.PQAuthSigResult result = transactionResult.getPqAuthSigList().get(0);
+    Assert.assertEquals(pqAuthSig.getScheme().name(), result.getScheme());
+    Assert.assertEquals(ByteArray.toJsonHex(pqAuthSig.getPublicKey().toByteArray()),
+        result.getPublicKey());
+    Assert.assertEquals(ByteArray.toJsonHex(pqAuthSig.getSignature().toByteArray()),
+        result.getSignature());
+  }
+
+  @Test
+  public void testParseSignatureWithEcdsaAndPqAuthSig() {
+    byte[] sign = buildSignature();
+    Protocol.PQAuthSig pqAuthSig = buildPqAuthSig();
+    Protocol.Transaction transaction = buildBaseTransaction().toBuilder()
+        .addSignature(ByteString.copyFrom(sign))
+        .addPqAuthSig(pqAuthSig)
+        .build();
+
+    TransactionResult transactionResult = new TransactionResult(transaction, wallet);
+    Assert.assertEquals(ByteArray.toJsonHex(java.util.Arrays.copyOfRange(sign, 0, 32)),
+        transactionResult.getR());
+    Assert.assertEquals(ByteArray.toJsonHex(java.util.Arrays.copyOfRange(sign, 32, 64)),
+        transactionResult.getS());
+    Assert.assertEquals(ByteArray.toJsonHex(new byte[] {27}), transactionResult.getV());
+    Assert.assertNotNull(transactionResult.getPqAuthSigList());
+    Assert.assertEquals(1, transactionResult.getPqAuthSigList().size());
+    TransactionResult.PQAuthSigResult result = transactionResult.getPqAuthSigList().get(0);
+    Assert.assertEquals(pqAuthSig.getScheme().name(), result.getScheme());
+    Assert.assertEquals(ByteArray.toJsonHex(pqAuthSig.getPublicKey().toByteArray()),
+        result.getPublicKey());
+    Assert.assertEquals(ByteArray.toJsonHex(pqAuthSig.getSignature().toByteArray()),
+        result.getSignature());
+  }
+
 }

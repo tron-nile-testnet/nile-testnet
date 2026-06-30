@@ -48,10 +48,18 @@ public class MetricsHistogram {
     init(MetricKeys.Histogram.BLOCK_FETCH_LATENCY, "fetch block latency.");
     init(MetricKeys.Histogram.BLOCK_RECEIVE_DELAY,
         "receive block delay time, receiveTime - blockTime.");
+    init(MetricKeys.Histogram.TX_FETCH_LATENCY,
+        "fetch transaction latency: GET_DATA send to full TXS received round-trip.");
+    init(MetricKeys.Histogram.HANDSHAKE_LATENCY,
+        "handshake round-trip latency on the SR<->FF path.");
 
     init(MetricKeys.Histogram.BLOCK_TRANSACTION_COUNT,
         "Distribution of transaction counts per block.",
         new double[]{0, 20, 50, 80, 100, 120, 140, 160, 180, 200, 230, 260, 300, 500, 2000, 5000, 10000},
+        MetricLabels.Histogram.MINER);
+    init(MetricKeys.Histogram.BLOCK_PQ_TRANSACTION_COUNT,
+        "Distribution of post-quantum transaction counts per block.",
+        new double[]{0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 3000},
         MetricLabels.Histogram.MINER);
   }
 

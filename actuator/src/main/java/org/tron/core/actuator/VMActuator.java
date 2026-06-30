@@ -120,7 +120,7 @@ public class VMActuator implements Actuator2 {
     }
 
     // Load Config
-    ConfigLoader.load(context.getStoreFactory());
+    ConfigLoader.load(context.getStoreFactory(), isConstantCall);
     // Warm up registry class
     OperationRegistry.init();
     trx = context.getTrxCap().getInstance();
@@ -806,8 +806,7 @@ public class VMActuator implements Actuator2 {
   }
 
   private boolean isCheckTransaction() {
-    return this.blockCap != null && !this.blockCap.getInstance().getBlockHeader()
-        .getWitnessSignature().isEmpty();
+    return this.blockCap != null && this.blockCap.hasWitnessSignature();
   }
 
 }

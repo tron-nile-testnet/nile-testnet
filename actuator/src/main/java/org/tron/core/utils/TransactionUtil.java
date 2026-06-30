@@ -17,8 +17,8 @@ package org.tron.core.utils;
 
 import static org.tron.common.crypto.Hash.sha3omit12;
 import static org.tron.common.math.Maths.max;
-import static org.tron.core.config.Parameter.ChainConstant.DELEGATE_COST_BASE_SIZE;
 import static org.tron.core.Constant.PER_SIGN_LENGTH;
+import static org.tron.core.config.Parameter.ChainConstant.DELEGATE_COST_BASE_SIZE;
 import static org.tron.core.config.Parameter.ChainConstant.TRX_PRECISION;
 
 import com.google.common.base.CaseFormat;
@@ -38,6 +38,8 @@ import org.tron.api.GrpcAPI.Return.response_code;
 import org.tron.api.GrpcAPI.TransactionExtention;
 import org.tron.api.GrpcAPI.TransactionSignWeight;
 import org.tron.api.GrpcAPI.TransactionSignWeight.Result;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
+import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.ChainBaseManager;
@@ -46,14 +48,15 @@ import org.tron.core.capsule.TransactionCapsule;
 import org.tron.core.exception.PermissionException;
 import org.tron.core.exception.SignatureFormatException;
 import org.tron.core.store.DynamicPropertiesStore;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Permission;
 import org.tron.protos.Protocol.Permission.PermissionType;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract;
 import org.tron.protos.Protocol.Transaction.Result.contractResult;
+import org.tron.protos.contract.BalanceContract.DelegateResourceContract;
 import org.tron.protos.contract.SmartContractOuterClass.CreateSmartContract;
 import org.tron.protos.contract.SmartContractOuterClass.TriggerSmartContract;
-import org.tron.protos.contract.BalanceContract.DelegateResourceContract;
 
 @Slf4j(topic = "capsule")
 @Component
@@ -83,7 +86,8 @@ public class TransactionUtil {
   }
 
   public static boolean validAccountId(byte[] accountId) {
-    return validReadableBytes(accountId, MAX_ACCOUNT_ID_LEN) && accountId.length >= MIN_ACCOUNT_ID_LEN;
+    return validReadableBytes(accountId, MAX_ACCOUNT_ID_LEN)
+        && accountId.length >= MIN_ACCOUNT_ID_LEN;
   }
 
   public static boolean validAssetName(byte[] assetName) {
@@ -185,6 +189,9 @@ public class TransactionUtil {
   }
 
   public static Transaction truncateSignatures(Transaction trx) {
+    // Only the legacy ECDSA signatures are length-normalised here. pq_auth_sig is
+    // intentionally left untouched (clearSignature() does not clear it): PQ
+    // signatures are fixed/banded length and must not be truncated.
     Transaction.Builder builder = trx.toBuilder().clearSignature();
     for (ByteString sig : trx.getSignatureList()) {
       if (sig.size() > PER_SIGN_LENGTH) {
@@ -199,8 +206,8 @@ public class TransactionUtil {
   public TransactionSignWeight getTransactionSignWeight(Transaction trx) {
     TransactionSignWeight.Builder tswBuilder = TransactionSignWeight.newBuilder();
     Result.Builder resultBuilder = Result.newBuilder();
-    if (trx.getSignatureCount() > chainBaseManager.getDynamicPropertiesStore()
-        .getTotalSignNum()) {
+    int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+    if (new TransactionCapsule(trx).getTotalSignatureCount() > totalSignNum) {
       resultBuilder.setCode(Result.response_code.OTHER_ERROR);
       resultBuilder.setMessage("too many signatures");
       tswBuilder.setResult(resultBuilder);
@@ -243,14 +250,26 @@ public class TransactionUtil {
           }
         }
         tswBuilder.setPermission(permission);
+        long currentWeight = 0L;
+        List<ByteString> approveList = new ArrayList<>();
         if (trx.getSignatureCount() > 0) {
-          List<ByteString> approveList = new ArrayList<>();
-          long currentWeight = TransactionCapsule.checkWeight(permission, trx.getSignatureList(),
+          currentWeight = TransactionCapsule.checkWeight(permission, trx.getSignatureList(),
               Sha256Hash.hash(CommonParameter.getInstance()
                   .isECKeyCryptoEngine(), trx.getRawData().toByteArray()), approveList);
-          tswBuilder.addAllApprovedList(approveList);
-          tswBuilder.setCurrentWeight(currentWeight);
         }
+        if (trx.getPqAuthSigCount() > 0) {
+          try {
+            long pqWeight = TransactionCapsule.validatePQSignatureGetWeight(trx, permission,
+                chainBaseManager.getDynamicPropertiesStore(), approveList);
+            currentWeight = StrictMathWrapper.addExact(currentWeight, pqWeight);
+          } catch (ArithmeticException e) {
+            throw new PermissionException("weight overflow");
+          }
+        }
+
+        tswBuilder.addAllApprovedList(approveList);
+        tswBuilder.setCurrentWeight(currentWeight);
+
         if (tswBuilder.getCurrentWeight() >= permission.getThreshold()) {
           resultBuilder.setCode(Result.response_code.ENOUGH_PERMISSION);
         } else {
@@ -276,16 +295,28 @@ public class TransactionUtil {
   }
 
   public static long estimateConsumeBandWidthSize(DynamicPropertiesStore dps, long balance) {
+    return estimateConsumeBandWidthSize(dps, balance, PQScheme.UNKNOWN_PQ_SCHEME);
+  }
+
+  /**
+   * Estimate the bandwidth a delegate-resource transaction consumes. The base cost
+   * ({@link org.tron.core.config.Parameter.ChainConstant#DELEGATE_COST_BASE_SIZE}) assumes an
+   * ECDSA signature. When {@code pqScheme} is a registered post-quantum scheme, the much larger
+   * PQAuthSig wire size is added on top so the estimate stays an upper bound for PQ accounts;
+   * {@code null} / {@code UNKNOWN_PQ_SCHEME} keeps the ECDSA-sized estimate unchanged.
+   */
+  public static long estimateConsumeBandWidthSize(DynamicPropertiesStore dps, long balance,
+      PQScheme pqScheme) {
     DelegateResourceContract.Builder builder;
     if (dps.supportMaxDelegateLockPeriod()) {
       builder = DelegateResourceContract.newBuilder()
-              .setLock(true)
-              .setLockPeriod(dps.getMaxDelegateLockPeriod())
-              .setBalance(balance);
+          .setLock(true)
+          .setLockPeriod(dps.getMaxDelegateLockPeriod())
+          .setBalance(balance);
     } else {
       builder = DelegateResourceContract.newBuilder()
-              .setLock(true)
-              .setBalance(balance);
+          .setLock(true)
+          .setBalance(balance);
     }
     long builderSize = builder.build().getSerializedSize();
     DelegateResourceContract.Builder builder2 = DelegateResourceContract.newBuilder()
@@ -293,6 +324,11 @@ public class TransactionUtil {
     long builder2Size = builder2.build().getSerializedSize();
     long addSize = max(builderSize - builder2Size, 0L, dps.disableJavaLangMath());
 
-    return DELEGATE_COST_BASE_SIZE + addSize;
+    long pqOverhead = 0L;
+    if (PQSchemeRegistry.contains(pqScheme)) {
+      pqOverhead = PQSchemeRegistry.computePQAuthSigWireSize(pqScheme);
+    }
+
+    return DELEGATE_COST_BASE_SIZE + addSize + pqOverhead;
   }
 }

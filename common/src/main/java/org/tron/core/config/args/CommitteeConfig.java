@@ -65,6 +65,8 @@ public class CommitteeConfig {
   private long dynamicEnergyThreshold = 0;
   private long dynamicEnergyIncreaseFactor = 0;
   private long dynamicEnergyMaxFactor = 0;
+  private long allowFnDsa512 = 0;
+  private long allowMlDsa44 = 0;
 
   // proposalExpireTime is NOT a committee field — it's in block.* and handled by BlockConfig
   // Defaults come from reference.conf (loaded globally via Configuration.java)
@@ -155,6 +157,22 @@ public class CommitteeConfig {
     }
     if (memoFee > 1_000_000_000L) {
       memoFee = 1_000_000_000L;
+    }
+
+    // clamp allowFnDsa512 to 0-1
+    if (allowFnDsa512 < 0) {
+      allowFnDsa512 = 0;
+    }
+    if (allowFnDsa512 > 1) {
+      allowFnDsa512 = 1;
+    }
+
+    // clamp allowMlDsa44 to 0-1
+    if (allowMlDsa44 < 0) {
+      allowMlDsa44 = 0;
+    }
+    if (allowMlDsa44 > 1) {
+      allowMlDsa44 = 1;
     }
 
     // cross-field: allowOldRewardOpt requires at least one reward/vote flag

@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -700,6 +701,42 @@ public class ManagerMockTest {
     verify(goodBlock, atLeastOnce()).validateSignature(
         any(DynamicPropertiesStore.class), any(AccountStore.class));
     verify(goodBlock, atLeastOnce()).setSwitch(true);
+  }
+
+  @SneakyThrows
+  @Test
+  public void testPushTransactionPqPendingFull() {
+    Manager dbManager = spy(new Manager());
+
+    ChainBaseManager cbm = mock(ChainBaseManager.class);
+    DynamicPropertiesStore dps = mock(DynamicPropertiesStore.class);
+    AccountStore accountStore = mock(AccountStore.class);
+    when(cbm.getDynamicPropertiesStore()).thenReturn(dps);
+    when(cbm.getAccountStore()).thenReturn(accountStore);
+    setField(dbManager, "chainBaseManager", cbm);
+
+    BalanceContract.TransferContract tc = BalanceContract.TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFromUtf8("aaa"))
+        .setToAddress(ByteString.copyFromUtf8("bbb"))
+        .setAmount(1)
+        .build();
+    Protocol.Transaction txn = Protocol.Transaction.newBuilder()
+        .setRawData(Protocol.Transaction.raw.newBuilder()
+            .addContract(Protocol.Transaction.Contract.newBuilder()
+                .setParameter(com.google.protobuf.Any.pack(tc))
+                .setType(Protocol.Transaction.Contract.ContractType.TransferContract)))
+        .addPqAuthSig(Protocol.PQAuthSig.getDefaultInstance())
+        .build();
+    TransactionCapsule trxMock = mock(TransactionCapsule.class);
+    when(trxMock.getInstance()).thenReturn(txn);
+    when(trxMock.validateSignature(
+        any(AccountStore.class), any(DynamicPropertiesStore.class))).thenReturn(true);
+    when(trxMock.getTransactionId()).thenReturn(Sha256Hash.ZERO_HASH);
+
+    setField(dbManager, "pqTransInPendingCounts", new AtomicInteger(Integer.MAX_VALUE));
+
+    boolean result = dbManager.pushTransaction(trxMock);
+    Assert.assertFalse(result);
   }
 
   private static void setField(Object target, String name, Object value) throws Exception {

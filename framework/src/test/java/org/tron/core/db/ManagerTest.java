@@ -67,6 +67,7 @@ import org.tron.core.capsule.AccountCapsule;
 import org.tron.core.capsule.AssetIssueCapsule;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.capsule.BytesCapsule;
+import org.tron.core.capsule.ReceiptCapsule;
 import org.tron.core.capsule.TransactionCapsule;
 import org.tron.core.capsule.TransactionInfoCapsule;
 import org.tron.core.capsule.TransactionRetCapsule;
@@ -110,6 +111,8 @@ import org.tron.core.store.StoreFactory;
 import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.Account;
 import org.tron.protos.Protocol.Block;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
 import org.tron.protos.contract.AccountContract;
@@ -883,6 +886,143 @@ public class ManagerTest extends BaseMethodTest {
     dbManager.getPendingTransactions().add(new TransactionCapsule(t2Bak));
     txs = dbManager.getVerifyTxs(capsule);
     Assert.assertEquals(txs.size(), 1);
+  }
+
+  @Test
+  public void getVerifyTxsDoesNotSkipForgedPqAuthSig() {
+    // A PQ transaction's txid hashes raw_data only, so a block tx that keeps the
+    // same raw_data but swaps in a different/forged pq_auth_sig shares the txid of
+    // a valid tx in the pending pool. The verify-cache must NOT mark it verified:
+    // otherwise nodes holding the valid tx skip PQ verification and accept a block
+    // that nodes without it reject -> consensus fork.
+    TransferContract c = TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFrom("pq".getBytes()))
+        .setAmount(11).build();
+    TransactionCapsule base = new TransactionCapsule(c, ContractType.TransferContract);
+
+    PQAuthSig pqValid = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setSignature(ByteString.copyFrom("valid-pq-sig".getBytes())).build();
+    PQAuthSig pqForged = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setSignature(ByteString.copyFrom("forged-pq-sig".getBytes())).build();
+
+    Transaction pendingTx = base.getInstance().toBuilder().addPqAuthSig(pqValid).build();
+    Transaction blockTx = base.getInstance().toBuilder().addPqAuthSig(pqForged).build();
+
+    // Same txid (raw_data identical), different pq_auth_sig.
+    Assert.assertEquals(new TransactionCapsule(pendingTx).getTransactionId(),
+        new TransactionCapsule(blockTx).getTransactionId());
+
+    // Forged pq_auth_sig must force re-verification (NOT cached).
+    List<Transaction> list = new ArrayList<>();
+    list.add(blockTx);
+    BlockCapsule capsule = new BlockCapsule(0, ByteString.EMPTY, 0, list);
+    dbManager.getPendingTransactions().clear();
+    dbManager.getPendingTransactions().add(new TransactionCapsule(pendingTx));
+    List<TransactionCapsule> txs = dbManager.getVerifyTxs(capsule);
+    Assert.assertEquals(1, txs.size());
+
+    // Control: identical pq_auth_sig is safe to reuse from cache.
+    list.clear();
+    list.add(pendingTx);
+    capsule = new BlockCapsule(0, ByteString.EMPTY, 0, list);
+    dbManager.getPendingTransactions().clear();
+    dbManager.getPendingTransactions().add(new TransactionCapsule(pendingTx));
+    txs = dbManager.getVerifyTxs(capsule);
+    Assert.assertEquals(0, txs.size());
+
+    dbManager.getPendingTransactions().clear();
+  }
+
+  @Test
+  public void isSameSigComparesBothSignatureChannels() throws Exception {
+    Method isSameSig = Manager.class.getDeclaredMethod("isSameSig",
+        TransactionCapsule.class, TransactionCapsule.class);
+    isSameSig.setAccessible(true);
+
+    TransferContract c = TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFrom("ss".getBytes())).setAmount(3).build();
+    Transaction base = new TransactionCapsule(c, ContractType.TransferContract).getInstance();
+
+    ByteString ecdsa = ByteString.copyFrom("ecdsa-sig".getBytes());
+    PQAuthSig pqA = PQAuthSig.newBuilder().setScheme(PQScheme.FN_DSA_512)
+        .setSignature(ByteString.copyFrom("pq-A".getBytes())).build();
+    PQAuthSig pqB = PQAuthSig.newBuilder().setScheme(PQScheme.FN_DSA_512)
+        .setSignature(ByteString.copyFrom("pq-B".getBytes())).build();
+
+    TransactionCapsule a = new TransactionCapsule(
+        base.toBuilder().addSignature(ecdsa).addPqAuthSig(pqA).build());
+    TransactionCapsule identical = new TransactionCapsule(
+        base.toBuilder().addSignature(ecdsa).addPqAuthSig(pqA).build());
+    TransactionCapsule diffPq = new TransactionCapsule(
+        base.toBuilder().addSignature(ecdsa).addPqAuthSig(pqB).build());
+    TransactionCapsule diffEcdsa = new TransactionCapsule(
+        base.toBuilder().addSignature(ByteString.copyFrom("other".getBytes()))
+            .addPqAuthSig(pqA).build());
+    TransactionCapsule noPq = new TransactionCapsule(base.toBuilder().addSignature(ecdsa).build());
+
+    // Null handling.
+    Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, null, a));
+    Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, a, null));
+    // Identical ECDSA + identical pq_auth_sig -> same (cache reuse is safe).
+    Assert.assertTrue((Boolean) isSameSig.invoke(dbManager, a, identical));
+    // Same ECDSA but a different pq_auth_sig -> NOT same (the fork fix).
+    Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, a, diffPq));
+    // Different ECDSA -> not same.
+    Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, a, diffEcdsa));
+    // Same ECDSA but differing pq_auth_sig count (1 vs 0) -> not same.
+    Assert.assertFalse((Boolean) isSameSig.invoke(dbManager, a, noPq));
+  }
+
+  private TransactionCapsule buildPqMultiSignTx(byte[] owner, int pqSigCount) {
+    TransferContract c = TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFrom(owner)).setAmount(1).build();
+    Transaction.Builder b = new TransactionCapsule(c, ContractType.TransferContract)
+        .getInstance().toBuilder();
+    for (int i = 0; i < pqSigCount; i++) {
+      b.addPqAuthSig(PQAuthSig.newBuilder().setScheme(PQScheme.FN_DSA_512)
+          .setSignature(ByteString.copyFrom(("pq-" + i).getBytes())).build());
+    }
+    return new TransactionCapsule(b.build());
+  }
+
+  @Test
+  public void consumeMultiSignFeeChargesPqOnlyMultiSign() throws Exception {
+    // A PQ-only multi-sign tx (0 ECDSA, 2 pq_auth_sig) must pay the multi-sign fee.
+    // The old gate getSignatureCount() > 1 saw 0 here and charged nothing; the fix
+    // counts both channels via getTotalSignatureCount().
+    byte[] owner = ByteArray.fromHexString("41abd4b9367799eaa3197fecb144eb71de1e049abc");
+    long fee = dbManager.getDynamicPropertiesStore().getMultiSignFee();
+    long initBalance = fee * 10;
+    AccountCapsule acc = new AccountCapsule(Account.newBuilder()
+        .setAddress(ByteString.copyFrom(owner)).setBalance(initBalance).build());
+    dbManager.getAccountStore().put(owner, acc);
+
+    TransactionTrace trace = mock(TransactionTrace.class);
+    when(trace.getReceipt()).thenReturn(mock(ReceiptCapsule.class));
+
+    dbManager.consumeMultiSignFee(buildPqMultiSignTx(owner, 2), trace);
+
+    Assert.assertEquals(initBalance - fee, dbManager.getAccountStore().get(owner).getBalance());
+  }
+
+  @Test
+  public void consumeMultiSignFeeSkipsSinglePqSig() throws Exception {
+    // One signature (1 pq_auth_sig) is not multi-sign -> no fee charged.
+    byte[] owner = ByteArray.fromHexString("41abd4b9367799eaa3197fecb144eb71de1e049abd");
+    long fee = dbManager.getDynamicPropertiesStore().getMultiSignFee();
+    long initBalance = fee * 10;
+    AccountCapsule acc = new AccountCapsule(Account.newBuilder()
+        .setAddress(ByteString.copyFrom(owner)).setBalance(initBalance).build());
+    dbManager.getAccountStore().put(owner, acc);
+
+    TransactionTrace trace = mock(TransactionTrace.class);
+    when(trace.getReceipt()).thenReturn(mock(ReceiptCapsule.class));
+
+    dbManager.consumeMultiSignFee(buildPqMultiSignTx(owner, 1), trace);
+
+    Assert.assertEquals(initBalance, dbManager.getAccountStore().get(owner).getBalance());
   }
 
   @Test
