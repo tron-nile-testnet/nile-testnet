@@ -67,6 +67,24 @@ public class MetricKeys {
     public static final String BLOCK_FETCH_LATENCY = "tron:block_fetch_latency_seconds";
     public static final String BLOCK_RECEIVE_DELAY = "tron:block_receive_delay_seconds";
     public static final String BLOCK_TRANSACTION_COUNT = "tron:block_transaction_count";
+    public static final String BLOCK_PQ_TRANSACTION_COUNT = "tron:block_pq_transaction_count";
+    /**
+     * Transaction fetch round-trip latency in seconds: from sending
+     * {@code GET_DATA (FETCH_INV_DATA)} to receiving the full {@code TXS}
+     * message.
+     * <p>Companion to {@link #BLOCK_FETCH_LATENCY} for the TX path.
+     */
+    public static final String TX_FETCH_LATENCY = "tron:tx_fetch_latency_seconds";
+
+    /**
+     * Handshake round-trip latency in seconds: from TCP connection
+     * establishment to {@code HelloMessage} fully processed.
+     * <p>Sampled only on the SR{@literal <->}FF handshake path — either
+     * the received {@code HelloMessage} carries a witness signature, or
+     * the remote peer is in {@code node.fastForward.nodes}. Regular
+     * FullNode handshakes are not sampled.
+     */
+    public static final String HANDSHAKE_LATENCY = "tron:handshake_latency_seconds";
 
     private Histogram() {
       throw new IllegalStateException("Histogram");

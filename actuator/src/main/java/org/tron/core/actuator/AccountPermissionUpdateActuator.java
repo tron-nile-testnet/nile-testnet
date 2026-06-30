@@ -1,6 +1,7 @@
 package org.tron.core.actuator;
 
 import static java.util.stream.Collectors.toList;
+import static org.tron.core.Constant.MAX_ACTIVE_PERMISSION_CNT;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -70,9 +71,10 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
 
   private boolean checkPermission(Permission permission) throws ContractValidateException {
     DynamicPropertiesStore dynamicStore = chainBaseManager.getDynamicPropertiesStore();
-    if (permission.getKeysCount() > dynamicStore.getTotalSignNum()) {
+    int totalSignNum = dynamicStore.getTotalSignNum();
+    if (permission.getKeysCount() > totalSignNum) {
       throw new ContractValidateException("number of keys in permission should not be greater "
-          + "than " + dynamicStore.getTotalSignNum());
+          + "than " + totalSignNum);
     }
     if (permission.getKeysCount() == 0) {
       throw new ContractValidateException("key's count should be greater than 0");
@@ -95,13 +97,14 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
     long weightSum = 0;
     List<ByteString> addressList = permission.getKeysList()
         .stream()
-        .map(x -> x.getAddress())
+        .map(Key::getAddress)
         .distinct()
         .collect(toList());
     if (addressList.size() != permission.getKeysList().size()) {
       throw new ContractValidateException(
           "address should be distinct in permission " + permission.getType());
     }
+
     for (Key key : permission.getKeysList()) {
       if (!DecodeUtil.addressValid(key.getAddress().toByteArray())) {
         throw new ContractValidateException("key is not a validate address");
@@ -201,7 +204,7 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
     if (accountPermissionUpdateContract.getActivesCount() == 0) {
       throw new ContractValidateException("active permission is missed");
     }
-    if (accountPermissionUpdateContract.getActivesCount() > 8) {
+    if (accountPermissionUpdateContract.getActivesCount() > MAX_ACTIVE_PERMISSION_CNT) {
       throw new ContractValidateException("active permission is too many");
     }
 
@@ -237,4 +240,5 @@ public class AccountPermissionUpdateActuator extends AbstractActuator {
   public long calcFee() {
     return chainBaseManager.getDynamicPropertiesStore().getUpdateAccountPermissionFee();
   }
+
 }

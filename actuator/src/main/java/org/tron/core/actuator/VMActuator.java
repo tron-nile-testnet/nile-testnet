@@ -806,8 +806,7 @@ public class VMActuator implements Actuator2 {
   }
 
   private boolean isCheckTransaction() {
-    return this.blockCap != null && !this.blockCap.getInstance().getBlockHeader()
-        .getWitnessSignature().isEmpty();
+    return this.blockCap != null && this.blockCap.hasWitnessSignature();
   }
 
 }

@@ -16,6 +16,7 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigObject;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -116,9 +117,16 @@ public class TronErrorTest {
   }
 
   @Test
-  public void witnessInitTest() {
+  public void witnessInitTest() throws IOException {
+    // Inherit config-test.conf and override every witness-key source so that
+    // --witness has nothing to initialize from.
+    Path conf = temporaryFolder.newFile("no-witness.conf").toPath();
+    String content = "include classpath(\"" + TestConstants.TEST_CONF + "\")\n"
+        + "localwitness = []\n"
+        + "localPqWitness.keys = []\n";
+    Files.write(conf, content.getBytes());
     TronError thrown = assertThrows(TronError.class, () -> {
-      Args.setParam(new String[]{"--witness"}, TestConstants.TEST_CONF);
+      Args.setParam(new String[]{"--witness"}, conf.toString());
     });
     assertEquals(TronError.ErrCode.WITNESS_INIT, thrown.getErrCode());
   }

@@ -121,14 +121,29 @@ public class PrecompiledContracts {
   private static final KZGPointEvaluation kzgPointEvaluation = new KZGPointEvaluation();
   private static final P256Verify p256Verify = new P256Verify();
 
+  private static final PQPrecompiledContracts.VerifyFnDsa512 verifyFnDsa512 =
+      new PQPrecompiledContracts.VerifyFnDsa512();
+  private static final PQPrecompiledContracts.BatchValidateFnDsa512 batchValidateFnDsa512 =
+      new PQPrecompiledContracts.BatchValidateFnDsa512();
+
+  private static final PQPrecompiledContracts.VerifyMlDsa44 verifyMlDsa44 =
+      new PQPrecompiledContracts.VerifyMlDsa44();
+  private static final PQPrecompiledContracts.BatchValidateMlDsa44 batchValidateMlDsa44 =
+      new PQPrecompiledContracts.BatchValidateMlDsa44();
+  private static final PQPrecompiledContracts.ValidateMultiPQSig validateMultiPqSig =
+      new PQPrecompiledContracts.ValidateMultiPQSig();
+
   // FreezeV2 PrecompileContracts
   private static final GetChainParameter getChainParameter = new GetChainParameter();
-  private static final AvailableUnfreezeV2Size availableUnfreezeV2Size = new AvailableUnfreezeV2Size();
+  private static final AvailableUnfreezeV2Size availableUnfreezeV2Size =
+      new AvailableUnfreezeV2Size();
   private static final UnfreezableBalanceV2 unfreezableBalanceV2 = new UnfreezableBalanceV2();
-  private static final ExpireUnfreezeBalanceV2 expireUnfreezeBalanceV2 = new ExpireUnfreezeBalanceV2();
+  private static final ExpireUnfreezeBalanceV2 expireUnfreezeBalanceV2 =
+      new ExpireUnfreezeBalanceV2();
   private static final DelegatableResource delegatableResource = new DelegatableResource();
   private static final ResourceV2 resourceV2 = new ResourceV2();
-  private static final CheckUnDelegateResource checkUnDelegateResource = new CheckUnDelegateResource();
+  private static final CheckUnDelegateResource checkUnDelegateResource =
+      new CheckUnDelegateResource();
   private static final ResourceUsage resourceUsage = new ResourceUsage();
   private static final TotalResource totalResource = new TotalResource();
   private static final TotalDelegatedResource totalDelegatedResource = new TotalDelegatedResource();
@@ -219,6 +234,33 @@ public class PrecompiledContracts {
   private static final DataWord kzgPointEvaluationAddr = new DataWord(
       "000000000000000000000000000000000000000000000000000000000002000a");
 
+  // EIP-8052 0x02000016: FN-DSA / Falcon-512 verify (FIPS-206 draft). Input layout:
+  // [msg 32B | sig 666B (headerless salt‖s2 slot, zero-padded; body ends at last
+  // non-zero byte) | pk 896B]. Total 1594 B. The slot holds the EIP-8052 headerless
+  // signature (no 0x39 byte); the precompile re-inserts the header before verifying.
+  private static final DataWord verifyFnDsa512Addr = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000002000016");
+
+  // 0x02000017: batch independent Falcon-512 verify — bitmap of (sig, pk, addr) matches.
+  private static final DataWord batchValidateFnDsa512Addr = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000002000017");
+
+  // 0x02000018: ML-DSA-44 single verify (FIPS 204 / Dilithium-2).
+  private static final DataWord verifyMlDsa44Addr = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000002000018");
+
+  // 0x02000019: batch independent ML-DSA-44 verify — bitmap output, same shape as 0x02000017.
+  private static final DataWord batchValidateMlDsa44Addr = new DataWord(
+      "0000000000000000000000000000000000000000000000000000000002000019");
+
+  // 0x0200001a: algorithm-agnostic Permission multi-sign — accepts ECDSA and any
+  // registered PQ scheme (Falcon-512, ML-DSA-44, ...) against the same
+  // Permission.keys[] in one call, dispatched by an explicit per-entry scheme
+  // tag. Replaces the earlier Falcon-only 0x02000017 and Dilithium-only draft, which
+  // were never activated.
+  private static final DataWord validateMultiPqSigAddr = new DataWord(
+      "000000000000000000000000000000000000000000000000000000000200001a");
+
   public static PrecompiledContract getOptimizedContractForConstant(PrecompiledContract contract) {
     try {
       Constructor<?> constructor = contract.getClass().getDeclaredConstructor();
@@ -307,6 +349,38 @@ public class PrecompiledContracts {
       return p256Verify;
     }
 
+    // 0x0200001a ValidateMultiPQSig is algorithm-agnostic and dispatches per entry,
+    // so it is available whenever ANY registered PQ scheme is active. Per-entry
+    // runtime checks inside the precompile still reject scheme tags whose
+    // proposal hasn't passed.
+    if (VMConfig.allowFnDsa512() || VMConfig.allowMlDsa44()) {
+      if (address.equals(validateMultiPqSigAddr)) {
+        return validateMultiPqSig;
+      }
+    }
+
+    // FN-DSA-512 (Falcon): single verify and batch verify are gated by their
+    // own proposal flag.
+    if (VMConfig.allowFnDsa512()) {
+      if (address.equals(verifyFnDsa512Addr)) {
+        return verifyFnDsa512;
+      }
+      if (address.equals(batchValidateFnDsa512Addr)) {
+        return batchValidateFnDsa512;
+      }
+    }
+
+    // ML-DSA-44 (FIPS 204 / Dilithium-2): single verify and batch verify are
+    // gated by their own proposal flag.
+    if (VMConfig.allowMlDsa44()) {
+      if (address.equals(verifyMlDsa44Addr)) {
+        return verifyMlDsa44;
+      }
+      if (address.equals(batchValidateMlDsa44Addr)) {
+        return batchValidateMlDsa44;
+      }
+    }
+
     if (VMConfig.allowTvmFreezeV2()) {
       if (address.equals(getChainParameterAddr)) {
         return getChainParameter;
@@ -378,7 +452,7 @@ public class PrecompiledContracts {
     return res;
   }
 
-  private static byte[] recoverAddrBySign(byte[] sign, byte[] hash) {
+  static byte[] recoverAddrBySign(byte[] sign, byte[] hash) {
     byte[] out = null;
     if (ArrayUtils.isEmpty(sign) || sign.length < 65) {
       return new byte[0];
@@ -397,7 +471,7 @@ public class PrecompiledContracts {
     return out;
   }
 
-  private static byte[][] extractBytes32Array(DataWord[] words, int offset) {
+  static byte[][] extractBytes32Array(DataWord[] words, int offset) {
     int len = words[offset].intValueSafe();
     byte[][] bytes32Array = new byte[len][];
     for (int i = 0; i < len; i++) {
@@ -421,7 +495,7 @@ public class PrecompiledContracts {
     return bytesArray;
   }
 
-  private static byte[][] extractSigArray(DataWord[] words, int offset, byte[] data) {
+  static byte[][] extractSigArray(DataWord[] words, int offset, byte[] data) {
     if (offset > words.length - 1) {
       return new byte[0][];
     }
@@ -435,7 +509,7 @@ public class PrecompiledContracts {
     return bytesArray;
   }
 
-  private static byte[] extractBytes(byte[] data, int offset, int len) {
+  static byte[] extractBytes(byte[] data, int offset, int len) {
     return Arrays.copyOfRange(data, offset, offset + len);
   }
 
@@ -774,8 +848,7 @@ public class PrecompiledContracts {
      * TIP-7883: ModExp gas cost increase.
      * New pricing formula with higher minimum cost and no divisor.
      */
-    private long getEnergyTIP7883(int baseLen, int modLen,
-                                  byte[] expHighBytes, int expLen) {
+    private long getEnergyTIP7883(int baseLen, int modLen, byte[] expHighBytes, int expLen) {
       long multComplexity = getMultComplexityTIP7883(baseLen, modLen);
       long iterCount = getIterationCountTIP7883(expHighBytes, expLen);
 
@@ -1155,7 +1228,7 @@ public class PrecompiledContracts {
       try {
         return doExecute(data);
       } catch (Throwable t) {
-        if (t instanceof InterruptedException){
+        if (t instanceof InterruptedException) {
           Thread.currentThread().interrupt();
         }
         return Pair.of(true, new byte[WORD_SIZE]);
@@ -1250,8 +1323,6 @@ public class PrecompiledContracts {
       private byte[] addr;
       private int nonce;
     }
-
-
   }
 
   public abstract static class VerifyProof extends PrecompiledContract {
@@ -2386,7 +2457,6 @@ public class PrecompiledContracts {
     }
   }
 
-
   public static class P256Verify extends PrecompiledContract {
 
     private static final X9ECParameters CURVE = SECNamedCurves.getByName("secp256r1");
@@ -2441,5 +2511,4 @@ public class PrecompiledContracts {
       }
     }
   }
-
 }
