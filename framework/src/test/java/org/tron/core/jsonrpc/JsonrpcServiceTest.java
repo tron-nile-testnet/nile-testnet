@@ -26,6 +26,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.bouncycastle.util.encoders.Hex;
+import org.eclipse.jetty.http.HttpStatus;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -1489,6 +1490,52 @@ public class JsonrpcServiceTest extends BaseTest {
   }
 
   @Test
+  public void testBuildCreateSmartContractAcceptsNullAbiOutputsOverHttp() {
+    fullNodeJsonRpcHttpService.start();
+    try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+      JsonObject buildArgs = new JsonObject();
+      buildArgs.addProperty("from", "0xabd4b9367799eaa3197fecb144eb71de1e049abc");
+      buildArgs.addProperty("data", "608060405234801561001057600080fd5b50");
+      buildArgs.addProperty("gas", "0x3b9aca00");
+      buildArgs.addProperty("abi", "[{\"inputs\":[],\"name\":\"test\",\"outputs\":null,"
+          + "\"type\":\"function\"}]");
+      JsonArray params = new JsonArray();
+      params.add(buildArgs);
+      JsonObject requestBody = new JsonObject();
+      requestBody.addProperty("jsonrpc", "2.0");
+      requestBody.addProperty("method", "buildTransaction");
+      requestBody.add("params", params);
+      requestBody.addProperty("id", 1);
+
+      HttpPost httpPost = new HttpPost("http://127.0.0.1:"
+          + CommonParameter.getInstance().getJsonRpcHttpFullNodePort() + "/jsonrpc");
+      httpPost.addHeader("Content-Type", "application/json");
+      httpPost.setEntity(new StringEntity(requestBody.toString()));
+      try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+        String resp = EntityUtils.toString(response.getEntity());
+        JSONObject json = JSON.parseObject(resp);
+        Assert.assertNull(resp, json.getJSONObject("error"));
+        JSONObject tx = json.getJSONObject("result").getJSONObject("transaction");
+        Assert.assertNotNull("transaction must be a JSON object", tx);
+
+        JSONArray contracts = tx.getJSONObject("raw_data").getJSONArray("contract");
+        Assert.assertEquals(1, contracts.size());
+        JSONObject contract = contracts.getJSONObject(0);
+        Assert.assertEquals("CreateSmartContract", contract.getString("type"));
+        JSONObject value = contract.getJSONObject("parameter").getJSONObject("value");
+        JSONObject abi = value.getJSONObject("new_contract").getJSONObject("abi");
+        JSONArray entrys = abi.getJSONArray("entrys");
+        Assert.assertEquals(1, entrys.size());
+        Assert.assertFalse(entrys.getJSONObject(0).containsKey("outputs"));
+      }
+    } catch (Exception e) {
+      Assert.fail(e.getMessage());
+    } finally {
+      fullNodeJsonRpcHttpService.stop();
+    }
+  }
+
+  @Test
   public void testBuildTransactionRejectsDeeplyNestedAbi() {
     // A deeply nested ABI must surface as invalid-params (-32602), not as a generic
     // internal error.
@@ -1526,8 +1573,7 @@ public class JsonrpcServiceTest extends BaseTest {
    * Verifies SizeLimitHandler integration with the real JsonRpcServlet + jsonrpc4j stack.
    *
    * Covers: normal request no regression, Content-Length oversized 413,
-   * and chunked oversized handled gracefully (body truncated, 200 + empty body
-   * because jsonrpc4j absorbs the BadMessageException).
+   * and chunked oversized 413 during streaming body reads.
    */
   @Test
   public void testJsonRpcSizeLimitIntegration() {
@@ -1563,11 +1609,11 @@ public class JsonrpcServiceTest extends BaseTest {
         overPost.setEntity(new StringEntity(
             new String(new char[(int) testLimit + 1]).replace('\0', 'x')));
         resp = httpClient.execute(overPost);
-        Assert.assertEquals(413, resp.getStatusLine().getStatusCode());
+        Assert.assertEquals(HttpStatus.PAYLOAD_TOO_LARGE_413,
+            resp.getStatusLine().getStatusCode());
         resp.close();
 
-        // Chunked oversized -> BadMessageException thrown during body read,
-        // absorbed by jsonrpc4j catch(Exception) -> 200 with empty body.
+        // Chunked oversized -> BadMessageException thrown during body read.
         // Body read IS truncated at the limit - OOM protection effective.
         byte[] chunkedData = new String(new char[(int) testLimit * 2])
             .replace('\0', 'x').getBytes("UTF-8");
@@ -1575,10 +1621,8 @@ public class JsonrpcServiceTest extends BaseTest {
         chunkedPost.setEntity(new InputStreamEntity(
             new ByteArrayInputStream(chunkedData), -1));
         resp = httpClient.execute(chunkedPost);
-        Assert.assertEquals(200, resp.getStatusLine().getStatusCode());
-        body = EntityUtils.toString(resp.getEntity());
-        Assert.assertTrue("Chunked oversized should return empty body"
-            + " (jsonrpc4j absorbs BadMessageException)", body.isEmpty());
+        Assert.assertEquals(HttpStatus.PAYLOAD_TOO_LARGE_413,
+            resp.getStatusLine().getStatusCode());
         resp.close();
       }
     } catch (Exception e) {
