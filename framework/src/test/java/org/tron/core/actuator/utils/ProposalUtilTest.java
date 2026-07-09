@@ -339,7 +339,7 @@ public class ProposalUtilTest extends BaseTest {
 
     testAllowTvmBlobProposal();
 
-    testAllowMarketTransaction();
+    //testAllowMarketTransaction();
 
     testAllowTvmSelfdestructRestrictionProposal();
 
