@@ -4,6 +4,8 @@ import java.util.Arrays;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.tron.common.prometheus.MetricKeys;
+import org.tron.common.prometheus.Metrics;
 import org.tron.common.utils.ByteArray;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.ChainBaseManager.NodeType;
@@ -15,6 +17,7 @@ import org.tron.core.net.peer.PeerManager;
 import org.tron.core.net.service.effective.EffectiveCheckService;
 import org.tron.core.net.service.relay.RelayService;
 import org.tron.p2p.discover.Node;
+import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.ReasonCode;
 
 @Slf4j(topic = "net")
@@ -122,8 +125,21 @@ public class HandshakeService {
 
     peer.setHelloMessageReceive(msg);
 
-    peer.getChannel().updateAvgLatency(
-            System.currentTimeMillis() - peer.getChannel().getStartTime());
+    // Wall-clock from libp2p channel creation to TRON handshake completion (this hello processed).
+    // Both stamps come from this node's clock, so it is skew-free; not a pure network RTT, but a
+    // useful latency reference — especially when the HelloMessage is large (e.g. carrying a PQ
+    // signature), where transfer time grows with message size.
+    long latencyMs = System.currentTimeMillis() - peer.getChannel().getStartTime();
+    peer.getChannel().updateAvgLatency(latencyMs);
+    // Sample only the SR<->FF handshake path:
+    //  - inbound:  received hello carries a witness signature.
+    //  - outbound: peer is in node.fastForward.nodes.
+    Protocol.HelloMessage hello = msg.getInstance();
+    boolean signed = !hello.getSignature().isEmpty() || hello.hasPqAuthSig();
+    if (signed || relayService.isFastForwardPeer(peer.getChannel())) {
+      Metrics.histogramObserve(MetricKeys.Histogram.HANDSHAKE_LATENCY,
+          latencyMs / Metrics.MILLISECONDS_PER_SECOND);
+    }
     PeerManager.sortPeers();
     peer.onConnect();
   }

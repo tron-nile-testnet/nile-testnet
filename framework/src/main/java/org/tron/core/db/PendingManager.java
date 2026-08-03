@@ -18,6 +18,7 @@ public class PendingManager implements AutoCloseable {
     this.dbManager = db;
     db.getSession().reset();
     db.getShieldedTransInPendingCounts().set(0);
+    db.getPqTransInPendingCounts().set(0);
   }
 
   @Override

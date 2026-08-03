@@ -206,6 +206,8 @@ public class ParameterTest {
     assertEquals(10, parameter.getAllowProtoFilterNum());
     parameter.setShieldedTransInPendingMaxCounts(1);
     assertEquals(1, parameter.getShieldedTransInPendingMaxCounts());
+    parameter.setPqTransInPendingMaxCounts(50);
+    assertEquals(50, parameter.getPqTransInPendingMaxCounts());
     parameter.setChangedDelegation(1);
     assertEquals(1, parameter.getChangedDelegation());
     parameter.setRateLimiterInitialization(new RateLimiterInitialization());

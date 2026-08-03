@@ -4,6 +4,9 @@ import static org.mockito.Mockito.mock;
 import static org.tron.core.net.message.handshake.HelloMessage.getEndpointFromNode;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedOutputStream;
+import com.google.protobuf.UnknownFieldSet;
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -19,12 +22,14 @@ import org.mockito.Mockito;
 import org.springframework.context.ApplicationContext;
 import org.tron.common.TestConstants;
 import org.tron.common.application.TronApplicationContext;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ReflectUtils;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.config.DefaultConfig;
 import org.tron.core.config.args.Args;
+import org.tron.core.exception.P2pException;
 import org.tron.core.net.P2pEventHandlerImpl;
 import org.tron.core.net.TronNetService;
 import org.tron.core.net.message.handshake.HelloMessage;
@@ -176,6 +181,101 @@ public class HandShakeServiceTest {
     Assert.assertTrue(helloMessage.valid());
   }
 
+
+  // A pq_auth_sig whose public_key/signature are within bounds but which
+  // carries a nested unknown field must be rejected: PQAuthSig retains and
+  // re-serializes unknown fields, so otherwise it could smuggle extra bytes
+  // past the per-field length checks.
+  @Test
+  public void testPqAuthSigNestedUnknownFieldRejected() throws Exception {
+    int pkLen = PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512);
+    int sigLen = PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512);
+
+    // control: a well-formed pq_auth_sig (real per-scheme lengths) passes valid().
+    Protocol.PQAuthSig okPq = Protocol.PQAuthSig.newBuilder()
+        .setScheme(Protocol.PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(new byte[pkLen]))
+        .setSignature(ByteString.copyFrom(new byte[sigLen]))
+        .build();
+    HelloMessage ok = new HelloMessage(
+        getTestHelloMessageBuilder().setPqAuthSig(okPq).build().toByteArray());
+    Assert.assertTrue(ok.valid());
+
+    // same, but with a nested unknown field (#99) inside PQAuthSig -> rejected.
+    UnknownFieldSet nestedUnknown = UnknownFieldSet.newBuilder()
+        .addField(99, UnknownFieldSet.Field.newBuilder()
+            .addLengthDelimited(ByteString.copyFrom(new byte[16])).build())
+        .build();
+    Protocol.PQAuthSig pqWithUnknown = Protocol.PQAuthSig.newBuilder()
+        .setScheme(Protocol.PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(new byte[pkLen]))
+        .setSignature(ByteString.copyFrom(new byte[sigLen]))
+        .setUnknownFields(nestedUnknown)
+        .build();
+    HelloMessage bad = new HelloMessage(
+        getTestHelloMessageBuilder().setPqAuthSig(pqWithUnknown).build().toByteArray());
+    Assert.assertFalse(bad.valid());
+  }
+
+  // The raw inbound size is bounded before parsing. Covers the three ways the
+  // parsed object stays small while the wire payload bloats toward the 5MB
+  // frame limit: repeated singular pq_auth_sig (parser merges, last value
+  // wins), a top-level unknown field, and an unbounded bytes sub-field of
+  // `from` (Endpoint).
+  @Test
+  public void testHelloMessageRawSizeBound() throws Exception {
+    int over = HelloMessage.MAX_HELLO_MESSAGE_SIZE + 1024;
+
+    // 1) repeated top-level pq_auth_sig: first huge, then legal. The merged
+    // object is legal (public_key overwritten), but raw bytes exceed the cap.
+    Protocol.PQAuthSig huge = Protocol.PQAuthSig.newBuilder()
+        .setPublicKey(ByteString.copyFrom(new byte[over]))
+        .build();
+    Protocol.PQAuthSig legal = Protocol.PQAuthSig.newBuilder()
+        .setScheme(Protocol.PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(
+            new byte[PQSchemeRegistry.getPublicKeyLength(Protocol.PQScheme.FN_DSA_512)]))
+        .setSignature(ByteString.copyFrom(
+            new byte[PQSchemeRegistry.getSignatureLength(Protocol.PQScheme.FN_DSA_512)]))
+        .build();
+    byte[] base = getTestHelloMessageBuilder().build().toByteArray();
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    bos.write(base);
+    CodedOutputStream cos = CodedOutputStream.newInstance(bos);
+    cos.writeMessage(12, huge);   // pq_auth_sig = field 12
+    cos.writeMessage(12, legal);
+    cos.flush();
+    assertRejectedBySize(bos.toByteArray());
+
+    // 2) oversized top-level unknown field.
+    UnknownFieldSet topUnknown = UnknownFieldSet.newBuilder()
+        .addField(2000, UnknownFieldSet.Field.newBuilder()
+            .addLengthDelimited(ByteString.copyFrom(new byte[over])).build())
+        .build();
+    assertRejectedBySize(
+        getTestHelloMessageBuilder().setUnknownFields(topUnknown).build().toByteArray());
+
+    // 3) oversized bytes sub-field of `from` (a known field valid() never bounds).
+    Endpoint fatFrom = Endpoint.newBuilder()
+        .setNodeId(ByteString.copyFrom(new byte[over]))
+        .setPort(10001)
+        .build();
+    assertRejectedBySize(
+        getTestHelloMessageBuilder().setFrom(fatFrom).build().toByteArray());
+  }
+
+  private static void assertRejectedBySize(byte[] wire) {
+    Assert.assertTrue("test fixture should exceed the cap",
+        wire.length > HelloMessage.MAX_HELLO_MESSAGE_SIZE);
+    try {
+      new HelloMessage(wire);
+      Assert.fail("oversized hello should be rejected before parsing");
+    } catch (P2pException e) {
+      Assert.assertEquals(P2pException.TypeEnum.BAD_MESSAGE, e.getType());
+    } catch (Exception e) {
+      Assert.fail("expected P2pException, got " + e);
+    }
+  }
 
   @Test
   public void testRelayHelloMessage() throws NoSuchMethodException {

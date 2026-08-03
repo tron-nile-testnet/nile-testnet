@@ -554,7 +554,7 @@ public class RpcApiService extends RpcService {
         StreamObserver<GrpcAPI.CanDelegatedMaxSizeResponseMessage> responseObserver) {
       try {
         responseObserver.onNext(wallet.getCanDelegatedMaxSize(
-                        request.getOwnerAddress(),request.getType()));
+                        request.getOwnerAddress(), request.getType(), request.getPqScheme()));
       } catch (Exception e) {
         responseObserver.onError(getRunTimeException(e));
       }
@@ -1943,7 +1943,7 @@ public class RpcApiService extends RpcService {
         StreamObserver<GrpcAPI.CanDelegatedMaxSizeResponseMessage> responseObserver) {
       try {
         responseObserver.onNext(wallet.getCanDelegatedMaxSize(
-                        request.getOwnerAddress(), request.getType()));
+                        request.getOwnerAddress(), request.getType(), request.getPqScheme()));
       } catch (Exception e) {
         responseObserver.onError(getRunTimeException(e));
       }

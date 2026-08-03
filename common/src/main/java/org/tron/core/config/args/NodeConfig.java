@@ -77,6 +77,7 @@ public class NodeConfig {
   private int maxFastForwardNum = 4;
   private ValidContractProtoConfig validContractProto = new ValidContractProtoConfig();
   private int shieldedTransInPendingMaxCounts = 10;
+  private int pqTransInPendingMaxCounts = 1000;
   private long blockCacheTimeout = 60;
   private int maxTransactionPendingSize = 2000;
   private long pendingTransactionTimeout = 60000;

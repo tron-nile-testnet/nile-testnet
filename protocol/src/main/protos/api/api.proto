@@ -723,6 +723,9 @@ message GetAvailableUnfreezeCountResponseMessage {
 message CanDelegatedMaxSizeRequestMessage {
   int32 type = 1;
   bytes owner_address = 2;
+  // Optional. When set to a registered scheme, the BANDWIDTH estimate
+  // reserves room for the PQAuthSig wire size instead of an ECDSA signature
+  PQScheme pq_scheme = 3;
 }
 message CanDelegatedMaxSizeResponseMessage {
   int64 max_size = 1;

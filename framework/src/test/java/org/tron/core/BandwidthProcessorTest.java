@@ -12,6 +12,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
+import org.tron.common.crypto.pqc.FNDSA512;
 import org.tron.common.runtime.RuntimeImpl;
 import org.tron.common.utils.ByteArray;
 import org.tron.core.capsule.AccountCapsule;
@@ -880,5 +881,116 @@ public class BandwidthProcessorTest extends BaseTest {
     long netLimitV2 = processor
             .calculateGlobalNetLimitV2(accountCapsule.getAllFrozenBalanceForBandwidth());
     Assert.assertTrue(netLimitV2 > 0);
+  }
+
+  @Test
+  public void pqPQAuthWitnessBytesSubtractedInCreateAccountCap() throws Exception {
+    chainBaseManager.getDynamicPropertiesStore().saveLatestBlockHeaderTimestamp(1526647838000L);
+    chainBaseManager.getDynamicPropertiesStore().saveTotalNetWeight(10_000_000L);
+
+    AccountCapsule ownerCapsule = new AccountCapsule(
+        ByteString.copyFromUtf8("owner"),
+        ByteString.copyFrom(ByteArray.fromHexString(OWNER_ADDRESS)),
+        AccountType.Normal,
+        chainBaseManager.getDynamicPropertiesStore().getAssetIssueFee());
+    ownerCapsule.setBalance(10_000_000L);
+    long expireTime = DateTime.now().getMillis() + 6 * 86_400_000;
+    ownerCapsule.setFrozenForBandwidth(2_000_000L, expireTime);
+    chainBaseManager.getAccountStore().put(ownerCapsule.getAddress().toByteArray(), ownerCapsule);
+
+    chainBaseManager.getAccountStore().delete(ByteArray.fromHexString(TO_ADDRESS));
+
+    TransferContract contract = TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFrom(ByteArray.fromHexString(OWNER_ADDRESS)))
+        .setToAddress(ByteString.copyFrom(ByteArray.fromHexString(TO_ADDRESS)))
+        .setAmount(100L)
+        .build();
+
+    byte[] fakeSig = new byte[FNDSA512.SIGNATURE_MAX_LENGTH];
+    byte[] fakePub = new byte[FNDSA512.PUBLIC_KEY_LENGTH];
+    Protocol.PQAuthSig pqAuthSig = Protocol.PQAuthSig.newBuilder()
+        .setScheme(Protocol.PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(fakePub))
+        .setSignature(ByteString.copyFrom(fakeSig))
+        .build();
+
+    TransactionCapsule baseTrx = new TransactionCapsule(contract,
+        chainBaseManager.getAccountStore());
+    Transaction withAuth = baseTrx.getInstance().toBuilder().addPqAuthSig(pqAuthSig).build();
+    TransactionCapsule trx = new TransactionCapsule(withAuth);
+    TransactionTrace trace = new TransactionTrace(trx, StoreFactory.getInstance(),
+        new RuntimeImpl());
+
+    long cap = chainBaseManager.getDynamicPropertiesStore().getMaxCreateAccountTxSize();
+    long rawSize = trx.getInstance().toBuilder().clearRet().build().getSerializedSize();
+    Assert.assertTrue("test precondition: raw tx must exceed cap with pq_auth_sig", rawSize > cap);
+
+    BandwidthProcessor processor = new BandwidthProcessor(chainBaseManager);
+    try {
+      processor.consume(trx, trace);
+    } catch (TooBigTransactionException e) {
+      Assert.fail("PQ pq_auth_sig bytes should be deducted from create-account cap check");
+    } finally {
+      chainBaseManager.getAccountStore().delete(ByteArray.fromHexString(OWNER_ADDRESS));
+      chainBaseManager.getAccountStore().delete(ByteArray.fromHexString(TO_ADDRESS));
+    }
+  }
+
+  @Test
+  public void pqPQAuthWitnessCountedInBandwidthUsage() throws Exception {
+    chainBaseManager.getDynamicPropertiesStore().saveLatestBlockHeaderTimestamp(1526647838000L);
+    chainBaseManager.getDynamicPropertiesStore().saveTotalNetWeight(10_000_000L);
+
+    AccountCapsule ownerCapsule = new AccountCapsule(
+        ByteString.copyFromUtf8("owner"),
+        ByteString.copyFrom(ByteArray.fromHexString(OWNER_ADDRESS)),
+        AccountType.Normal,
+        chainBaseManager.getDynamicPropertiesStore().getAssetIssueFee());
+    ownerCapsule.setBalance(10_000_000L);
+    long expireTime = DateTime.now().getMillis() + 6 * 86_400_000;
+    ownerCapsule.setFrozenForBandwidth(2_000_000L, expireTime);
+    chainBaseManager.getAccountStore().put(ownerCapsule.getAddress().toByteArray(), ownerCapsule);
+
+    AccountCapsule toAddressCapsule = new AccountCapsule(
+        ByteString.copyFromUtf8("to"),
+        ByteString.copyFrom(ByteArray.fromHexString(TO_ADDRESS)),
+        AccountType.Normal,
+        0L);
+    chainBaseManager.getAccountStore().put(toAddressCapsule.getAddress().toByteArray(),
+        toAddressCapsule);
+
+    TransferContract contract = TransferContract.newBuilder()
+        .setOwnerAddress(ByteString.copyFrom(ByteArray.fromHexString(OWNER_ADDRESS)))
+        .setToAddress(ByteString.copyFrom(ByteArray.fromHexString(TO_ADDRESS)))
+        .setAmount(100L)
+        .build();
+
+    byte[] fakeSig = new byte[FNDSA512.SIGNATURE_MAX_LENGTH];
+    byte[] fakePub = new byte[FNDSA512.PUBLIC_KEY_LENGTH];
+    Protocol.PQAuthSig pqAuthSig = Protocol.PQAuthSig.newBuilder()
+        .setScheme(Protocol.PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(fakePub))
+        .setSignature(ByteString.copyFrom(fakeSig))
+        .build();
+
+    TransactionCapsule baseTrx = new TransactionCapsule(contract,
+        chainBaseManager.getAccountStore());
+    Transaction withAuth = baseTrx.getInstance().toBuilder().addPqAuthSig(pqAuthSig).build();
+    TransactionCapsule trx = new TransactionCapsule(withAuth);
+    TransactionTrace trace = new TransactionTrace(trx, StoreFactory.getInstance(),
+        new RuntimeImpl());
+
+    long expectedBytes = trx.getInstance().toBuilder().clearRet().build().getSerializedSize()
+        + (chainBaseManager.getDynamicPropertiesStore().supportVM()
+            ? Constant.MAX_RESULT_SIZE_IN_TX : 0);
+
+    BandwidthProcessor processor = new BandwidthProcessor(chainBaseManager);
+    try {
+      processor.consume(trx, trace);
+      Assert.assertEquals(expectedBytes, trace.getReceipt().getNetUsage());
+    } finally {
+      chainBaseManager.getAccountStore().delete(ByteArray.fromHexString(OWNER_ADDRESS));
+      chainBaseManager.getAccountStore().delete(ByteArray.fromHexString(TO_ADDRESS));
+    }
   }
 }

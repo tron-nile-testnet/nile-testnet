@@ -15,9 +15,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.es.ExecutorServiceManager;
+import org.tron.common.prometheus.MetricKeys;
+import org.tron.common.prometheus.Metrics;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.ChainBaseManager;
+import org.tron.core.capsule.TransactionCapsule;
 import org.tron.core.config.args.Args;
 import org.tron.core.exception.P2pException;
 import org.tron.core.exception.P2pException.TypeEnum;
@@ -30,6 +34,7 @@ import org.tron.core.net.peer.Item;
 import org.tron.core.net.peer.PeerConnection;
 import org.tron.core.net.service.adv.AdvService;
 import org.tron.protos.Protocol.Inventory.InventoryType;
+import org.tron.protos.Protocol.PQAuthSig;
 import org.tron.protos.Protocol.ReasonCode;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.Protocol.Transaction.Contract.ContractType;
@@ -89,9 +94,17 @@ public class TransactionsMsgHandler implements TronMsgHandler {
     }
     TransactionsMessage transactionsMessage = (TransactionsMessage) msg;
     check(peer, transactionsMessage);
+    long now = System.currentTimeMillis();
     for (Transaction trx : transactionsMessage.getTransactions().getTransactionsList()) {
       Item item = new Item(new TransactionMessage(trx).getMessageId(), InventoryType.TRX);
-      peer.getAdvInvRequest().remove(item);
+      // Observe end-to-end fetch latency (GET_DATA send → full TXS received)
+      // before consuming the timestamp. Null means this tx wasn't actively
+      // fetched, in which case no sample is recorded.
+      Long requestTime = peer.getAdvInvRequest().remove(item);
+      if (requestTime != null) {
+        Metrics.histogramObserve(MetricKeys.Histogram.TX_FETCH_LATENCY,
+            (now - requestTime) / Metrics.MILLISECONDS_PER_SECOND);
+      }
     }
     int smartContractQueueSize = 0;
     int trxHandlePoolQueueSize = 0;
@@ -144,10 +157,31 @@ public class TransactionsMsgHandler implements TronMsgHandler {
         throw new P2pException(TypeEnum.BAD_TRX,
             "tx " + item.getHash() + " contract size should be greater than 0");
       }
+      TransactionCapsule trxCap = new TransactionCapsule(trx);
+      // Bound signature entry count before per-entry validation.
+      int sigCount = trxCap.getTotalSignatureCount();
+      int totalSignNum = chainBaseManager.getDynamicPropertiesStore().getTotalSignNum();
+      if (sigCount > totalSignNum) {
+        throw new P2pException(TypeEnum.BAD_TRX, "tx " + item.getHash()
+            + " total signature count is " + sigCount + " exceeds " + totalSignNum);
+      }
       for (ByteString sig : trx.getSignatureList()) {
         if (!SignUtils.isValidLength(sig.size())) {
           throw new P2pException(TypeEnum.BAD_TRX,
               "tx " + item.getHash() + " signature size is " + sig.size());
+        }
+      }
+
+      if (trx.getPqAuthSigCount() > 0
+          && !chainBaseManager.getDynamicPropertiesStore().isAnyPqSchemeAllowed()) {
+        String info = "pq_auth_sig not allowed: no post-quantum scheme is activated";
+        throw new P2pException(TypeEnum.BAD_TRX, "tx " + item.getHash() + " " + info);
+      }
+
+      for (PQAuthSig pqAuthSig : trx.getPqAuthSigList()) {
+        if (!PQAuthSigValidator.isLengthWithinBounds(pqAuthSig)) {
+          throw new P2pException(TypeEnum.BAD_TRX,
+              "tx " + item.getHash() + " pq_auth_sig size is out of bounds");
         }
       }
     }

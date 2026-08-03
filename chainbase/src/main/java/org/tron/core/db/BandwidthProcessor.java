@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Commons;
 import org.tron.common.utils.StringUtil;
@@ -23,6 +24,7 @@ import org.tron.core.exception.AccountResourceInsufficientException;
 import org.tron.core.exception.ContractValidateException;
 import org.tron.core.exception.TooBigTransactionException;
 import org.tron.core.exception.TooBigTransactionResultException;
+import org.tron.protos.Protocol.PQAuthSig;
 import org.tron.protos.Protocol.Transaction.Contract;
 import org.tron.protos.contract.AssetIssueContractOuterClass.TransferAssetContract;
 import org.tron.protos.contract.BalanceContract.TransferContract;
@@ -140,8 +142,18 @@ public class BandwidthProcessor extends ResourceProcessor {
         if (optimizeTxs) {
           long maxCreateAccountTxSize = dynamicPropertiesStore.getMaxCreateAccountTxSize();
           int signatureCount = trx.getInstance().getSignatureCount();
+          long sigOverhead = signatureCount * PER_SIGN_LENGTH;
+
+          // PQAuthSig bytes are subtracted as signature overhead regardless of open or not
+          if (trx.getInstance().getPqAuthSigCount() > 0) {
+            long pqAuthSigBytes = 0L;
+            for (PQAuthSig pqAuthSig : trx.getInstance().getPqAuthSigList()) {
+              pqAuthSigBytes += PQSchemeRegistry.computePQAuthSigWireSize(pqAuthSig.getScheme());
+            }
+            sigOverhead += pqAuthSigBytes;
+          }
           long createAccountBytesSize = trx.getInstance().toBuilder().clearRet()
-              .build().getSerializedSize() - (signatureCount * PER_SIGN_LENGTH);
+              .build().getSerializedSize() - sigOverhead;
           if (createAccountBytesSize > maxCreateAccountTxSize) {
             throw new TooBigTransactionException(String.format(
                 "Too big new account transaction, TxId %s, the size is %d bytes, maxTxSize %d",

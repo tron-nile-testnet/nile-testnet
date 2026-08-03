@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.util.encoders.Hex;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.springframework.context.ApplicationContext;
@@ -26,6 +25,8 @@ import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.FNDSA512;
+import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.ReflectUtils;
@@ -48,6 +49,8 @@ import org.tron.p2p.connection.Channel;
 import org.tron.p2p.discover.Node;
 import org.tron.p2p.utils.NetUtil;
 import org.tron.protos.Protocol;
+import org.tron.protos.Protocol.PQAuthSig;
+import org.tron.protos.Protocol.PQScheme;
 
 @Slf4j(topic = "net")
 public class RelayServiceTest extends BaseTest {
@@ -61,13 +64,9 @@ public class RelayServiceTest extends BaseTest {
   @Resource
   private TronNetService tronNetService;
 
-  /**
-   * init context.
-   */
-  @BeforeClass
-  public static void init() {
+  static {
     Args.setParam(new String[]{"--output-directory", dbPath(), "--debug"},
-            TestConstants.TEST_CONF);
+        TestConstants.TEST_CONF);
   }
 
   @After
@@ -251,17 +250,132 @@ public class RelayServiceTest extends BaseTest {
   }
 
   @Test
+  public void testPqHelloMessage() throws Exception {
+    FNDSA512 pqKeypair = new FNDSA512();
+    byte[] pqAddress = PQSchemeRegistry.computeAddress(
+        PQScheme.FN_DSA_512, pqKeypair.getPublicKey());
+    ByteString pqAddressBs = ByteString.copyFrom(pqAddress);
+
+    // Snapshot prior active-witness list (if any) so other tests are not perturbed.
+    List<ByteString> previousActive;
+    try {
+      previousActive = new ArrayList<>(
+          chainBaseManager.getWitnessScheduleStore().getActiveWitnesses());
+    } catch (Exception ignored) {
+      previousActive = null;
+    }
+    List<ByteString> active = previousActive == null
+        ? new ArrayList<>() : new ArrayList<>(previousActive);
+    if (!active.contains(pqAddressBs)) {
+      active.add(pqAddressBs);
+    }
+    chainBaseManager.getWitnessScheduleStore().saveActiveWitnesses(active);
+
+    // Activate FN-DSA-512 on chain so verifyPqAuthSig accepts the scheme.
+    long previousAllowFnDsa = chainBaseManager.getDynamicPropertiesStore().getAllowFnDsa512();
+    chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+
+    Args.getInstance().fastForward = true;
+
+    InetSocketAddress addr = new InetSocketAddress("127.0.0.1", 10001);
+    Node node = new Node(NetUtil.getNodeId(), addr.getAddress().getHostAddress(),
+        null, addr.getPort());
+    HelloMessage helloMessage = new HelloMessage(node, System.currentTimeMillis(),
+        ChainBaseManager.getChainBaseManager());
+    byte[] digest = Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
+        ByteArray.fromLong(helloMessage.getTimestamp())).getBytes();
+    byte[] pqSig = FNDSA512.sign(pqKeypair.getPrivateKey(), digest);
+    PQAuthSig pqAuthSig = PQAuthSig.newBuilder()
+        .setScheme(PQScheme.FN_DSA_512)
+        .setPublicKey(ByteString.copyFrom(pqKeypair.getPublicKey()))
+        .setSignature(ByteString.copyFrom(pqSig))
+        .build();
+
+    Protocol.HelloMessage base = helloMessage.getHelloMessage().toBuilder()
+        .setAddress(pqAddressBs)
+        .clearSignature()
+        .setPqAuthSig(pqAuthSig)
+        .build();
+    helloMessage.setHelloMessage(base);
+
+    Channel channel = mock(Channel.class);
+    Mockito.when(channel.getInetSocketAddress()).thenReturn(addr);
+    Mockito.when(channel.getInetAddress()).thenReturn(addr.getAddress());
+    PeerManager.add((ApplicationContext) ReflectUtils.getFieldObject(p2pEventHandler, "ctx"),
+        channel).setAddress(pqAddressBs);
+
+    ReflectUtils.setFieldValue(tronNetService, "p2pConfig", new P2pConfig());
+    Field scheduleField = service.getClass().getDeclaredField("witnessScheduleStore");
+    scheduleField.setAccessible(true);
+    scheduleField.set(service, chainBaseManager.getWitnessScheduleStore());
+    Field managerField = service.getClass().getDeclaredField("manager");
+    managerField.setAccessible(true);
+    managerField.set(service, dbManager);
+
+    try {
+      // Happy path: valid PQ-only signature.
+      Assert.assertTrue(service.checkHelloMessage(helloMessage, channel));
+
+      // Both legacy signature and pq_auth_sig set → mutex rejects.
+      helloMessage.setHelloMessage(base.toBuilder()
+          .setSignature(ByteString.copyFrom(new byte[]{0x01}))
+          .build());
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+
+      // Neither legacy signature nor pq_auth_sig set → mutex rejects.
+      helloMessage.setHelloMessage(base.toBuilder().clearSignature().clearPqAuthSig().build());
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+
+      // PQ public key length mismatch → reject.
+      helloMessage.setHelloMessage(base.toBuilder()
+          .setPqAuthSig(pqAuthSig.toBuilder()
+              .setPublicKey(ByteString.copyFrom(new byte[]{0x00})))
+          .build());
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+
+      // Derived PQ address does not match the claimed witness address → reject.
+      FNDSA512 strayKeypair = new FNDSA512();
+      byte[] strayDigest = Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
+          ByteArray.fromLong(helloMessage.getTimestamp())).getBytes();
+      byte[] straySig = FNDSA512.sign(strayKeypair.getPrivateKey(), strayDigest);
+      helloMessage.setHelloMessage(base.toBuilder()
+          .setPqAuthSig(PQAuthSig.newBuilder()
+              .setScheme(PQScheme.FN_DSA_512)
+              .setPublicKey(ByteString.copyFrom(strayKeypair.getPublicKey()))
+              .setSignature(ByteString.copyFrom(straySig)))
+          .build());
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+
+      // Scheme not activated on chain → reject.
+      helloMessage.setHelloMessage(base);
+      chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(0L);
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+    } finally {
+      chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(previousAllowFnDsa);
+      if (previousActive != null) {
+        chainBaseManager.getWitnessScheduleStore().saveActiveWitnesses(previousActive);
+      }
+    }
+  }
+
+  @Test
   public void testNullWitnessAddress() {
     try {
       Class<?> clazz = service.getClass();
 
-      Field keySizeField = clazz.getDeclaredField("keySize");
-      keySizeField.setAccessible(true);
-      keySizeField.set(service, 0);
+      Field ecdsaKeySizeField = clazz.getDeclaredField("ecdsaKeySize");
+      ecdsaKeySizeField.setAccessible(true);
+      ecdsaKeySizeField.set(service, 0);
+      Field pqKeySizeField = clazz.getDeclaredField("pqKeySize");
+      pqKeySizeField.setAccessible(true);
+      pqKeySizeField.set(service, 0);
 
-      Field witnessAddressField = clazz.getDeclaredField("witnessAddress");
-      witnessAddressField.setAccessible(true);
-      witnessAddressField.set(service, null);
+      Field ecdsaField = clazz.getDeclaredField("ecdsaWitnessAddress");
+      ecdsaField.setAccessible(true);
+      Field pqField = clazz.getDeclaredField("pqWitnessAddress");
+      pqField.setAccessible(true);
+      ecdsaField.set(service, null);
+      pqField.set(service, null);
 
       Method isActiveWitnessMethod = clazz.getDeclaredMethod("isActiveWitness");
       isActiveWitnessMethod.setAccessible(true);
@@ -269,7 +383,7 @@ public class RelayServiceTest extends BaseTest {
       Boolean result = (Boolean) isActiveWitnessMethod.invoke(service);
       Assert.assertNotEquals(Boolean.TRUE, result);
 
-      witnessAddressField.set(service, ByteString.copyFrom(new byte[21]));
+      ecdsaField.set(service, ByteString.copyFrom(new byte[21]));
       result = (Boolean) isActiveWitnessMethod.invoke(service);
       Assert.assertNotEquals(Boolean.TRUE, result);
     } catch (NoSuchMethodException | NoSuchFieldException

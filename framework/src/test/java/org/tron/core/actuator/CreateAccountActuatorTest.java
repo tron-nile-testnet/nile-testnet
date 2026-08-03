@@ -220,6 +220,10 @@ public class CreateAccountActuatorTest extends BaseTest {
 
   }
 
+  // PQ-native account creation is deferred per V2 scope: AccountCreateContract.pq_key
+  // has been removed (reserved 4) and CreateAccountActuator no longer carries any PQ
+  // validation logic. Tests for that path were dropped along with the field.
+
   private void processAndCheckInvalid(CreateAccountActuator actuator, TransactionResultCapsule ret,
       String failMsg,
       String expectedMsg) {

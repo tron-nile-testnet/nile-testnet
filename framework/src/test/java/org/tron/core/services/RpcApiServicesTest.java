@@ -74,6 +74,7 @@ import org.tron.protos.Protocol.Account;
 import org.tron.protos.Protocol.Block;
 import org.tron.protos.Protocol.BlockHeader.raw;
 import org.tron.protos.Protocol.MarketOrderPair;
+import org.tron.protos.Protocol.PQScheme;
 import org.tron.protos.Protocol.Transaction;
 import org.tron.protos.contract.AccountContract.AccountCreateContract;
 import org.tron.protos.contract.AccountContract.AccountPermissionUpdateContract;
@@ -376,6 +377,13 @@ public class RpcApiServicesTest {
     assertNotNull(blockingStubFull.getCanDelegatedMaxSize(message));
     assertNotNull(blockingStubSolidity.getCanDelegatedMaxSize(message));
     assertNotNull(blockingStubPBFT.getCanDelegatedMaxSize(message));
+
+    // The optional pq_scheme must flow through full / solidity / pbft without error.
+    CanDelegatedMaxSizeRequestMessage pqMessage = CanDelegatedMaxSizeRequestMessage.newBuilder()
+        .setType(0).setOwnerAddress(ownerAddress).setPqScheme(PQScheme.ML_DSA_44).build();
+    assertNotNull(blockingStubFull.getCanDelegatedMaxSize(pqMessage));
+    assertNotNull(blockingStubSolidity.getCanDelegatedMaxSize(pqMessage));
+    assertNotNull(blockingStubPBFT.getCanDelegatedMaxSize(pqMessage));
   }
 
   @Test

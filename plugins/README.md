@@ -222,3 +222,69 @@ When using `--password-file` with `update`, the file must contain exactly two li
 - `--sm2`: Use SM2 algorithm instead of ECDSA (for `new` and `import`).
 - `--json`: Output in JSON format for scripting.
 - `-h | --help`: Provide the help info.
+
+## PQ Key (`pq-key`)
+
+`pq-key` generates and manages post-quantum key files. Each file holds one keypair (seed, private key, public key, and derived TRON address) in JSON format.
+
+### Subcommands
+
+#### pq-key new
+
+Generate a new post-quantum key JSON file.
+
+```shell script
+# full command
+  java -jar Toolkit.jar pq-key new [-h] [--scheme=<FN_DSA_512|ML_DSA_44>] [--output-dir=<dir>] [--json]
+# examples
+  java -jar Toolkit.jar pq-key new --scheme ML_DSA_44                    # generate ML-DSA-44 key file
+  java -jar Toolkit.jar pq-key new --scheme ML_DSA_44 --output-dir keys/ # custom output directory
+  java -jar Toolkit.jar pq-key new --scheme ML_DSA_44 --json             # JSON summary output
+  java -jar Toolkit.jar pq-key new --scheme FN_DSA_512                   # generate Falcon-512 key file
+```
+
+**Generated file format:**
+
+```json
+// ML_DSA_44
+{
+  "scheme": "ML_DSA_44",
+  "seed": "<64 hex chars>",
+  "privateKey": "<5120 hex chars>",
+  "publicKey": "<2624 hex chars>",
+  "address": "T..."
+}
+
+// FN_DSA_512
+{
+  "scheme": "FN_DSA_512",
+  "seed": "<96 hex chars>",
+  "privateKey": "<2560 hex chars>",
+  "publicKey": "<1792 hex chars>",
+  "address": "T..."
+}
+```
+
+`privateKey` takes priority at load time; `seed` is retained as a backup field.
+
+> **NOTE (FN_DSA_512):** The `seed` field is for reference only. Falcon keygen is NOT bit-stable
+> across JVM versions or CPU architectures — `privateKey` + `publicKey` are always used.
+
+**JSON summary output (`--json`):**
+
+```json
+{ "address": "T...", "scheme": "ML_DSA_44", "file": "keys/pq--ML_DSA_44--2025-01-01T00-00-00--TABCdef12.json" }
+```
+
+### Common Options
+
+- `--scheme`: PQ signature scheme, default: `FN_DSA_512`. Valid values: `FN_DSA_512`, `ML_DSA_44`.
+- `--output-dir`: Output directory, default: `Wallet`. Created automatically if missing.
+- `--json`: Print a JSON summary (address, scheme, file path) to stdout instead of human-readable text.
+- `-h | --help`: Provide the help info.
+
+**Security notes:**
+
+- The key file is written with `0600` (owner-read/write only) permissions on POSIX systems.
+- Never share the key file. It grants full control over the corresponding address.
+- Back up the key file. Loss of the file means loss of access to the address.
