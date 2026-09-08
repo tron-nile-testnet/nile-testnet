@@ -1,0 +1,13 @@
+// Local verification only: do not modify the node build or add published dependencies.
+gradle.projectsEvaluated {
+    def framework = gradle.rootProject.project(':framework')
+    framework.tasks.register('conformanceClasspath') {
+        dependsOn framework.tasks.named('classes')
+        dependsOn framework.configurations.runtimeClasspath.buildDependencies
+        doLast {
+            def target = System.getProperty('conformance.classpathFile')
+            if (!target) throw new GradleException('conformance.classpathFile is required')
+            new File(target).text = framework.sourceSets.main.runtimeClasspath.asPath
+        }
+    }
+}
