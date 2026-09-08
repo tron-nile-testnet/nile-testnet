@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package protocol;
+
+option java_package = "org.tron.tip899.fixture";
+option java_outer_classname = "Tip899FixtureProto";
+
+// Wire-compatible subset of Tron.proto at
+// tron-nile-testnet/nile-testnet@c164973fffa4a7fa95ecfa9c0fe793f6761aeb78.
+enum PQScheme {
+  UNKNOWN_PQ_SCHEME = 0;
+  FN_DSA_512 = 1;
+  ML_DSA_44 = 2;
+}
+
+message PQAuthSig {
+  PQScheme scheme = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+}
+
+// Only field 6 is modeled. Its encoding is identical to Transaction.pq_auth_sig.
+message TransactionPQAuthSigField {
+  repeated PQAuthSig pq_auth_sig = 6;
+}

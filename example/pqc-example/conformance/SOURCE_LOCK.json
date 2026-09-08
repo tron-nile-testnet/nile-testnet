@@ -1,0 +1,41 @@
+{
+  "tip": {
+    "number": 899,
+    "url": "https://github.com/tronprotocol/tips/issues/899"
+  },
+  "referenceImplementation": {
+    "repository": "https://github.com/tron-nile-testnet/nile-testnet",
+    "branch": "release_post_quantum",
+    "commit": "c164973fffa4a7fa95ecfa9c0fe793f6761aeb78",
+    "bouncyCastle": "1.84"
+  },
+  "falconReference": {
+    "url": "https://falcon-sign.info/Falcon-impl-20211101.zip",
+    "sha256": "d9f982bd825b9903b57b686d6d26018dac173a1dff09f224cc39302f9d85a595"
+  },
+  "bouncyCastleJar": {
+    "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar",
+    "sha256": "64d6c5a6121fcd927152dd182cbed39afe0fda641a970d9bcc0c9cb1858b2731"
+  },
+  "protobuf": {
+    "version": "3.25.8",
+    "javaJarUrl": "https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-java/3.25.8/protobuf-java-3.25.8.jar",
+    "javaJarSha256": "72bdb32eb38cafb7dcd288262c29a34d57cba2e19101af9685155ba8c0a56008",
+    "protocMacArm64Url": "https://repo.maven.apache.org/maven2/com/google/protobuf/protoc/3.25.8/protoc-3.25.8-osx-aarch_64.exe",
+    "protocMacArm64Sha256": "d2300cc09a7a4f347d289b06ac4c0c9d2f99e4eb44fe6467e9f49a2dca66fd81"
+  },
+  "platform": {
+    "os": "macOS",
+    "architecture": "arm64",
+    "otherPlatforms": "NOT_RUN"
+  },
+  "toolVersions": {
+    "openssl": "3.6.3",
+    "java": "17.0.19",
+    "node": "20.19.2",
+    "npm": "10.8.2",
+    "python": "3.12.1",
+    "protobufjs": "8.8.0",
+    "js-sha3": "0.13.0"
+  }
+}

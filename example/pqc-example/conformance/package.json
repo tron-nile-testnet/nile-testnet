@@ -1,0 +1,14 @@
+{
+  "name": "tip-899-conformance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-implementation conformance fixtures for TRON TIP-899",
+  "scripts": {
+    "fixture:check": "node tools/fixture.mjs check fixtures/*.json"
+  },
+  "dependencies": {
+    "js-sha3": "0.13.0",
+    "protobufjs": "8.8.0"
+  }
+}

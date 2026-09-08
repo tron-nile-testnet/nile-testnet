@@ -1,0 +1,303 @@
+{
+  "status": "PASS_WITH_INACTIVE_SCHEME_LIMITATION",
+  "endpoint": "https://nile.trongrid.io",
+  "observationType": "NILE_READ_ONLY_TVM_SIMULATION",
+  "broadcasts": 0,
+  "limitation": "Node execution against live chain state; NOT a mined transaction, consensus replay, or full PQ transaction/block/P2P validation. Calls use moving head state, not a pinned historical block.",
+  "implementationCommit": "c164973fffa4a7fa95ecfa9c0fe793f6761aeb78",
+  "runnerSha256": "1635da5559ee34e27aeb0afa9c2aff51f350eb6e727d98cc0c14767d086fdcaf",
+  "observations": [
+    {
+      "scheme": "fn-dsa-512",
+      "case": "valid",
+      "at": "2026-09-08T09:32:22.761Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "27e0ee2a7375f99c8d250acf9d988f20ec1704fbb942372ed307b0c710ff28e1",
+      "inputLength": 1594,
+      "probeBytecodeSha256": "f6980f5dc4d6946c2eec3232a3b4c114bee94de35321eef49dfbb552b35ce1eb",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "tampered-message",
+      "at": "2026-09-08T09:32:24.462Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "e3b7c4a698e1b70bd40288486109e57dabf45607ac9ec233a717a649f9082e35",
+      "inputLength": 1594,
+      "probeBytecodeSha256": "04feba48a0d8814dd8b55b3503f63e9bc63e9ca9751fbe57b857cdb030600677",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "tampered-signature",
+      "at": "2026-09-08T09:32:26.579Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "d2e58dc0c9505167c2a153186ed241c54db3bfc7ed0c5e5d8ec100789c47e7ff",
+      "inputLength": 1594,
+      "probeBytecodeSha256": "d9416fd702b8b0de0795bed52c052aa2d19d9cdbd7dd8b49613f7220dee18d61",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "short-input",
+      "at": "2026-09-08T09:32:28.255Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "0fd418cdf544bbfd3422823b333524ab3914de9f1d26262b22f01ab050c25683",
+      "inputLength": 1593,
+      "probeBytecodeSha256": "c730606504d2560b3cddffbf0c3b5916c6475d6f4d6afc232e3890ad4ee05983",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "trailing-byte",
+      "at": "2026-09-08T09:32:30.170Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "38c99e5b59fbf7413e66ffb52a9664cf02359cb0c8e96ab3091126de0773a949",
+      "inputLength": 1595,
+      "probeBytecodeSha256": "d2d2609adab20b9034a566670af245d307b3f2c9c3154658839d7526a7ea5ccb",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "reference-tagged-public-key",
+      "at": "2026-09-08T09:32:31.523Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "622696ae35c6f9cd346e66a1e8cbb5d083150e311087c1b3ea0544767da79e17",
+      "inputLength": 1595,
+      "probeBytecodeSha256": "ad6e6e6e2ba83fb1443d1aca650bf185f94dff50c39356c72b5d0e8f39855127",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "header-retained-in-slot",
+      "at": "2026-09-08T09:32:33.359Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "ca17815472a0692fb2cb81c8cdf13abb472349815035cb8f97886e8634830437",
+      "inputLength": 1594,
+      "probeBytecodeSha256": "18b4a2cae413d79b8499b4fe2e2faca3cd9623d4be943b6c09b9b9daac79eda9",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "nonzero-slot-padding",
+      "at": "2026-09-08T09:32:35.207Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "4a357d5e303cf860dcb39f93741dbb314fb160c5b75293cd62429e48b6b09185",
+      "inputLength": 1594,
+      "probeBytecodeSha256": "2e7cc845b74a48195d8b5b9471fe5df12879b1690d99968500b3a7fe758a860c",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "fn-dsa-512",
+      "case": "empty-signature-slot",
+      "at": "2026-09-08T09:32:37.098Z",
+      "fixtureSha256": "a3be1a81e7d794c0210aa0aed71b1938ab2ed5daf95fc0beaed9e82193744abd",
+      "inputSha256": "f4630b47f8c3ad377dd28025a339180150c81ef0623cb1324095f770bea5ab30",
+      "inputLength": 1594,
+      "probeBytecodeSha256": "659186f5d6c07676cdb69dc84b7df29c1170e8583028bf2e8d3c0523da634992",
+      "address": "0x02000016",
+      "activationFlag": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 32,
+        "outputHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "status": "PASS_ACTIVE_PRECOMPILE",
+      "energyUsed": 22629
+    },
+    {
+      "scheme": "ml-dsa-44",
+      "case": "valid",
+      "at": "2026-09-08T09:32:38.831Z",
+      "fixtureSha256": "74a5ffaf6cba1ec1caf2abd3c960133b972e88508fa6059212cb89291db97809",
+      "inputSha256": "4d5929844179a4be44d9ef8edc58ba3fff21003c18cec429d4eee5a1e51b55a0",
+      "inputLength": 3764,
+      "probeBytecodeSha256": "2d2cbb92d1219679ec92924fbeb31b2f25fde25c2740897fb2c4cfccc401a9e5",
+      "address": "0x02000018",
+      "activationFlag": {
+        "value": 0,
+        "valueOmittedInResponse": true
+      },
+      "expectedOutputWhenActiveHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "observed": {
+        "staticCallSuccess": true,
+        "returnDataLength": 0,
+        "outputHex": ""
+      },
+      "status": "PASS_INACTIVE_DISPATCH_ONLY",
+      "energyUsed": 13659
+    }
+  ],
+  "notRun": [
+    {
+      "scheme": "ml-dsa-44",
+      "case": "tampered-message",
+      "reason": "SCHEME_INACTIVE"
+    },
+    {
+      "scheme": "ml-dsa-44",
+      "case": "tampered-signature",
+      "reason": "SCHEME_INACTIVE"
+    },
+    {
+      "scheme": "ml-dsa-44",
+      "case": "short-input",
+      "reason": "SCHEME_INACTIVE"
+    },
+    {
+      "scheme": "ml-dsa-44",
+      "case": "trailing-byte",
+      "reason": "SCHEME_INACTIVE"
+    },
+    {
+      "scheme": "ml-dsa-44",
+      "case": "valid-signature-verification",
+      "reason": "SCHEME_INACTIVE; empty return is not cryptographic verification"
+    }
+  ],
+  "genesisBlockId": "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc",
+  "before": {
+    "at": "2026-09-08T09:32:21.044Z",
+    "nodeVersion": "4.8.2.1.PQ1_build1",
+    "p2pVersion": "201910292",
+    "nodeReportedHead": "Num:70779676,ID:000000000438031c6c4d7022aef16afc0761c0059c720f03629a4bf88b51b707",
+    "head": {
+      "number": 70779677,
+      "id": "000000000438031d405ede06165aa1aa1ea48fdbd477b6f6b0e3ae917412da82",
+      "timestamp": 1788859938000
+    },
+    "flags": {
+      "getAllowFnDsa512": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "getAllowMlDsa44": {
+        "value": 0,
+        "valueOmittedInResponse": true
+      }
+    },
+    "simulationOwner": "4166f227fa01b58c6e74dbf61bcce5f608dd6b2437"
+  },
+  "after": {
+    "at": "2026-09-08T09:32:44.359Z",
+    "nodeVersion": "4.8.2.1.PQ1_build1",
+    "p2pVersion": "201910292",
+    "nodeReportedHead": "Num:70779684,ID:00000000043803242950268886ba26c4f09453eb6fb192d1a0705212b38e7609",
+    "head": {
+      "number": 70779685,
+      "id": "0000000004380325397b719c428fab70f4c456ba8a9cb6c667b10b2ce7f00f9e",
+      "timestamp": 1788859962000
+    },
+    "flags": {
+      "getAllowFnDsa512": {
+        "value": 1,
+        "valueOmittedInResponse": false
+      },
+      "getAllowMlDsa44": {
+        "value": 0,
+        "valueOmittedInResponse": true
+      }
+    },
+    "simulationOwner": "41486201c73390eccebb20341053e1b2d91af40e79"
+  }
+}
