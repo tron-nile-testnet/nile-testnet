@@ -3,7 +3,7 @@ package org.tron.core.vm.nativecontract;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.tron.core.config.Parameter.ChainConstant.TRX_PRECISION;
-import static org.tron.core.config.Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2;
+import static org.tron.core.config.Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1;
 import static org.tron.protos.contract.Common.ResourceCode.BANDWIDTH;
 import static org.tron.protos.contract.Common.ResourceCode.ENERGY;
 
@@ -51,10 +51,10 @@ public class StakeV2AfterSelfDestructTest {
     ForkController forkController = mock(ForkController.class);
     try (MockedStatic<ForkController> fork = Mockito.mockStatic(ForkController.class)) {
       fork.when(ForkController::instance).thenReturn(forkController);
-      when(forkController.pass(VERSION_4_8_2_2)).thenReturn(false);
+      when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(false);
       processor.validate(param, repository);
 
-      when(forkController.pass(VERSION_4_8_2_2)).thenReturn(true);
+      when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(true);
       assertFreezeV2Timeout(() -> processor.validate(param, repository));
     }
   }
@@ -78,7 +78,7 @@ public class StakeV2AfterSelfDestructTest {
     ForkController forkController = mock(ForkController.class);
     try (MockedStatic<ForkController> fork = Mockito.mockStatic(ForkController.class)) {
       fork.when(ForkController::instance).thenReturn(forkController);
-      when(forkController.pass(VERSION_4_8_2_2)).thenReturn(false);
+      when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(false);
       when(repository.getAccount(ownerAddress)).thenReturn(account(ownerAddress, -1, 0));
       withdrawProcessor.validate(withdrawParam, repository);
       cancelProcessor.validate(cancelParam, repository);
@@ -86,7 +86,7 @@ public class StakeV2AfterSelfDestructTest {
       withdrawProcessor.validate(withdrawParam, repository);
       cancelProcessor.validate(cancelParam, repository);
 
-      when(forkController.pass(VERSION_4_8_2_2)).thenReturn(true);
+      when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(true);
       when(repository.getAccount(ownerAddress)).thenReturn(account(ownerAddress, -1, 0));
       assertInvalidDelegatedV2Timeout(
           () -> withdrawProcessor.validate(withdrawParam, repository));
@@ -115,7 +115,7 @@ public class StakeV2AfterSelfDestructTest {
     ForkController forkController = mock(ForkController.class);
     try (MockedStatic<ForkController> fork = Mockito.mockStatic(ForkController.class)) {
       fork.when(ForkController::instance).thenReturn(forkController);
-      when(forkController.pass(VERSION_4_8_2_2)).thenReturn(false);
+      when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(false);
       when(repository.getAccount(ownerAddress)).thenReturn(
           accountWithFrozenV2(ownerAddress, -1, 0, BANDWIDTH));
       processor.validate(bandwidthParam, repository);
@@ -123,7 +123,7 @@ public class StakeV2AfterSelfDestructTest {
           accountWithFrozenV2(ownerAddress, 0, -1, ENERGY));
       processor.validate(energyParam, repository);
 
-      when(forkController.pass(VERSION_4_8_2_2)).thenReturn(true);
+      when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(true);
       when(repository.getAccount(ownerAddress)).thenReturn(
           accountWithFrozenV2(ownerAddress, -1, 0, BANDWIDTH));
       assertInvalidDelegatedV2Timeout(

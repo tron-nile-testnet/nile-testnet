@@ -3,7 +3,7 @@ package org.tron.common.runtime.vm;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.tron.core.config.Parameter.ChainConstant.FROZEN_PERIOD;
-import static org.tron.core.config.Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2;
+import static org.tron.core.config.Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1;
 
 import java.util.List;
 import java.util.Locale;
@@ -1288,7 +1288,7 @@ public class OperationsTest extends BaseTest {
     ForkController forkController = Mockito.mock(ForkController.class);
     try (MockedStatic<ForkController> fork = Mockito.mockStatic(ForkController.class)) {
       fork.when(ForkController::instance).thenReturn(forkController);
-      Mockito.when(forkController.pass(VERSION_4_8_2_2)).thenReturn(true);
+      Mockito.when(forkController.pass(VERSION_4_8_2_2_PQ1)).thenReturn(true);
 
       OutOfTimeException exception = Assert.assertThrows(OutOfTimeException.class,
           () -> program.suicide2(new DataWord(beneficiary)));

@@ -466,7 +466,7 @@ public class VMActuator implements Actuator2 {
 
   static void checkContractNameLength(SmartContract contract) throws ContractValidateException {
     int contractNameLength =
-        ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2)
+        ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1)
             ? contract.getNameBytes().size()
             : contract.getName().getBytes().length;
     if (contractNameLength > VMConstant.CONTRACT_NAME_LENGTH) {

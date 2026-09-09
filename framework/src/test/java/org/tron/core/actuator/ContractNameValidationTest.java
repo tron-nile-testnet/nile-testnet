@@ -56,7 +56,7 @@ public class ContractNameValidationTest {
 
   private void runWithActivation(boolean activated, ThrowingRunnable action) throws Throwable {
     ForkController controller = mock(ForkController.class);
-    when(controller.pass(ForkBlockVersionEnum.VERSION_4_8_2_2)).thenReturn(activated);
+    when(controller.pass(ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1)).thenReturn(activated);
     try (MockedStatic<ForkController> controllerMock = Mockito.mockStatic(ForkController.class)) {
       controllerMock.when(ForkController::instance).thenReturn(controller);
       action.run();

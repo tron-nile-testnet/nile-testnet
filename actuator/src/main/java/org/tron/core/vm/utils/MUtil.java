@@ -60,7 +60,7 @@ public class MUtil {
   }
 
   public static void checkCPUTimeForContractHashFields() {
-    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2)) {
+    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1)) {
       throw new OutOfTimeException("CPU timeout for contract hash fields");
     }
   }
@@ -84,20 +84,20 @@ public class MUtil {
   }
 
   public static void checkCPUTimeForFreezeV2AfterSelfDestruct() {
-    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2)) {
+    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1)) {
       throw new OutOfTimeException("CPU timeout for FreezeBalanceV2 after SELFDESTRUCT");
     }
   }
 
   public static void checkCPUTimeForSelfDestructedBeneficiary() {
-    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2)) {
+    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1)) {
       throw new OutOfTimeException(
           "CPU timeout for SELFDESTRUCT with selfdestructed beneficiary");
     }
   }
 
   public static void checkCPUTimeForInvalidDelegatedV2Balance() {
-    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2)) {
+    if (ForkController.instance().pass(Parameter.ForkBlockVersionEnum.VERSION_4_8_2_2_PQ1)) {
       throw new OutOfTimeException("CPU timeout for invalid delegated V2 balance");
     }
   }
