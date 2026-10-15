@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.tron.common.crypto.pqc.FNDSA512;
 import org.tron.common.crypto.pqc.MLDSA44;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.math.StrictMathWrapper;
@@ -218,7 +219,8 @@ public class PQPrecompiledContracts {
           return Pair.of(true, DataWord.ZERO().getData());
         }
         byte[] pk = copyOfRange(data, sigEnd, INPUT_LEN);
-        boolean ok = FNDSA512.verify(pk, msg, sig);
+        byte[] signed = PQDomain.MESSAGE.bindIf(VMConfig.allowPqDomainSeparation(), msg);
+        boolean ok = FNDSA512.verify(pk, signed, sig);
         return Pair.of(true, ok ? DataWord.ONE().getData() : DataWord.ZERO().getData());
       } catch (Throwable t) {
         return Pair.of(true, DataWord.ZERO().getData());
@@ -385,7 +387,8 @@ public class PQPrecompiledContracts {
         if (!DataWord.equalAddressByteArray(derived, expectedAddr)) {
           return false;
         }
-        return FNDSA512.verify(pk, hash, canonicalSig);
+        byte[] signed = PQDomain.MESSAGE.bindIf(VMConfig.allowPqDomainSeparation(), hash);
+        return FNDSA512.verify(pk, signed, canonicalSig);
       } catch (Throwable t) {
         return false;
       }
@@ -454,7 +457,8 @@ public class PQPrecompiledContracts {
         byte[] msg = copyOfRange(data, 0, MSG_LEN);
         byte[] sig = copyOfRange(data, MSG_LEN, MSG_LEN + MLDSA44.SIGNATURE_LENGTH);
         byte[] pk = copyOfRange(data, MSG_LEN + MLDSA44.SIGNATURE_LENGTH, INPUT_LEN);
-        boolean ok = MLDSA44.verify(pk, msg, sig);
+        byte[] signed = PQDomain.MESSAGE.bindIf(VMConfig.allowPqDomainSeparation(), msg);
+        boolean ok = MLDSA44.verify(pk, signed, sig);
         return Pair.of(true,
             ok ? DataWord.ONE().getData() : DataWord.ZERO().getData());
       } catch (Throwable t) {
@@ -593,7 +597,8 @@ public class PQPrecompiledContracts {
         if (!DataWord.equalAddressByteArray(derived, expectedAddr)) {
           return false;
         }
-        return MLDSA44.verify(pk, hash, sig);
+        byte[] signed = PQDomain.MESSAGE.bindIf(VMConfig.allowPqDomainSeparation(), hash);
+        return MLDSA44.verify(pk, signed, sig);
       } catch (Throwable t) {
         return false;
       }
@@ -842,7 +847,8 @@ public class PQPrecompiledContracts {
           if (weight == 0) {
             return Pair.of(true, DATA_FALSE);
           }
-          if (!PQSchemeRegistry.verify(scheme, pk, hash, sig)) {
+          if (!PQSchemeRegistry.verify(scheme, pk,
+              PQDomain.MESSAGE.bindIf(VMConfig.allowPqDomainSeparation(), hash), sig)) {
             return Pair.of(true, DATA_FALSE);
           }
           totalWeight += weight;

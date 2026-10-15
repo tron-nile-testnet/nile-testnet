@@ -11,6 +11,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.tron.common.crypto.pqc.MLDSA44;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.client.utils.AbiUtil;
 import org.tron.core.vm.PQPrecompiledContracts.BatchValidateMlDsa44;
@@ -48,11 +49,13 @@ public class BatchValidateMlDsa44Test {
   @Before
   public void enableProposal() {
     VMConfig.initAllowMlDsa44(1L);
+    VMConfig.initAllowPqDomainSeparation(1L);
   }
 
   @After
   public void disableProposal() {
     VMConfig.initAllowMlDsa44(0L);
+    VMConfig.initAllowPqDomainSeparation(0L);
   }
 
   @Test
@@ -77,7 +80,7 @@ public class BatchValidateMlDsa44Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
-      sigs.add(Hex.toHexString(k.sign(HASH)));
+      sigs.add(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -96,8 +99,8 @@ public class BatchValidateMlDsa44Test {
     MLDSA44 k1 = new MLDSA44();
     MLDSA44 k2 = new MLDSA44();
     List<String> sigs = Arrays.asList(
-        Hex.toHexString(k1.sign(HASH)),
-        Hex.toHexString(k2.sign(HASH)));
+        Hex.toHexString(k1.sign(PQDomain.MESSAGE.bind(HASH))),
+        Hex.toHexString(k2.sign(PQDomain.MESSAGE.bind(HASH))));
     List<String> pks = Arrays.asList(
         Hex.toHexString(k1.getPublicKey()),
         Hex.toHexString(k2.getPublicKey()));
@@ -115,7 +118,7 @@ public class BatchValidateMlDsa44Test {
   public void constantCall_tamperedSignature_clearsBit() {
     contract.setConstantCall(true);
     MLDSA44 k = new MLDSA44();
-    byte[] sig = k.sign(HASH);
+    byte[] sig = k.sign(PQDomain.MESSAGE.bind(HASH));
     sig[0] ^= 0x01;
     List<String> sigs = Collections1(Hex.toHexString(sig));
     List<String> pks = Collections1(Hex.toHexString(k.getPublicKey()));
@@ -130,7 +133,7 @@ public class BatchValidateMlDsa44Test {
     contract.setConstantCall(true);
     MLDSA44 k = new MLDSA44();
     byte[] truncatedPk = Arrays.copyOf(k.getPublicKey(), k.getPublicKey().length - 1);
-    List<String> sigs = Collections1(Hex.toHexString(k.sign(HASH)));
+    List<String> sigs = Collections1(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
     List<String> pks = Collections1(Hex.toHexString(truncatedPk));
     List<String> addrs = Collections1(addrAsBytes32Hex(k.getPublicKey()));
 
@@ -148,7 +151,7 @@ public class BatchValidateMlDsa44Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
-      sigs.add(Hex.toHexString(k.sign(HASH)));
+      sigs.add(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -162,7 +165,7 @@ public class BatchValidateMlDsa44Test {
   public void mismatchedArrayLengths_reverts() {
     contract.setConstantCall(true);
     MLDSA44 k = new MLDSA44();
-    List<String> sigs = Collections1(Hex.toHexString(k.sign(HASH)));
+    List<String> sigs = Collections1(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
     List<String> pks = Arrays.asList(
         Hex.toHexString(k.getPublicKey()), Hex.toHexString(k.getPublicKey()));
     List<String> addrs = Collections1(addrAsBytes32Hex(k.getPublicKey()));
@@ -181,7 +184,7 @@ public class BatchValidateMlDsa44Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
-      sigs.add(Hex.toHexString(k.sign(HASH)));
+      sigs.add(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -198,7 +201,7 @@ public class BatchValidateMlDsa44Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
-      sigs.add(Hex.toHexString(k.sign(HASH)));
+      sigs.add(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -224,7 +227,7 @@ public class BatchValidateMlDsa44Test {
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
       // Sign HASH...
-      sigs.add(Hex.toHexString(k.sign(HASH)));
+      sigs.add(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -245,7 +248,7 @@ public class BatchValidateMlDsa44Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
-      sigs.add(Hex.toHexString(k.sign(HASH)));
+      sigs.add(Hex.toHexString(k.sign(PQDomain.MESSAGE.bind(HASH))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -269,7 +272,7 @@ public class BatchValidateMlDsa44Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       MLDSA44 k = new MLDSA44();
-      byte[] sig = k.sign(HASH);
+      byte[] sig = k.sign(PQDomain.MESSAGE.bind(HASH));
       // Tamper entries 1 and 3.
       if (i == 1 || i == 3) {
         sig[0] ^= 0x01;

@@ -1592,6 +1592,11 @@ public class Wallet {
         .build());
 
     builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
+        .setKey("getAllowPqDomainSeparation")
+        .setValue(dbManager.getDynamicPropertiesStore().getAllowPqDomainSeparation())
+        .build());
+
+    builder.addChainParameter(Protocol.ChainParameters.ChainParameter.newBuilder()
         .setKey("getAllowOptimizeTvmStorage")
         .setValue(dbManager.getDynamicPropertiesStore().getAllowOptimizeTvmStorage())
         .build());

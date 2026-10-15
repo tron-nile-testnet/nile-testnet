@@ -35,6 +35,7 @@ import org.tron.common.bloom.Bloom;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
 import org.tron.common.crypto.pqc.PQAuthSigValidator;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
@@ -285,7 +286,9 @@ public class BlockCapsule implements ProtoCapsule<Block> {
     }
 
     byte[] digest = getRawHash().getBytes();
-    return PQSchemeRegistry.verify(scheme, publicKey, digest, signature);
+    byte[] signed = PQDomain.BLOCK.bindIf(
+        dynamicPropertiesStore.allowPqDomainSeparation(), digest);
+    return PQSchemeRegistry.verify(scheme, publicKey, signed, signature);
   }
 
   public BlockId getBlockId() {

@@ -263,6 +263,8 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
   private static final byte[] ALLOW_FN_DSA_512 = "ALLOW_FN_DSA_512".getBytes();
 
   private static final byte[] ALLOW_ML_DSA_44 = "ALLOW_ML_DSA_44".getBytes();
+  private static final byte[] ALLOW_PQ_DOMAIN_SEPARATION =
+      "ALLOW_PQ_DOMAIN_SEPARATION".getBytes();
 
   private static final byte[] ALLOW_OPTIMIZE_TVM_STORAGE = "ALLOW_OPTIMIZE_TVM_STORAGE".getBytes();
 
@@ -3119,6 +3121,21 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
 
   public boolean allowMlDsa44() {
     return getAllowMlDsa44() == 1L;
+  }
+
+  public long getAllowPqDomainSeparation() {
+    return Optional.ofNullable(getUnchecked(ALLOW_PQ_DOMAIN_SEPARATION))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(0L);
+  }
+
+  public void saveAllowPqDomainSeparation(long value) {
+    this.put(ALLOW_PQ_DOMAIN_SEPARATION, new BytesCapsule(ByteArray.fromLong(value)));
+  }
+
+  public boolean allowPqDomainSeparation() {
+    return getAllowPqDomainSeparation() == 1L;
   }
 
   /**

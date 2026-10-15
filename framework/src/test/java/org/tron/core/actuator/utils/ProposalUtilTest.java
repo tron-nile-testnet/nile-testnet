@@ -917,4 +917,58 @@ public class ProposalUtilTest extends BaseTest {
     }
     dynamicPropertiesStore.saveAllowMlDsa44(0L);
   }
+
+  @Test
+  public void validateAllowPqDomainSeparation() {
+    long code = ProposalType.ALLOW_PQ_DOMAIN_SEPARATION.getCode();
+    ThrowingRunnable proposeZero = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        code, 0);
+    ThrowingRunnable proposeOne = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        code, 1);
+    ThrowingRunnable proposeTwo = () -> ProposalUtil.validator(dynamicPropertiesStore, forkUtils,
+        code, 2);
+
+    forkUtils.init(dbManager.getChainBaseManager());
+    byte[] stats = new byte[27];
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_2_4_PQ1.getValue(), stats);
+    long maintenanceTimeInterval = forkUtils.getManager().getDynamicPropertiesStore()
+        .getMaintenanceTimeInterval();
+    long hardForkTime =
+        ((ForkBlockVersionEnum.VERSION_4_8_2_4_PQ1.getHardForkTime() - 1)
+            / maintenanceTimeInterval + 1) * maintenanceTimeInterval;
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .saveLatestBlockHeaderTimestamp(hardForkTime - 1);
+
+    ContractValidateException thrown = assertThrows(ContractValidateException.class, proposeOne);
+    assertEquals("Bad chain parameter id [ALLOW_PQ_DOMAIN_SEPARATION]", thrown.getMessage());
+
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .saveLatestBlockHeaderTimestamp(hardForkTime + 1);
+    Arrays.fill(stats, (byte) 1);
+    forkUtils.getManager().getDynamicPropertiesStore()
+        .statsByVersion(ForkBlockVersionEnum.VERSION_4_8_2_4_PQ1.getValue(), stats);
+
+    thrown = assertThrows(ContractValidateException.class, proposeZero);
+    assertEquals("This value[ALLOW_PQ_DOMAIN_SEPARATION] is only allowed to be 1",
+        thrown.getMessage());
+    thrown = assertThrows(ContractValidateException.class, proposeTwo);
+    assertEquals("This value[ALLOW_PQ_DOMAIN_SEPARATION] is only allowed to be 1",
+        thrown.getMessage());
+
+    try {
+      proposeOne.run();
+    } catch (Throwable e) {
+      Assert.fail("Should pass when activating: " + e.getMessage());
+    }
+
+    dynamicPropertiesStore.saveAllowPqDomainSeparation(1L);
+    thrown = assertThrows(ContractValidateException.class, proposeOne);
+    assertEquals("[ALLOW_PQ_DOMAIN_SEPARATION] has been valid, no need to propose again",
+        thrown.getMessage());
+    thrown = assertThrows(ContractValidateException.class, proposeZero);
+    assertEquals("[ALLOW_PQ_DOMAIN_SEPARATION] has been valid, no need to propose again",
+        thrown.getMessage());
+    dynamicPropertiesStore.saveAllowPqDomainSeparation(0L);
+  }
 }

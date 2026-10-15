@@ -17,6 +17,7 @@ import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.pqc.FNDSA512;
 import org.tron.common.crypto.pqc.MLDSA44;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
@@ -71,12 +72,14 @@ public class ValidateMultiPQSigTest extends BaseTest {
     dbManager.getDynamicPropertiesStore().saveTotalSignNum(5);
     VMConfig.initAllowFnDsa512(1L);
     VMConfig.initAllowMlDsa44(1L);
+    VMConfig.initAllowPqDomainSeparation(1L);
   }
 
   @After
   public void after() {
     VMConfig.initAllowFnDsa512(0L);
     VMConfig.initAllowMlDsa44(0L);
+    VMConfig.initAllowPqDomainSeparation(0L);
   }
 
   // ---------- registration / gating ----------
@@ -161,8 +164,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(padFalconSig(pq1.sign(toSign))),
-        Hex.toHexString(padFalconSig(pq2.sign(toSign))));
+        Hex.toHexString(padFalconSig(pq1.sign(PQDomain.MESSAGE.bind(toSign)))),
+        Hex.toHexString(padFalconSig(pq2.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(pq1.getPublicKey()),
         Hex.toHexString(pq2.getPublicKey()));
@@ -187,8 +190,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(pq1.sign(toSign)),
-        Hex.toHexString(pq2.sign(toSign)));
+        Hex.toHexString(pq1.sign(PQDomain.MESSAGE.bind(toSign))),
+        Hex.toHexString(pq2.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(pq1.getPublicKey()),
         Hex.toHexString(pq2.getPublicKey()));
@@ -222,8 +225,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(k1.sign(toSign).toByteArray()));
     List<Integer> schemes = Arrays.asList(TAG_FN_DSA_512, TAG_ML_DSA_44);
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))),
-        Hex.toHexString(dilithium.sign(toSign)));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))),
+        Hex.toHexString(dilithium.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(falcon.getPublicKey()),
         Hex.toHexString(dilithium.getPublicKey()));
@@ -255,8 +258,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Hex.toHexString(k1.sign(toSign).toByteArray()));
     List<Integer> schemes = Arrays.asList(TAG_FN_DSA_512, TAG_ML_DSA_44);
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))),
-        Hex.toHexString(dilithium.sign(toSign)));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))),
+        Hex.toHexString(dilithium.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(falcon.getPublicKey()),
         Hex.toHexString(dilithium.getPublicKey()));
@@ -286,8 +289,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
     // a sig + pk slot (we use Falcon-shaped bytes so encodeBytesArray is happy).
     List<Integer> schemes = Arrays.asList(TAG_FN_DSA_512, 99);
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))),
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))),
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(falcon.getPublicKey()),
         Hex.toHexString(falcon.getPublicKey()));
@@ -312,7 +315,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     List<Integer> schemes = Collections.singletonList(99);  // unregistered tag
     List<String> pqSigs = Collections.singletonList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
     Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
@@ -335,7 +338,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     List<Integer> schemes = Collections.singletonList(0);
     List<String> pqSigs = Collections.singletonList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
     Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
@@ -357,7 +360,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     // 2 schemes but only 1 sig / 1 pk → schemeCnt mismatch.
     List<Integer> schemes = Arrays.asList(TAG_FN_DSA_512, TAG_FN_DSA_512);
     List<String> pqSigs = Collections.singletonList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
     Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
@@ -381,7 +384,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     List<Integer> schemes = Collections.singletonList(TAG_FN_DSA_512);
     List<String> pqSigs = Collections.singletonList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(falcon.getPublicKey()));
 
     Assert.assertArrayEquals(DataWord.ZERO().getData(),
@@ -402,7 +405,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
-    List<String> pqSigs = Collections.singletonList(Hex.toHexString(dilithium.sign(toSign)));
+    List<String> pqSigs = Collections.singletonList(
+        Hex.toHexString(dilithium.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(dilithium.getPublicKey()));
 
     Assert.assertArrayEquals(DataWord.ZERO().getData(),
@@ -427,7 +431,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     List<Integer> schemes = Arrays.asList(TAG_ML_DSA_44, TAG_ML_DSA_44);
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(d1.sign(toSign)), Hex.toHexString(d2.sign(toSign)));
+        Hex.toHexString(d1.sign(PQDomain.MESSAGE.bind(toSign))),
+        Hex.toHexString(d2.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(d1.getPublicKey()), Hex.toHexString(d2.getPublicKey()));
 
@@ -449,7 +454,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
-    byte[] padded = padFalconSig(falcon.sign(toSign));
+    byte[] padded = padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)));
     Assert.assertEquals(FNDSA512.SIGNATURE_MAX_LENGTH - 1, padded.length);
 
     List<Integer> schemes = Collections.singletonList(TAG_FN_DSA_512);
@@ -473,7 +478,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     // Trim the slot one byte short of 666 — must be rejected (slot length exact).
-    byte[] shortSlot = Arrays.copyOf(padFalconSig(falcon.sign(toSign)),
+    byte[] shortSlot = Arrays.copyOf(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign))),
         FNDSA512.SIGNATURE_MAX_LENGTH - 2);
 
     List<Integer> schemes = Collections.singletonList(TAG_FN_DSA_512);
@@ -543,7 +548,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
     List<String> pqSigs = Collections.singletonList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(d1.getPublicKey()));
 
     Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
@@ -564,7 +569,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] truncatedPk = Arrays.copyOf(d1.getPublicKey(), d1.getPublicKey().length - 1);
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
-    List<String> pqSigs = Collections.singletonList(Hex.toHexString(d1.sign(toSign)));
+    List<String> pqSigs = Collections.singletonList(
+        Hex.toHexString(d1.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(truncatedPk));
 
     Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
@@ -590,8 +596,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     List<Integer> schemes = Arrays.asList(TAG_FN_DSA_512, TAG_FN_DSA_512);
     List<String> pqSigs = Arrays.asList(
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))),
-        Hex.toHexString(padFalconSig(falcon.sign(toSign))));
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))),
+        Hex.toHexString(padFalconSig(falcon.sign(PQDomain.MESSAGE.bind(toSign)))));
     List<String> pqPks = Arrays.asList(
         Hex.toHexString(falcon.getPublicKey()),
         Hex.toHexString(falcon.getPublicKey()));
@@ -611,7 +617,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
     byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
-    byte[] forged = d1.sign(toSign);
+    byte[] forged = d1.sign(PQDomain.MESSAGE.bind(toSign));
     forged[10] ^= 0x01;
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
@@ -637,7 +643,8 @@ public class ValidateMultiPQSigTest extends BaseTest {
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
-    List<String> pqSigs = Collections.singletonList(Hex.toHexString(outsider.sign(toSign)));
+    List<String> pqSigs = Collections.singletonList(
+        Hex.toHexString(outsider.sign(PQDomain.MESSAGE.bind(toSign))));
     List<String> pqPks = Collections.singletonList(Hex.toHexString(outsider.getPublicKey()));
 
     Pair<Boolean, byte[]> ret = runContract(owner.getAddress(), 2, data,
@@ -707,7 +714,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     List<String> ecdsaSigs = Arrays.asList(
         Hex.toHexString(k1.sign(toSign).toByteArray()),
         Hex.toHexString(k2.sign(toSign).toByteArray()));
-    byte[] forged = d1.sign(toSign);
+    byte[] forged = d1.sign(PQDomain.MESSAGE.bind(toSign));
     forged[0] ^= 0x55;
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
     List<String> pqSigs = Collections.singletonList(Hex.toHexString(forged));

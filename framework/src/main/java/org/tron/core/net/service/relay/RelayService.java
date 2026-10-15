@@ -19,6 +19,7 @@ import org.tron.common.backup.BackupManager;
 import org.tron.common.backup.BackupManager.BackupStatusEnum;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.crypto.pqc.PqKeypair;
 import org.tron.common.es.ExecutorServiceManager;
@@ -171,7 +172,9 @@ public class RelayService {
       PQScheme scheme = kp.getScheme();
       byte[] privKey = ByteArray.fromHexString(kp.getPrivateKey());
       byte[] pubKey = ByteArray.fromHexString(kp.getPublicKey());
-      byte[] sig = PQSchemeRegistry.sign(scheme, privKey, digest);
+      byte[] signed = PQDomain.RELAY.bindIf(
+          manager.getDynamicPropertiesStore().allowPqDomainSeparation(), digest);
+      byte[] sig = PQSchemeRegistry.sign(scheme, privKey, signed);
       builder.setPqAuthSig(PQAuthSig.newBuilder()
           .setScheme(scheme)
           .setPublicKey(ByteString.copyFrom(pubKey))
@@ -287,7 +290,9 @@ public class RelayService {
           remoteAddress, ByteArray.toHexString(witnessAddr.toByteArray()));
       return false;
     }
-    return PQSchemeRegistry.verify(scheme, publicKey, digest, signature);
+    byte[] signed = PQDomain.RELAY.bindIf(
+        manager.getDynamicPropertiesStore().allowPqDomainSeparation(), digest);
+    return PQSchemeRegistry.verify(scheme, publicKey, signed, signature);
   }
 
   /**

@@ -971,6 +971,21 @@ public class ProposalUtil {
         }
         break;
       }
+      case ALLOW_PQ_DOMAIN_SEPARATION: {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_4_PQ1)) {
+          throw new ContractValidateException(
+              "Bad chain parameter id [ALLOW_PQ_DOMAIN_SEPARATION]");
+        }
+        if (dynamicPropertiesStore.getAllowPqDomainSeparation() == 1) {
+          throw new ContractValidateException(
+              "[ALLOW_PQ_DOMAIN_SEPARATION] has been valid, no need to propose again");
+        }
+        if (value != 1) {
+          throw new ContractValidateException(
+              "This value[ALLOW_PQ_DOMAIN_SEPARATION] is only allowed to be 1");
+        }
+        break;
+      }
       case ALLOW_OPTIMIZE_TVM_STORAGE: {
         if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_3_PQ1)) {
           throw new ContractValidateException(
@@ -1077,7 +1092,8 @@ public class ProposalUtil {
     ALLOW_HARDEN_EXCHANGE_CALCULATION(98), // 0, 1
     ALLOW_OPTIMIZE_TVM_STORAGE(99), // 0, 1
     ALLOW_FN_DSA_512(1000), // 0, 1
-    ALLOW_ML_DSA_44(1001); // 0, 1
+    ALLOW_ML_DSA_44(1001), // 0, 1
+    ALLOW_PQ_DOMAIN_SEPARATION(1002); // 1
     private long code;
 
     ProposalType(long code) {
