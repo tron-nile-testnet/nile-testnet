@@ -12,6 +12,7 @@ import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.pqc.FNDSA512;
 import org.tron.common.crypto.pqc.MLDSA44;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.config.args.Args;
@@ -102,7 +103,7 @@ public class BlockCapsulePQTest extends BaseTest {
   }
 
   private byte[] signPQ(byte[] message) {
-    return FNDSA512.sign(pqKeypair.getPrivateKey(), message);
+    return FNDSA512.sign(pqKeypair.getPrivateKey(), PQDomain.BLOCK.bind(message));
   }
 
   private PQAuthSig buildPQAuthSig(byte[] signature) {
@@ -289,7 +290,7 @@ public class BlockCapsulePQTest extends BaseTest {
     byte[] parentHash = new byte[32];
     BlockCapsule block = buildUnsignedBlock(parentHash);
     byte[] digest = block.getRawHashBytes();
-    byte[] sig = MLDSA44.sign(mlKeypair.getPrivateKey(), digest);
+    byte[] sig = MLDSA44.sign(mlKeypair.getPrivateKey(), PQDomain.BLOCK.bind(digest));
     block.setPqAuthSig(PQAuthSig.newBuilder()
         .setScheme(PQScheme.ML_DSA_44)
         .setPublicKey(ByteString.copyFrom(mlKeypair.getPublicKey()))
@@ -312,7 +313,7 @@ public class BlockCapsulePQTest extends BaseTest {
     byte[] parentHash = new byte[32];
     BlockCapsule block = buildUnsignedBlock(parentHash);
     byte[] digest = block.getRawHashBytes();
-    byte[] sig = MLDSA44.sign(mlKeypair.getPrivateKey(), digest);
+    byte[] sig = MLDSA44.sign(mlKeypair.getPrivateKey(), PQDomain.BLOCK.bind(digest));
     sig[sig.length - 1] ^= 0x01;
     block.setPqAuthSig(PQAuthSig.newBuilder()
         .setScheme(PQScheme.ML_DSA_44)

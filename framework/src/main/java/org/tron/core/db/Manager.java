@@ -53,6 +53,7 @@ import org.tron.api.GrpcAPI.TransactionInfoList;
 import org.tron.common.args.GenesisBlock;
 import org.tron.common.bloom.Bloom;
 import org.tron.common.cron.CronExpression;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.exit.ExitManager;
@@ -1849,7 +1850,7 @@ public class Manager {
               + " set but local PQ key material is missing");
     }
     byte[] digest = blockCapsule.getRawHashBytes();
-    byte[] signature = PQSchemeRegistry.sign(scheme, pqPrivateKey, digest);
+    byte[] signature = PQSchemeRegistry.sign(scheme, pqPrivateKey, PQDomain.BLOCK, digest);
     PQAuthSig.Builder builder = PQAuthSig.newBuilder()
         .setScheme(scheme)
         .setPublicKey(ByteString.copyFrom(pqPublicKey))

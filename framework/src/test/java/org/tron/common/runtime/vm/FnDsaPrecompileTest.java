@@ -6,6 +6,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.tron.common.crypto.pqc.FNDSA512;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.core.vm.PrecompiledContracts;
 import org.tron.core.vm.PrecompiledContracts.PrecompiledContract;
 import org.tron.core.vm.config.VMConfig;
@@ -57,7 +58,7 @@ public class FnDsaPrecompileTest {
   @Test
   public void validSignature_returnsOne() {
     FNDSA512 key = new FNDSA512();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] input = buildInput(MESSAGE_HASH, sig, key.getPublicKey());
 
     PrecompiledContract pc = PrecompiledContracts.getContractForAddress(FNDSA_ADDR);
@@ -71,7 +72,7 @@ public class FnDsaPrecompileTest {
   @Test
   public void tamperedMessage_returnsZero() {
     FNDSA512 key = new FNDSA512();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] tampered = MESSAGE_HASH.clone();
     tampered[0] ^= 0x01;
     byte[] input = buildInput(tampered, sig, key.getPublicKey());
@@ -86,7 +87,7 @@ public class FnDsaPrecompileTest {
   @Test
   public void tamperedSignature_returnsZero() {
     FNDSA512 key = new FNDSA512();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     // sig[0] is the 0x39 header, stripped by buildInput; flip a salt byte instead.
     sig[1] ^= 0x01;
     byte[] input = buildInput(MESSAGE_HASH, sig, key.getPublicKey());
@@ -102,7 +103,7 @@ public class FnDsaPrecompileTest {
   public void wrongPublicKey_returnsZero() {
     FNDSA512 signer = new FNDSA512();
     FNDSA512 other = new FNDSA512();
-    byte[] sig = signer.sign(MESSAGE_HASH);
+    byte[] sig = signer.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] input = buildInput(MESSAGE_HASH, sig, other.getPublicKey());
 
     Pair<Boolean, byte[]> result =
@@ -135,7 +136,7 @@ public class FnDsaPrecompileTest {
     // Strict equality (matches 0x100 P256Verify / EIP-7951): appending even one byte
     // to an otherwise-valid input must be rejected to prevent non-canonical encodings.
     FNDSA512 key = new FNDSA512();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] valid = buildInput(MESSAGE_HASH, sig, key.getPublicKey());
     byte[] padded = new byte[valid.length + 1];
     System.arraycopy(valid, 0, padded, 0, valid.length);

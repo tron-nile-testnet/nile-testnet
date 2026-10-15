@@ -49,6 +49,7 @@ import org.tron.common.crypto.Rsv;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
 import org.tron.common.crypto.pqc.PQAuthSigValidator;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.es.ExecutorServiceManager;
 import org.tron.common.math.StrictMathWrapper;
@@ -772,7 +773,7 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
           .orElseThrow(() -> new PermissionException(
               "pq_auth_sig public key derives to " + encode58Check(derivedAddr)
                   + " but it is not contained of permission."));
-      if (!PQSchemeRegistry.verify(scheme, pk, digest, sig)) {
+      if (!PQSchemeRegistry.verify(scheme, pk, PQDomain.TRANSACTION, digest, sig)) {
         throw new SignatureException("pq sig invalid");
       }
       try {

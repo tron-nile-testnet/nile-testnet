@@ -26,6 +26,7 @@ import org.tron.common.TestConstants;
 import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
 import org.tron.common.crypto.pqc.FNDSA512;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
@@ -284,7 +285,7 @@ public class RelayServiceTest extends BaseTest {
         ChainBaseManager.getChainBaseManager());
     byte[] digest = Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
         ByteArray.fromLong(helloMessage.getTimestamp())).getBytes();
-    byte[] pqSig = FNDSA512.sign(pqKeypair.getPrivateKey(), digest);
+    byte[] pqSig = FNDSA512.sign(pqKeypair.getPrivateKey(), PQDomain.RELAY.bind(digest));
     PQAuthSig pqAuthSig = PQAuthSig.newBuilder()
         .setScheme(PQScheme.FN_DSA_512)
         .setPublicKey(ByteString.copyFrom(pqKeypair.getPublicKey()))
@@ -337,7 +338,8 @@ public class RelayServiceTest extends BaseTest {
       FNDSA512 strayKeypair = new FNDSA512();
       byte[] strayDigest = Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
           ByteArray.fromLong(helloMessage.getTimestamp())).getBytes();
-      byte[] straySig = FNDSA512.sign(strayKeypair.getPrivateKey(), strayDigest);
+      byte[] straySig = FNDSA512.sign(strayKeypair.getPrivateKey(),
+          PQDomain.RELAY.bind(strayDigest));
       helloMessage.setHelloMessage(base.toBuilder()
           .setPqAuthSig(PQAuthSig.newBuilder()
               .setScheme(PQScheme.FN_DSA_512)

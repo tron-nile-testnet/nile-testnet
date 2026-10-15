@@ -11,6 +11,7 @@ import org.tron.api.GrpcAPI.EmptyMessage;
 import org.tron.api.GrpcAPI.Return;
 import org.tron.api.WalletGrpc;
 import org.tron.api.WalletGrpc.WalletBlockingStub;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.crypto.pqc.PQSignature;
 import org.tron.common.parameter.CommonParameter;
@@ -113,7 +114,7 @@ public class PQClient {
       byte[] txId   = Sha256Hash.of(
           CommonParameter.getInstance().isECKeyCryptoEngine(),
           rawData.toByteArray()).getBytes();
-      byte[] sig    = userKp.sign(txId);
+      byte[] sig    = userKp.sign(PQDomain.TRANSACTION.bind(txId));
 
       // Producers must set the scheme tag explicitly; scheme=0
       // (UNKNOWN_PQ_SCHEME) is rejected by the verifier as unregistered.

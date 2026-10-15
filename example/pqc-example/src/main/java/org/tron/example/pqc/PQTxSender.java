@@ -20,6 +20,7 @@ import org.tron.api.WalletGrpc;
 import org.tron.api.WalletGrpc.WalletBlockingStub;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.ECKey.ECDSASignature;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.crypto.pqc.PQSignature;
 import org.tron.common.math.StrictMathWrapper;
@@ -297,7 +298,7 @@ public class PQTxSender {
 
       Transaction tx = buildTransferTransaction(ownerAddr, blockHash, refNum);
       byte[] txId = sha256(tx.getRawData().toByteArray());
-      byte[] sig = userKp.sign(txId);
+      byte[] sig = userKp.sign(PQDomain.TRANSACTION.bind(txId));
       Transaction signedTx = tx.toBuilder()
           .addPqAuthSig(PQAuthSig.newBuilder()
               .setScheme(scheme)
@@ -334,7 +335,7 @@ public class PQTxSender {
       tx = tx.toBuilder().setRawData(rawBuilder).build();
 
       byte[] txId = sha256(tx.getRawData().toByteArray());
-      byte[] sig = userKp.sign(txId);
+      byte[] sig = userKp.sign(PQDomain.TRANSACTION.bind(txId));
       Transaction signedTx = tx.toBuilder()
           .addPqAuthSig(PQAuthSig.newBuilder()
               .setScheme(scheme)

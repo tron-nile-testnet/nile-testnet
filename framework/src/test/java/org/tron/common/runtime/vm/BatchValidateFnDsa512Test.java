@@ -11,6 +11,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.tron.common.crypto.pqc.FNDSA512;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.client.utils.AbiUtil;
 import org.tron.core.vm.PQPrecompiledContracts.BatchValidateFnDsa512;
@@ -77,7 +78,7 @@ public class BatchValidateFnDsa512Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
-      sigs.add(Hex.toHexString(padSlot(k.sign(HASH))));
+      sigs.add(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -96,8 +97,8 @@ public class BatchValidateFnDsa512Test {
     FNDSA512 k1 = new FNDSA512();
     FNDSA512 k2 = new FNDSA512();
     List<String> sigs = Arrays.asList(
-        Hex.toHexString(padSlot(k1.sign(HASH))),
-        Hex.toHexString(padSlot(k2.sign(HASH))));
+        Hex.toHexString(padSlot(k1.sign(PQDomain.MESSAGE.bind(HASH)))),
+        Hex.toHexString(padSlot(k2.sign(PQDomain.MESSAGE.bind(HASH)))));
     List<String> pks = Arrays.asList(
         Hex.toHexString(k1.getPublicKey()),
         Hex.toHexString(k2.getPublicKey()));
@@ -115,7 +116,7 @@ public class BatchValidateFnDsa512Test {
   public void constantCall_tamperedSignature_clearsBit() {
     contract.setConstantCall(true);
     FNDSA512 k = new FNDSA512();
-    byte[] sig = padSlot(k.sign(HASH));
+    byte[] sig = padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)));
     sig[0] ^= 0x01;
     List<String> sigs = Collections1(Hex.toHexString(sig));
     List<String> pks = Collections1(Hex.toHexString(k.getPublicKey()));
@@ -130,7 +131,7 @@ public class BatchValidateFnDsa512Test {
     contract.setConstantCall(true);
     FNDSA512 k = new FNDSA512();
     byte[] truncatedPk = Arrays.copyOf(k.getPublicKey(), k.getPublicKey().length - 1);
-    List<String> sigs = Collections1(Hex.toHexString(padSlot(k.sign(HASH))));
+    List<String> sigs = Collections1(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
     List<String> pks = Collections1(Hex.toHexString(truncatedPk));
     List<String> addrs = Collections1(addrAsBytes32Hex(k.getPublicKey()));
 
@@ -148,7 +149,7 @@ public class BatchValidateFnDsa512Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
-      sigs.add(Hex.toHexString(padSlot(k.sign(HASH))));
+      sigs.add(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -162,7 +163,7 @@ public class BatchValidateFnDsa512Test {
   public void mismatchedArrayLengths_reverts() {
     contract.setConstantCall(true);
     FNDSA512 k = new FNDSA512();
-    List<String> sigs = Collections1(Hex.toHexString(padSlot(k.sign(HASH))));
+    List<String> sigs = Collections1(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
     List<String> pks = Arrays.asList(
         Hex.toHexString(k.getPublicKey()), Hex.toHexString(k.getPublicKey()));
     List<String> addrs = Collections1(addrAsBytes32Hex(k.getPublicKey()));
@@ -181,7 +182,7 @@ public class BatchValidateFnDsa512Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
-      sigs.add(Hex.toHexString(padSlot(k.sign(HASH))));
+      sigs.add(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -198,7 +199,7 @@ public class BatchValidateFnDsa512Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
-      sigs.add(Hex.toHexString(padSlot(k.sign(HASH))));
+      sigs.add(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -224,7 +225,7 @@ public class BatchValidateFnDsa512Test {
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
       // Sign HASH...
-      sigs.add(Hex.toHexString(padSlot(k.sign(HASH))));
+      sigs.add(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -245,7 +246,7 @@ public class BatchValidateFnDsa512Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
-      sigs.add(Hex.toHexString(padSlot(k.sign(HASH))));
+      sigs.add(Hex.toHexString(padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)))));
       pks.add(Hex.toHexString(k.getPublicKey()));
       addrs.add(addrAsBytes32Hex(k.getPublicKey()));
     }
@@ -269,7 +270,7 @@ public class BatchValidateFnDsa512Test {
     List<String> addrs = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       FNDSA512 k = new FNDSA512();
-      byte[] sig = padSlot(k.sign(HASH));
+      byte[] sig = padSlot(k.sign(PQDomain.MESSAGE.bind(HASH)));
       // Tamper entries 1 and 3.
       if (i == 1 || i == 3) {
         sig[0] ^= 0x01;
@@ -303,7 +304,7 @@ public class BatchValidateFnDsa512Test {
   public void slotShorterThan666_clearsBit() {
     contract.setConstantCall(true);
     FNDSA512 k = new FNDSA512();
-    byte[] sig = k.sign(HASH);
+    byte[] sig = k.sign(PQDomain.MESSAGE.bind(HASH));
     byte[] shortSlot = Arrays.copyOf(sig, FNDSA512.SIGNATURE_MAX_LENGTH - 2);
     List<String> sigs = Collections1(Hex.toHexString(shortSlot));
     List<String> pks = Collections1(Hex.toHexString(k.getPublicKey()));

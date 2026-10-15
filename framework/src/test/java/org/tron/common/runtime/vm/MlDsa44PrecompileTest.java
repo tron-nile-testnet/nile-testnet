@@ -6,6 +6,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.tron.common.crypto.pqc.MLDSA44;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.core.vm.PrecompiledContracts;
 import org.tron.core.vm.PrecompiledContracts.PrecompiledContract;
 import org.tron.core.vm.config.VMConfig;
@@ -51,7 +52,7 @@ public class MlDsa44PrecompileTest {
   @Test
   public void draftAddress18ValidSignature_returnsOne() {
     MLDSA44 key = new MLDSA44();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] input = buildInput(MESSAGE_HASH, sig, key.getPublicKey());
 
     PrecompiledContract pc = PrecompiledContracts.getContractForAddress(MLDSA_DRAFT_ADDR);
@@ -65,7 +66,7 @@ public class MlDsa44PrecompileTest {
   @Test
   public void draftAddress18TamperedMessage_returnsZero() {
     MLDSA44 key = new MLDSA44();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] tampered = MESSAGE_HASH.clone();
     tampered[0] ^= 0x01;
     byte[] input = buildInput(tampered, sig, key.getPublicKey());
@@ -80,7 +81,7 @@ public class MlDsa44PrecompileTest {
   @Test
   public void draftAddress18TamperedSignature_returnsZero() {
     MLDSA44 key = new MLDSA44();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     sig[0] ^= 0x01;
     byte[] input = buildInput(MESSAGE_HASH, sig, key.getPublicKey());
 
@@ -95,7 +96,7 @@ public class MlDsa44PrecompileTest {
   public void draftAddress18WrongPublicKey_returnsZero() {
     MLDSA44 signer = new MLDSA44();
     MLDSA44 other = new MLDSA44();
-    byte[] sig = signer.sign(MESSAGE_HASH);
+    byte[] sig = signer.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] input = buildInput(MESSAGE_HASH, sig, other.getPublicKey());
 
     Pair<Boolean, byte[]> result =
@@ -138,7 +139,7 @@ public class MlDsa44PrecompileTest {
   public void draftAddress18TrailingBytes_returnsZero() {
     // Strict equality: even one extra trailing byte must be rejected.
     MLDSA44 key = new MLDSA44();
-    byte[] sig = key.sign(MESSAGE_HASH);
+    byte[] sig = key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH));
     byte[] valid = buildInput(MESSAGE_HASH, sig, key.getPublicKey());
     byte[] padded = new byte[valid.length + 1];
     System.arraycopy(valid, 0, padded, 0, valid.length);

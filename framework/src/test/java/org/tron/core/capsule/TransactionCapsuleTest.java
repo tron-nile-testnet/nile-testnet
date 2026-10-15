@@ -25,6 +25,7 @@ import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.pqc.FNDSA512;
 import org.tron.common.crypto.pqc.MLDSA44;
+import org.tron.common.crypto.pqc.PQDomain;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Sha256Hash;
@@ -256,7 +257,7 @@ public class TransactionCapsuleTest extends BaseTest {
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
 
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
 
     Transaction signed = tx.toBuilder()
         .addPqAuthSig(PQAuthSig.newBuilder()
@@ -274,7 +275,7 @@ public class TransactionCapsuleTest extends BaseTest {
   public void totalSignatureCountCountsBothChannels() throws Exception {
     FNDSA512 kp = new FNDSA512();
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txId(tx));
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txId(tx)));
     PQAuthSig pq = PQAuthSig.newBuilder()
         .setScheme(PQScheme.FN_DSA_512)
         .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
@@ -306,7 +307,7 @@ public class TransactionCapsuleTest extends BaseTest {
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
 
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     PQAuthSig w = PQAuthSig.newBuilder()
         .setScheme(PQScheme.FN_DSA_512)
         .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
@@ -332,7 +333,7 @@ public class TransactionCapsuleTest extends BaseTest {
 
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     PQAuthSig w = PQAuthSig.newBuilder()
         .setScheme(PQScheme.FN_DSA_512)
         .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
@@ -357,7 +358,7 @@ public class TransactionCapsuleTest extends BaseTest {
 
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     // Consensus rejects nested unknown fields too.
     PQAuthSig smuggled = PQAuthSig.newBuilder()
         .setScheme(PQScheme.FN_DSA_512)
@@ -388,7 +389,7 @@ public class TransactionCapsuleTest extends BaseTest {
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
     
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     sig[0] ^= 0x01;
 
     Transaction signed = tx.toBuilder()
@@ -418,7 +419,7 @@ public class TransactionCapsuleTest extends BaseTest {
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
     
-    byte[] sig = FNDSA512.sign(stranger.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(stranger.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
 
     Transaction signed = tx.toBuilder()
         .addPqAuthSig(PQAuthSig.newBuilder()
@@ -484,7 +485,7 @@ public class TransactionCapsuleTest extends BaseTest {
 
     // FN-DSA-512: variable-length signature (<= 752 bytes) + 897-byte public key
     FNDSA512 kpFn = new FNDSA512();
-    byte[] sigFn = FNDSA512.sign(kpFn.getPrivateKey(), txid);
+    byte[] sigFn = FNDSA512.sign(kpFn.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     Transaction txFn = baseTx.toBuilder()
         .addPqAuthSig(PQAuthSig.newBuilder()
             .setScheme(PQScheme.FN_DSA_512)
@@ -498,7 +499,7 @@ public class TransactionCapsuleTest extends BaseTest {
 
     // ML-DSA-44: fixed 2420-byte signature + 1312-byte public key
     MLDSA44 kpMl = new MLDSA44();
-    byte[] sigMl = MLDSA44.sign(kpMl.getPrivateKey(), txid);
+    byte[] sigMl = MLDSA44.sign(kpMl.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     Transaction txMl = baseTx.toBuilder()
         .addPqAuthSig(PQAuthSig.newBuilder()
             .setScheme(PQScheme.ML_DSA_44)
@@ -555,7 +556,7 @@ public class TransactionCapsuleTest extends BaseTest {
 
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
 
     // Truncate public key by one byte to force the length-mismatch branch.
     byte[] shortPub = new byte[FNDSA512.PUBLIC_KEY_LENGTH - 1];
@@ -610,7 +611,7 @@ public class TransactionCapsuleTest extends BaseTest {
 
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
 
     // setSchemeValue(99) sets an unknown numeric tag; reading back yields
     // PQScheme.UNRECOGNIZED, which PQSchemeRegistry.contains() rejects.
@@ -679,8 +680,8 @@ public class TransactionCapsuleTest extends BaseTest {
 
       Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
       byte[] txid = txId(tx);
-      byte[] sigA = FNDSA512.sign(a.getPrivateKey(), txid);
-      byte[] sigB = FNDSA512.sign(b.getPrivateKey(), txid);
+      byte[] sigA = FNDSA512.sign(a.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
+      byte[] sigB = FNDSA512.sign(b.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
 
       Transaction signed = tx.toBuilder()
           .addPqAuthSig(PQAuthSig.newBuilder()
@@ -716,7 +717,7 @@ public class TransactionCapsuleTest extends BaseTest {
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
     
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
 
     Transaction signed = tx.toBuilder()
         .addPqAuthSig(PQAuthSig.newBuilder()
@@ -790,8 +791,8 @@ public class TransactionCapsuleTest extends BaseTest {
     FNDSA512 kp2 = new FNDSA512();
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
     byte[] txid = txId(tx);
-    byte[] sig1 = FNDSA512.sign(kp1.getPrivateKey(), txid);
-    byte[] sig2 = FNDSA512.sign(kp2.getPrivateKey(), txid);
+    byte[] sig1 = FNDSA512.sign(kp1.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
+    byte[] sig2 = FNDSA512.sign(kp2.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
     Permission permission = Permission.newBuilder()
         .setType(PermissionType.Owner).setThreshold(1)
         .addKeys(Key.newBuilder()
@@ -828,7 +829,7 @@ public class TransactionCapsuleTest extends BaseTest {
     FNDSA512 knownKp = new FNDSA512();
     FNDSA512 strangerKp = new FNDSA512();
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
-    byte[] sig = FNDSA512.sign(strangerKp.getPrivateKey(), txId(tx));
+    byte[] sig = FNDSA512.sign(strangerKp.getPrivateKey(), PQDomain.TRANSACTION.bind(txId(tx)));
     Permission permission = Permission.newBuilder()
         .setType(PermissionType.Owner).setThreshold(1)
         .addKeys(Key.newBuilder()
@@ -856,7 +857,7 @@ public class TransactionCapsuleTest extends BaseTest {
     dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
     FNDSA512 kp = new FNDSA512();
     Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
-    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), txId(tx));
+    byte[] sig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txId(tx)));
     long expectedWeight = 7L;
     Permission permission = Permission.newBuilder()
         .setType(PermissionType.Owner).setThreshold(1)

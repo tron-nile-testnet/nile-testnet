@@ -282,6 +282,15 @@ public final class PQSchemeRegistry {
     return require(scheme).ops.verify(publicKey, message, signature);
   }
 
+  public static byte[] sign(PQScheme scheme, byte[] privateKey, PQDomain domain, byte[] target) {
+    return sign(scheme, privateKey, domain.bind(target));
+  }
+
+  public static boolean verify(
+      PQScheme scheme, byte[] publicKey, PQDomain domain, byte[] target, byte[] signature) {
+    return verify(scheme, publicKey, domain.bind(target), signature);
+  }
+
   public static PQSignature fromSeed(PQScheme scheme, byte[] seed) {
     return require(scheme).ops.fromSeed(seed);
   }
