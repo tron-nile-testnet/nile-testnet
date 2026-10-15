@@ -773,7 +773,9 @@ public class TransactionCapsule implements ProtoCapsule<Transaction> {
           .orElseThrow(() -> new PermissionException(
               "pq_auth_sig public key derives to " + encode58Check(derivedAddr)
                   + " but it is not contained of permission."));
-      if (!PQSchemeRegistry.verify(scheme, pk, PQDomain.TRANSACTION, digest, sig)) {
+      byte[] signed = PQDomain.TRANSACTION.bindIf(
+          dynamicPropertiesStore.allowPqDomainSeparation(), digest);
+      if (!PQSchemeRegistry.verify(scheme, pk, signed, sig)) {
         throw new SignatureException("pq sig invalid");
       }
       try {

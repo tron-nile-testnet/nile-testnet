@@ -72,12 +72,14 @@ public class ValidateMultiPQSigTest extends BaseTest {
     dbManager.getDynamicPropertiesStore().saveTotalSignNum(5);
     VMConfig.initAllowFnDsa512(1L);
     VMConfig.initAllowMlDsa44(1L);
+    VMConfig.initAllowPqDomainSeparation(1L);
   }
 
   @After
   public void after() {
     VMConfig.initAllowFnDsa512(0L);
     VMConfig.initAllowMlDsa44(0L);
+    VMConfig.initAllowPqDomainSeparation(0L);
   }
 
   // ---------- registration / gating ----------

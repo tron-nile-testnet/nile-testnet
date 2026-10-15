@@ -219,6 +219,12 @@ public class PQTxSender {
         tx.getRawData().toByteArray());
   }
 
+  private static boolean domainSeparationActive(WalletBlockingStub stub) {
+    return stub.getChainParameters(EmptyMessage.getDefaultInstance())
+        .getChainParameterList().stream()
+        .anyMatch(p -> "getAllowPqDomainSeparation".equals(p.getKey()) && p.getValue() == 1);
+  }
+
   private static byte[] longToBytes(long value) {
     return ByteBuffer.allocate(8).putLong(value).array();
   }
@@ -298,7 +304,8 @@ public class PQTxSender {
 
       Transaction tx = buildTransferTransaction(ownerAddr, blockHash, refNum);
       byte[] txId = sha256(tx.getRawData().toByteArray());
-      byte[] sig = userKp.sign(PQDomain.TRANSACTION.bind(txId));
+      boolean bound = domainSeparationActive(timedStub);
+      byte[] sig = userKp.sign(PQDomain.TRANSACTION.bindIf(bound, txId));
       Transaction signedTx = tx.toBuilder()
           .addPqAuthSig(PQAuthSig.newBuilder()
               .setScheme(scheme)
@@ -335,7 +342,8 @@ public class PQTxSender {
       tx = tx.toBuilder().setRawData(rawBuilder).build();
 
       byte[] txId = sha256(tx.getRawData().toByteArray());
-      byte[] sig = userKp.sign(PQDomain.TRANSACTION.bind(txId));
+      boolean bound = domainSeparationActive(timedStub);
+      byte[] sig = userKp.sign(PQDomain.TRANSACTION.bindIf(bound, txId));
       Transaction signedTx = tx.toBuilder()
           .addPqAuthSig(PQAuthSig.newBuilder()
               .setScheme(scheme)

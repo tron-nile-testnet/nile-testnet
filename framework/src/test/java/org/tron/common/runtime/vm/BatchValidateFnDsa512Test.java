@@ -49,11 +49,13 @@ public class BatchValidateFnDsa512Test {
   @Before
   public void enableProposal() {
     VMConfig.initAllowFnDsa512(1L);
+    VMConfig.initAllowPqDomainSeparation(1L);
   }
 
   @After
   public void disableProposal() {
     VMConfig.initAllowFnDsa512(0L);
+    VMConfig.initAllowPqDomainSeparation(0L);
   }
 
   @Test

@@ -34,6 +34,14 @@ public class PQDomainTest {
   }
 
   @Test
+  public void bindIfKeepsTheRawTargetUntilActive() {
+    for (PQDomain domain : PQDomain.values()) {
+      assertArrayEquals(TARGET, domain.bindIf(false, TARGET));
+      assertArrayEquals(domain.bind(TARGET), domain.bindIf(true, TARGET));
+    }
+  }
+
+  @Test
   public void messageSignatureIsRejectedAsTransactionSignature() {
     for (PQScheme scheme : new PQScheme[] {PQScheme.FN_DSA_512, PQScheme.ML_DSA_44}) {
       PQSignature key = PQSchemeRegistry.fromSeed(scheme,

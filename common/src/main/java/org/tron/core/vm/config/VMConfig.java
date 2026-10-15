@@ -49,6 +49,7 @@ public class VMConfig {
     public boolean allowFnDsa512;
     public boolean allowMlDsa44;
     public boolean allowOptimizeTvmStorage;
+    public boolean allowPqDomainSeparation;
   }
 
   // HEAD / block-processing config, written by the consensus path; read by everyone with no
@@ -219,6 +220,10 @@ public class VMConfig {
     globalSnapshot.allowOptimizeTvmStorage = allow == 1;
   }
 
+  public static void initAllowPqDomainSeparation(long allow) {
+    globalSnapshot.allowPqDomainSeparation = allow == 1;
+  }
+
   public static boolean getEnergyLimitHardFork() {
     return CommonParameter.ENERGY_LIMIT_HARD_FORK;
   }
@@ -337,5 +342,9 @@ public class VMConfig {
 
   public static boolean allowOptimizeTvmStorage() {
     return current().allowOptimizeTvmStorage;
+  }
+
+  public static boolean allowPqDomainSeparation() {
+    return current().allowPqDomainSeparation;
   }
 }

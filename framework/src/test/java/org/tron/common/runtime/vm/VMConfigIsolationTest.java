@@ -104,6 +104,7 @@ public class VMConfigIsolationTest {
     snapshot.allowTvmOsaka = VMConfig.allowTvmOsaka();
     snapshot.allowHardenResourceCalculation = VMConfig.allowHardenResourceCalculation();
     snapshot.allowOptimizeTvmStorage = VMConfig.allowOptimizeTvmStorage();
+    snapshot.allowPqDomainSeparation = VMConfig.allowPqDomainSeparation();
     return snapshot;
   }
 }

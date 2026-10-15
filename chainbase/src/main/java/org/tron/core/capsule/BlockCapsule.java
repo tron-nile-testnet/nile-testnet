@@ -286,7 +286,9 @@ public class BlockCapsule implements ProtoCapsule<Block> {
     }
 
     byte[] digest = getRawHash().getBytes();
-    return PQSchemeRegistry.verify(scheme, publicKey, PQDomain.BLOCK, digest, signature);
+    byte[] signed = PQDomain.BLOCK.bindIf(
+        dynamicPropertiesStore.allowPqDomainSeparation(), digest);
+    return PQSchemeRegistry.verify(scheme, publicKey, signed, signature);
   }
 
   public BlockId getBlockId() {

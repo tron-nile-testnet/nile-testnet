@@ -172,7 +172,9 @@ public class RelayService {
       PQScheme scheme = kp.getScheme();
       byte[] privKey = ByteArray.fromHexString(kp.getPrivateKey());
       byte[] pubKey = ByteArray.fromHexString(kp.getPublicKey());
-      byte[] sig = PQSchemeRegistry.sign(scheme, privKey, PQDomain.RELAY, digest);
+      byte[] signed = PQDomain.RELAY.bindIf(
+          manager.getDynamicPropertiesStore().allowPqDomainSeparation(), digest);
+      byte[] sig = PQSchemeRegistry.sign(scheme, privKey, signed);
       builder.setPqAuthSig(PQAuthSig.newBuilder()
           .setScheme(scheme)
           .setPublicKey(ByteString.copyFrom(pubKey))
@@ -288,7 +290,9 @@ public class RelayService {
           remoteAddress, ByteArray.toHexString(witnessAddr.toByteArray()));
       return false;
     }
-    return PQSchemeRegistry.verify(scheme, publicKey, PQDomain.RELAY, digest, signature);
+    byte[] signed = PQDomain.RELAY.bindIf(
+        manager.getDynamicPropertiesStore().allowPqDomainSeparation(), digest);
+    return PQSchemeRegistry.verify(scheme, publicKey, signed, signature);
   }
 
   /**

@@ -275,6 +275,9 @@ public class RelayServiceTest extends BaseTest {
     // Activate FN-DSA-512 on chain so verifyPqAuthSig accepts the scheme.
     long previousAllowFnDsa = chainBaseManager.getDynamicPropertiesStore().getAllowFnDsa512();
     chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    long previousDomain = chainBaseManager.getDynamicPropertiesStore()
+        .getAllowPqDomainSeparation();
+    chainBaseManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(1L);
 
     Args.getInstance().fastForward = true;
 
@@ -317,6 +320,21 @@ public class RelayServiceTest extends BaseTest {
       // Happy path: valid PQ-only signature.
       Assert.assertTrue(service.checkHelloMessage(helloMessage, channel));
 
+      // After activation a raw target signature is rejected.
+      byte[] rawSig = FNDSA512.sign(pqKeypair.getPrivateKey(), digest);
+      Protocol.HelloMessage raw = base.toBuilder()
+          .setPqAuthSig(pqAuthSig.toBuilder().setSignature(ByteString.copyFrom(rawSig)))
+          .build();
+      helloMessage.setHelloMessage(raw);
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+
+      // Before activation the raw target signature is accepted and the bound one is not.
+      chainBaseManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(0L);
+      Assert.assertTrue(service.checkHelloMessage(helloMessage, channel));
+      helloMessage.setHelloMessage(base);
+      Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
+      chainBaseManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(1L);
+
       // Both legacy signature and pq_auth_sig set → mutex rejects.
       helloMessage.setHelloMessage(base.toBuilder()
           .setSignature(ByteString.copyFrom(new byte[]{0x01}))
@@ -354,6 +372,7 @@ public class RelayServiceTest extends BaseTest {
       Assert.assertFalse(service.checkHelloMessage(helloMessage, channel));
     } finally {
       chainBaseManager.getDynamicPropertiesStore().saveAllowFnDsa512(previousAllowFnDsa);
+      chainBaseManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(previousDomain);
       if (previousActive != null) {
         chainBaseManager.getWitnessScheduleStore().saveActiveWitnesses(previousActive);
       }

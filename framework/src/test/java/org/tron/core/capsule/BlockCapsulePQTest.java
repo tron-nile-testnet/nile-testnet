@@ -45,6 +45,7 @@ public class BlockCapsulePQTest extends BaseTest {
     witnessAddress = witnessKey.getAddress();
     pqKeypair = new FNDSA512();
     pqAddress = PQSchemeRegistry.computeAddress(PQScheme.FN_DSA_512, pqKeypair.getPublicKey());
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(1L);
   }
 
   /**
@@ -57,6 +58,7 @@ public class BlockCapsulePQTest extends BaseTest {
   public void resetPqFlags() {
     dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(0L);
     dbManager.getDynamicPropertiesStore().saveAllowMlDsa44(0L);
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(0L);
   }
 
   /**
@@ -193,6 +195,34 @@ public class BlockCapsulePQTest extends BaseTest {
     byte[] digest = block.getRawHashBytes();
     block.setPqAuthSig(buildPQAuthSig(signPQ(digest)));
     Assert.assertTrue(block.validateSignature(
+        dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+  }
+
+  @Test
+  public void domainSeparationActivationSwitchesSignedTarget() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowMultiSign(1L);
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    AccountCapsule witness = buildWitnessAccount(pqAddress);
+    dbManager.getAccountStore().put(witnessAddress, witness);
+
+    BlockCapsule block = buildUnsignedBlock(new byte[32]);
+    byte[] digest = block.getRawHashBytes();
+    byte[] rawSig = FNDSA512.sign(pqKeypair.getPrivateKey(), digest);
+    byte[] boundSig = signPQ(digest);
+
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(0L);
+    block.setPqAuthSig(buildPQAuthSig(rawSig));
+    Assert.assertTrue(block.validateSignature(
+        dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+    block.setPqAuthSig(buildPQAuthSig(boundSig));
+    Assert.assertFalse(block.validateSignature(
+        dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(1L);
+    Assert.assertTrue(block.validateSignature(
+        dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+    block.setPqAuthSig(buildPQAuthSig(rawSig));
+    Assert.assertFalse(block.validateSignature(
         dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
   }
 

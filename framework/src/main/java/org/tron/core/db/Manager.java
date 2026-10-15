@@ -1850,7 +1850,9 @@ public class Manager {
               + " set but local PQ key material is missing");
     }
     byte[] digest = blockCapsule.getRawHashBytes();
-    byte[] signature = PQSchemeRegistry.sign(scheme, pqPrivateKey, PQDomain.BLOCK, digest);
+    byte[] signed = PQDomain.BLOCK.bindIf(
+        getDynamicPropertiesStore().allowPqDomainSeparation(), digest);
+    byte[] signature = PQSchemeRegistry.sign(scheme, pqPrivateKey, signed);
     PQAuthSig.Builder builder = PQAuthSig.newBuilder()
         .setScheme(scheme)
         .setPublicKey(ByteString.copyFrom(pqPublicKey))

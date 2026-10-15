@@ -35,4 +35,8 @@ public enum PQDomain {
       throw new IllegalStateException("SHA-256 unavailable", e);
     }
   }
+
+  public byte[] bindIf(boolean active, byte[] target) {
+    return active ? bind(target) : target;
+  }
 }

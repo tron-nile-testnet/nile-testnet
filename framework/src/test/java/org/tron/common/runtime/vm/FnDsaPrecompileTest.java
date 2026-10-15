@@ -37,11 +37,13 @@ public class FnDsaPrecompileTest {
   @Before
   public void enableProposal() {
     VMConfig.initAllowFnDsa512(1L);
+    VMConfig.initAllowPqDomainSeparation(1L);
   }
 
   @After
   public void disableProposal() {
     VMConfig.initAllowFnDsa512(0L);
+    VMConfig.initAllowPqDomainSeparation(0L);
   }
 
   @Test
@@ -67,6 +69,23 @@ public class FnDsaPrecompileTest {
     Assert.assertTrue(result.getLeft());
     Assert.assertArrayEquals(DataWord.ONE().getData(), result.getRight());
     Assert.assertEquals(3000, pc.getEnergyForData(input));
+  }
+
+  @Test
+  public void domainSeparationActivation_switchesSignedTarget() {
+    FNDSA512 key = new FNDSA512();
+    byte[] raw = buildInput(MESSAGE_HASH, key.sign(MESSAGE_HASH), key.getPublicKey());
+    byte[] bound = buildInput(MESSAGE_HASH, key.sign(PQDomain.MESSAGE.bind(MESSAGE_HASH)),
+        key.getPublicKey());
+    PrecompiledContract pc = PrecompiledContracts.getContractForAddress(FNDSA_ADDR);
+
+    VMConfig.initAllowPqDomainSeparation(0L);
+    Assert.assertArrayEquals(DataWord.ONE().getData(), pc.execute(raw).getRight());
+    Assert.assertArrayEquals(DataWord.ZERO().getData(), pc.execute(bound).getRight());
+
+    VMConfig.initAllowPqDomainSeparation(1L);
+    Assert.assertArrayEquals(DataWord.ONE().getData(), pc.execute(bound).getRight());
+    Assert.assertArrayEquals(DataWord.ZERO().getData(), pc.execute(raw).getRight());
   }
 
   @Test

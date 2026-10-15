@@ -114,7 +114,7 @@ public class PQClient {
       byte[] txId   = Sha256Hash.of(
           CommonParameter.getInstance().isECKeyCryptoEngine(),
           rawData.toByteArray()).getBytes();
-      byte[] sig    = userKp.sign(PQDomain.TRANSACTION.bind(txId));
+      byte[] sig    = userKp.sign(PQDomain.TRANSACTION.bindIf(domainSeparationActive(stub), txId));
 
       // Producers must set the scheme tag explicitly; scheme=0
       // (UNKNOWN_PQ_SCHEME) is rejected by the verifier as unregistered.
@@ -142,6 +142,12 @@ public class PQClient {
       channel.shutdown();
       channel.awaitTermination(5, TimeUnit.SECONDS);
     }
+  }
+
+  private static boolean domainSeparationActive(WalletBlockingStub stub) {
+    return stub.getChainParameters(EmptyMessage.getDefaultInstance())
+        .getChainParameterList().stream()
+        .anyMatch(p -> "getAllowPqDomainSeparation".equals(p.getKey()) && p.getValue() == 1);
   }
 
   private static byte[] longToBytes(long value) {

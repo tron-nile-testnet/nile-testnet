@@ -49,11 +49,13 @@ public class BatchValidateMlDsa44Test {
   @Before
   public void enableProposal() {
     VMConfig.initAllowMlDsa44(1L);
+    VMConfig.initAllowPqDomainSeparation(1L);
   }
 
   @After
   public void disableProposal() {
     VMConfig.initAllowMlDsa44(0L);
+    VMConfig.initAllowPqDomainSeparation(0L);
   }
 
   @Test

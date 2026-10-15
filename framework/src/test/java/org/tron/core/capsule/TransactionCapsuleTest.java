@@ -68,6 +68,7 @@ public class TransactionCapsuleTest extends BaseTest {
     AccountCapsule ownerCapsule = new AccountCapsule(ByteString.copyFromUtf8("owner"),
         StringUtil.hexString2ByteString(OWNER_ADDRESS), AccountType.Normal, 10_000_000_000L);
     dbManager.getAccountStore().put(ownerCapsule.createDbKey(), ownerCapsule);
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(1L);
   }
 
   @Test
@@ -269,6 +270,42 @@ public class TransactionCapsuleTest extends BaseTest {
     TransactionCapsule cap = new TransactionCapsule(signed);
     Assert.assertTrue(cap.validatePubSignature(dbManager.getAccountStore(),
         dbManager.getDynamicPropertiesStore()));
+  }
+
+  @Test
+  public void domainSeparationActivationSwitchesSignedTarget() throws Exception {
+    dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(1L);
+    FNDSA512 kp = new FNDSA512();
+    putAccountWithPQPermission(PQ_OWNER_HEX, kp.getPublicKey(), PQScheme.FN_DSA_512);
+    Transaction tx = buildTransferTx(PQ_OWNER_HEX, 0);
+    byte[] txid = txId(tx);
+    byte[] rawSig = FNDSA512.sign(kp.getPrivateKey(), txid);
+    byte[] boundSig = FNDSA512.sign(kp.getPrivateKey(), PQDomain.TRANSACTION.bind(txid));
+
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(0L);
+    Assert.assertTrue(pqSignatureAccepted(tx, kp, rawSig));
+    Assert.assertFalse(pqSignatureAccepted(tx, kp, boundSig));
+
+    dbManager.getDynamicPropertiesStore().saveAllowPqDomainSeparation(1L);
+    Assert.assertTrue(pqSignatureAccepted(tx, kp, boundSig));
+    Assert.assertFalse(pqSignatureAccepted(tx, kp, rawSig));
+  }
+
+  private boolean pqSignatureAccepted(Transaction tx, FNDSA512 kp, byte[] sig) throws Exception {
+    Transaction signed = tx.toBuilder()
+        .addPqAuthSig(PQAuthSig.newBuilder()
+            .setScheme(PQScheme.FN_DSA_512)
+            .setPublicKey(ByteString.copyFrom(kp.getPublicKey()))
+            .setSignature(ByteString.copyFrom(sig))
+            .build())
+        .build();
+    try {
+      return new TransactionCapsule(signed).validatePubSignature(dbManager.getAccountStore(),
+          dbManager.getDynamicPropertiesStore());
+    } catch (ValidateSignatureException e) {
+      Assert.assertTrue(e.getMessage().contains("pq sig invalid"));
+      return false;
+    }
   }
 
   @Test
