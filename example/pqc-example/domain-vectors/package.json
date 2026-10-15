@@ -1,0 +1,12 @@
+{
+  "name": "tron-pq-domain-vectors",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "0.7.1"
+  }
+}
