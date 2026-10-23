@@ -73,6 +73,31 @@ public class VMConfigIsolationTest {
     assertFalse("setGlobalSnapshot must drop the thread-local view", VMConfig.allowTvmOsaka());
   }
 
+  @Test
+  public void testPqAndStorageKeyFlagsRemainIsolated() throws InterruptedException {
+    VMConfig.initAllowFnDsa512(1);
+    VMConfig.initAllowMlDsa44(1);
+    VMConfig.initAllowOptimizeTvmStorageKey(1);
+    VMConfig.setLocalSnapshot(new VMConfig.Snapshot());
+
+    assertFalse(VMConfig.allowFnDsa512());
+    assertFalse(VMConfig.allowMlDsa44());
+    assertFalse(VMConfig.allowOptimizeTvmStorageKey());
+
+    AtomicBoolean otherThreadSawGlobalFlags = new AtomicBoolean(false);
+    Thread thread = new Thread(() -> otherThreadSawGlobalFlags.set(
+        VMConfig.allowFnDsa512() && VMConfig.allowMlDsa44()
+            && VMConfig.allowOptimizeTvmStorageKey()));
+    thread.start();
+    thread.join();
+    assertTrue(otherThreadSawGlobalFlags.get());
+
+    VMConfig.clearLocalSnapshot();
+    assertTrue(VMConfig.allowFnDsa512());
+    assertTrue(VMConfig.allowMlDsa44());
+    assertTrue(VMConfig.allowOptimizeTvmStorageKey());
+  }
+
   // Deep-copy the current global config through the public getters (no thread-local set here, so
   // the getters read the global) so @After can restore the exact prior state.
   private static VMConfig.Snapshot snapshotGlobal() {
@@ -103,7 +128,9 @@ public class VMConfigIsolationTest {
     snapshot.allowTvmSelfdestructRestriction = VMConfig.allowTvmSelfdestructRestriction();
     snapshot.allowTvmOsaka = VMConfig.allowTvmOsaka();
     snapshot.allowHardenResourceCalculation = VMConfig.allowHardenResourceCalculation();
-    snapshot.allowOptimizeTvmStorage = VMConfig.allowOptimizeTvmStorage();
+    snapshot.allowFnDsa512 = VMConfig.allowFnDsa512();
+    snapshot.allowMlDsa44 = VMConfig.allowMlDsa44();
+    snapshot.allowOptimizeTvmStorageKey = VMConfig.allowOptimizeTvmStorageKey();
     return snapshot;
   }
 }
