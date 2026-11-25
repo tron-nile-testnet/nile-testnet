@@ -22,6 +22,7 @@ import org.tron.common.parameter.CommonParameter;
 import org.tron.core.capsule.ProposalCapsule;
 import org.tron.core.config.args.Args;
 import org.tron.core.consensus.ProposalService;
+import org.tron.core.store.DynamicPropertiesStore;
 import org.tron.core.utils.ProposalUtil.ProposalType;
 import org.tron.protos.Protocol.Proposal;
 
@@ -137,6 +138,45 @@ public class ProposalServiceTest extends BaseTest {
   }
 
   @Test
+  public void testIndependentGovernanceActivation() {
+    long savedStorage = dbManager.getDynamicPropertiesStore().getAllowOptimizeTvmStorage();
+    long savedEcdsa = dbManager.getDynamicPropertiesStore().getAllowStrictEcdsaValidation();
+    int savedCloseExchange = dbManager.getDynamicPropertiesStore().getCloseExchange();
+    try {
+      dbManager.getDynamicPropertiesStore().saveAllowOptimizeTvmStorage(0);
+      dbManager.getDynamicPropertiesStore().saveAllowStrictEcdsaValidation(0);
+      dbManager.getDynamicPropertiesStore().saveCloseExchange(0);
+      Proposal storageProposal = Proposal.newBuilder().putParameters(99, 1).build();
+
+      Assert.assertTrue(ProposalService.process(dbManager, new ProposalCapsule(storageProposal)));
+      Assert.assertTrue(dbManager.getDynamicPropertiesStore().allowOptimizeTvmStorage());
+      Assert.assertFalse(dbManager.getDynamicPropertiesStore().allowStrictEcdsaValidation());
+      Assert.assertEquals(0, dbManager.getDynamicPropertiesStore().getCloseExchange());
+
+      dbManager.getDynamicPropertiesStore().saveAllowOptimizeTvmStorage(0);
+      Proposal ecdsaProposal = Proposal.newBuilder().putParameters(100, 1).build();
+
+      Assert.assertTrue(ProposalService.process(dbManager, new ProposalCapsule(ecdsaProposal)));
+      Assert.assertTrue(dbManager.getDynamicPropertiesStore().allowStrictEcdsaValidation());
+      Assert.assertFalse(dbManager.getDynamicPropertiesStore().allowOptimizeTvmStorage());
+      Assert.assertEquals(0, dbManager.getDynamicPropertiesStore().getCloseExchange());
+
+      dbManager.getDynamicPropertiesStore().saveAllowStrictEcdsaValidation(0);
+      Proposal closeExchangeProposal = Proposal.newBuilder().putParameters(101, 1).build();
+
+      Assert.assertTrue(ProposalService.process(dbManager,
+          new ProposalCapsule(closeExchangeProposal)));
+      Assert.assertEquals(1, dbManager.getDynamicPropertiesStore().getCloseExchange());
+      Assert.assertFalse(dbManager.getDynamicPropertiesStore().allowStrictEcdsaValidation());
+      Assert.assertFalse(dbManager.getDynamicPropertiesStore().allowOptimizeTvmStorage());
+    } finally {
+      dbManager.getDynamicPropertiesStore().saveAllowOptimizeTvmStorage(savedStorage);
+      dbManager.getDynamicPropertiesStore().saveAllowStrictEcdsaValidation(savedEcdsa);
+      dbManager.getDynamicPropertiesStore().saveCloseExchange(savedCloseExchange);
+    }
+  }
+
+  @Test
   public void testProposalExpireTime() {
     long defaultWindow = dbManager.getDynamicPropertiesStore().getProposalExpireTime();
     long proposalExpireTime = CommonParameter.getInstance().getProposalExpireTime();
@@ -185,4 +225,129 @@ public class ProposalServiceTest extends BaseTest {
 
     dbManager.getDynamicPropertiesStore().saveAllowMlDsa44(0L);
   }
+
+
+  // -------------------------------------------------------------------------------------------
+  // CLOSE_EXCHANGE application-side regression tests
+  // -------------------------------------------------------------------------------------------
+
+  private static final long CLOSE_EXCHANGE_CODE =
+      ProposalType.CLOSE_EXCHANGE.getCode();
+  private static final long EXCHANGE_CREATE_FEE_CODE =
+      ProposalType.EXCHANGE_CREATE_FEE.getCode();
+  private static final long HARDEN_EXCHANGE_CODE =
+      ProposalType.ALLOW_HARDEN_EXCHANGE_CALCULATION.getCode();
+  private static final long CREATE_ACCOUNT_FEE_CODE =
+      ProposalType.CREATE_ACCOUNT_FEE.getCode();
+  private static final long WITNESS_PAY_PER_BLOCK_CODE =
+      ProposalType.WITNESS_PAY_PER_BLOCK.getCode();
+
+  private DynamicPropertiesStore dps() {
+    return dbManager.getDynamicPropertiesStore();
+  }
+
+  private void apply(long code, long value) {
+    Proposal proposal = Proposal.newBuilder().putParameters(code, value).build();
+    Assert.assertTrue(ProposalService.process(dbManager, new ProposalCapsule(proposal)));
+  }
+
+  /**
+   * The apply side stores every CLOSE_EXCHANGE value unconditionally: duplicate, stale,
+   * jump and reset proposals all write through. Creation-side validation (ProposalUtil) is
+   * the only gate.
+   */
+  @Test
+  public void testApplyCloseExchangeSavesUnconditionally() {
+    dps().saveCloseExchange(0);
+
+    apply(CLOSE_EXCHANGE_CODE, 1);
+    Assert.assertEquals(1, dps().getCloseExchange());
+
+    // duplicate re-application of the same value: still stored
+    apply(CLOSE_EXCHANGE_CODE, 1);
+    Assert.assertEquals(1, dps().getCloseExchange());
+
+    apply(CLOSE_EXCHANGE_CODE, 2);
+    Assert.assertEquals(2, dps().getCloseExchange());
+
+    // stale lower value: applied unconditionally
+    apply(CLOSE_EXCHANGE_CODE, 1);
+    Assert.assertEquals(1, dps().getCloseExchange());
+
+    // jump beyond the highest level: applied unconditionally
+    apply(CLOSE_EXCHANGE_CODE, 3);
+    Assert.assertEquals(3, dps().getCloseExchange());
+
+    // reset: applied unconditionally
+    apply(CLOSE_EXCHANGE_CODE, 0);
+    Assert.assertEquals(0, dps().getCloseExchange());
+  }
+
+  /**
+   * A CLOSE_EXCHANGE entry is applied unconditionally, and the sibling parameters carried by
+   * the same proposal are applied as well.
+   */
+  @Test
+  public void testApplyCloseExchangeDoesNotBlockOtherParameters() {
+    dps().saveCloseExchange(1);
+    dps().saveCreateAccountFee(1000L);
+    dps().saveWitnessPayPerBlock(100L);
+
+    Proposal proposal = Proposal.newBuilder()
+        .putParameters(CLOSE_EXCHANGE_CODE, 3L)      // applied unconditionally
+        .putParameters(CREATE_ACCOUNT_FEE_CODE, 2000L)
+        .putParameters(WITNESS_PAY_PER_BLOCK_CODE, 300L)
+        .build();
+    Assert.assertTrue(ProposalService.process(dbManager, new ProposalCapsule(proposal)));
+
+    Assert.assertEquals("CLOSE_EXCHANGE entry must be applied unconditionally",
+        3, dps().getCloseExchange());
+    Assert.assertEquals(2000L, dps().getCreateAccountFee());
+    Assert.assertEquals(300L, dps().getWitnessPayPerBlock());
+  }
+
+  /**
+   * EXCHANGE_CREATE_FEE(12) and ALLOW_HARDEN_EXCHANGE_CALCULATION(98) apply unconditionally
+   * at any close level, together with the sibling parameters of the same proposal. The
+   * close-level lockout lives on the creation side only.
+   */
+  @Test
+  public void testApplyLegacyExchangeParametersAroundCloseLevel() {
+    // ensure level 0: prior tests in this class may have left the level raised
+    dps().saveCloseExchange(0);
+    // close level 0: both legacy parameters apply
+    dps().saveExchangeCreateFee(1024_000_000L);
+    dps().saveAllowHardenExchangeCalculation(0);
+    apply(EXCHANGE_CREATE_FEE_CODE, 2_048_000_000L);
+    Assert.assertEquals(2_048_000_000L, dps().getExchangeCreateFee());
+    apply(HARDEN_EXCHANGE_CODE, 1);
+    Assert.assertEquals(1, dps().getAllowHardenExchangeCalculation());
+
+    dps().saveCloseExchange(1);
+    try {
+      // close level >= 1: legacy exchange parameters now apply unconditionally too
+      apply(EXCHANGE_CREATE_FEE_CODE, 3_072_000_000L);
+      Assert.assertEquals("EXCHANGE_CREATE_FEE must apply at close level >= 1",
+          3_072_000_000L, dps().getExchangeCreateFee());
+      apply(HARDEN_EXCHANGE_CODE, 0);
+      Assert.assertEquals("ALLOW_HARDEN_EXCHANGE_CALCULATION must apply at close level >= 1",
+          0, dps().getAllowHardenExchangeCalculation());
+
+      // sibling parameters of the same proposal apply as well
+      dps().saveCreateAccountFee(1000L);
+      Proposal proposal = Proposal.newBuilder()
+          .putParameters(EXCHANGE_CREATE_FEE_CODE, 4_096_000_000L)
+          .putParameters(HARDEN_EXCHANGE_CODE, 1L)
+          .putParameters(CREATE_ACCOUNT_FEE_CODE, 5000L)
+          .build();
+      Assert.assertTrue(ProposalService.process(dbManager, new ProposalCapsule(proposal)));
+      Assert.assertEquals(4_096_000_000L, dps().getExchangeCreateFee());
+      Assert.assertEquals(1, dps().getAllowHardenExchangeCalculation());
+      Assert.assertEquals(5000L, dps().getCreateAccountFee());
+    } finally {
+      dps().saveCloseExchange(0);
+      dps().saveAllowHardenExchangeCalculation(0);
+    }
+  }
+
 }

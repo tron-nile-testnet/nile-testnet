@@ -15,6 +15,7 @@
 
 package org.tron.core.capsule;
 
+import static org.tron.core.Constant.PER_SIGN_LENGTH;
 import static org.tron.core.exception.BadBlockException.TypeEnum.CALC_MERKLE_ROOT_FAILED;
 
 import com.google.common.primitives.Longs;
@@ -36,7 +37,6 @@ import org.tron.common.crypto.SignInterface;
 import org.tron.common.crypto.SignUtils;
 import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
-import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.common.utils.Time;
@@ -57,7 +57,6 @@ import org.tron.protos.Protocol.Transaction;
 public class BlockCapsule implements ProtoCapsule<Block> {
 
   public boolean generatedByMyself = false;
-  private volatile boolean merkleValidated = false;
   @Getter
   @Setter
   private TransactionRetCapsule result;
@@ -170,8 +169,7 @@ public class BlockCapsule implements ProtoCapsule<Block> {
 
   // TODO add unit test for sig2.getbytes
   public void sign(byte[] privateKey) {
-    SignInterface ecKeyEngine = SignUtils
-        .fromPrivate(privateKey, CommonParameter.getInstance().isECKeyCryptoEngine());
+    SignInterface ecKeyEngine = SignUtils.fromPrivate(privateKey);
 
     ByteString sig = ByteString.copyFrom(ecKeyEngine.Base64toBytes(ecKeyEngine.signHash(getRawHash()
         .getBytes())));
@@ -196,8 +194,7 @@ public class BlockCapsule implements ProtoCapsule<Block> {
   }
 
   private Sha256Hash getRawHash() {
-    return Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
-        this.block.getBlockHeader().getRawData().toByteArray());
+    return Sha256Hash.of(this.block.getBlockHeader().getRawData().toByteArray());
   }
 
   public boolean validateSignature(DynamicPropertiesStore dynamicPropertiesStore,
@@ -232,15 +229,21 @@ public class BlockCapsule implements ProtoCapsule<Block> {
       return validatePQSignature(dynamicPropertiesStore, witnessPermissionAddress,
           header.getPqAuthSig());
     }
-    return validateLegacySignature(header, witnessPermissionAddress);
+    return validateLegacySignature(header, witnessPermissionAddress,
+        dynamicPropertiesStore.allowStrictEcdsaValidation());
   }
 
-  private boolean validateLegacySignature(BlockHeader header, byte[] witnessPermissionAddress)
+  private boolean validateLegacySignature(BlockHeader header, byte[] witnessPermissionAddress,
+      boolean strictEcdsaValidation)
       throws ValidateSignatureException {
     try {
+      ByteString witnessSignature = block.getBlockHeader().getWitnessSignature();
+      if (strictEcdsaValidation
+          && !SignUtils.isValidLength(witnessSignature.size())) {
+        throw new ValidateSignatureException("Invalid ECDSA signature format");
+      }
       byte[] sigAddress = SignUtils.signatureToAddress(getRawHash().getBytes(),
-          TransactionCapsule.getBase64FromByteString(header.getWitnessSignature()),
-          CommonParameter.getInstance().isECKeyCryptoEngine());
+          TransactionCapsule.getBase64FromByteString(witnessSignature), strictEcdsaValidation);
 
       return Arrays.equals(sigAddress, witnessPermissionAddress);
     } catch (SignatureException e) {
@@ -291,7 +294,7 @@ public class BlockCapsule implements ProtoCapsule<Block> {
   public BlockId getBlockId() {
     if (blockId.equals(Sha256Hash.ZERO_HASH)) {
       blockId =
-          new BlockId(Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
+          new BlockId(Sha256Hash.of(
               this.block.getBlockHeader().getRawData().toByteArray()), getNum());
     }
     return blockId;
@@ -313,16 +316,12 @@ public class BlockCapsule implements ProtoCapsule<Block> {
   }
 
   public void validateMerkleRoot() throws BadBlockException {
-    if (merkleValidated) {
-      return;
-    }
     Sha256Hash actual = calcMerkleRoot();
     if (!actual.equals(getMerkleRoot())) {
       throw new BadBlockException(CALC_MERKLE_ROOT_FAILED,
           String.format("merkle root mismatch for block %d: expected %s, actual %s",
               getNum(), getMerkleRoot(), actual));
     }
-    merkleValidated = true;
   }
 
   public void setMerkleRoot() {
@@ -416,20 +415,33 @@ public class BlockCapsule implements ProtoCapsule<Block> {
   public boolean sanitize() {
     boolean blockHasUnknown = !this.block.getUnknownFields().asMap().isEmpty();
     boolean headerHasUnknown = !this.block.getBlockHeader().getUnknownFields().asMap().isEmpty();
-    if (!blockHasUnknown && !headerHasUnknown) {
+    ByteString witnessSignature = this.block.getBlockHeader().getWitnessSignature();
+    boolean hasOverlongWitnessSignature = witnessSignature.size() > PER_SIGN_LENGTH;
+    if (!blockHasUnknown && !headerHasUnknown && !hasOverlongWitnessSignature) {
       return false;
     }
     UnknownFieldSet empty = UnknownFieldSet.getDefaultInstance();
     Block.Builder builder = this.block.toBuilder();
+    BlockHeader.Builder headerBuilder = this.block.getBlockHeader().toBuilder();
     if (blockHasUnknown) {
       builder.setUnknownFields(empty);
     }
     if (headerHasUnknown) {
-      builder.setBlockHeader(this.block.getBlockHeader().toBuilder()
-          .setUnknownFields(empty)
-          .build());
+      headerBuilder.setUnknownFields(empty);
+    }
+    if (hasOverlongWitnessSignature) {
+      // Copy the canonical prefix so it does not retain the oversized signature's backing array.
+      headerBuilder.setWitnessSignature(ByteString.copyFrom(
+          witnessSignature.substring(0, PER_SIGN_LENGTH).toByteArray()));
+    }
+    if (headerHasUnknown || hasOverlongWitnessSignature) {
+      builder.setBlockHeader(headerBuilder.build());
     }
     this.block = builder.build();
+    logger.debug("Sanitized block {}, removed unknown fields: block={}, header={}, "
+            + "witness signature length: {} -> {}",
+        getBlockId().getString(), blockHasUnknown, headerHasUnknown,
+        witnessSignature.size(), this.block.getBlockHeader().getWitnessSignature().size());
     return true;
   }
 

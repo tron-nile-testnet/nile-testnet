@@ -21,6 +21,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnknownFieldSet;
+import io.prometheus.client.CollectorRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -30,7 +31,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,6 +41,8 @@ import org.tron.api.GrpcAPI;
 import org.tron.common.crypto.Hash;
 import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
+import org.tron.common.prometheus.MetricKeys;
+import org.tron.common.prometheus.MetricLabels;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.ByteUtil;
 import org.tron.common.utils.Sha256Hash;
@@ -68,6 +70,7 @@ import org.tron.core.exception.VMIllegalException;
 import org.tron.core.exception.ValidateSignatureException;
 import org.tron.core.exception.ZksnarkException;
 import org.tron.core.net.TronNetDelegate;
+import org.tron.core.net.TronNetService;
 import org.tron.core.net.message.adv.TransactionMessage;
 import org.tron.core.net.peer.PeerConnection;
 import org.tron.core.store.AbiStore;
@@ -100,6 +103,17 @@ public class WalletMockTest {
   @After
   public void  clearMocks() {
     Mockito.clearAllCaches();
+  }
+
+  private Wallet walletWithChainBaseManager() {
+    Wallet wallet = new Wallet();
+    ChainBaseManager manager = mock(ChainBaseManager.class);
+    DynamicPropertiesStore properties = mock(DynamicPropertiesStore.class);
+    when(properties.getTotalSignNum()).thenReturn(5);
+    when(manager.getDynamicPropertiesStore()).thenReturn(properties);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        wallet, "chainBaseManager", manager);
+    return wallet;
   }
 
   @Test
@@ -215,12 +229,97 @@ public class WalletMockTest {
     ret = wallet.broadcastTransaction(validSig);
     assertEquals(GrpcAPI.Return.response_code.BLOCK_UNSOLIDIFIED, ret.getCode());
 
-    // 68-byte signature (upper bound) also passes the length check
-    Protocol.Transaction paddedSig = Protocol.Transaction.newBuilder()
-        .addSignature(ByteString.copyFrom(new byte[68]))
-        .build();
-    ret = wallet.broadcastTransaction(paddedSig);
-    assertEquals(GrpcAPI.Return.response_code.BLOCK_UNSOLIDIFIED, ret.getCode());
+    // All supported padded lengths pass admission and reach downstream validation.
+    for (int length : new int[]{66, 67, 68}) {
+      Protocol.Transaction paddedSig = Protocol.Transaction.newBuilder()
+          .addSignature(ByteString.copyFrom(new byte[length]))
+          .build();
+      ret = wallet.broadcastTransaction(paddedSig);
+      assertEquals(GrpcAPI.Return.response_code.BLOCK_UNSOLIDIFIED, ret.getCode());
+    }
+  }
+
+  @Test
+  public void testBroadcastSignatureRejectionMetric() {
+    boolean metricsEnabled = Args.getInstance().isMetricsPrometheusEnable();
+    Args.getInstance().setMetricsPrometheusEnable(true);
+    try {
+      Wallet wallet = walletWithChainBaseManager();
+      double before = rejectedTransactions(MetricLabels.Counter.TX_REJECT_API);
+      double p2pBefore = rejectedTransactions(MetricLabels.Counter.TX_REJECT_P2P);
+      int rejected = 0;
+      for (int length : new int[]{0, 64, 69, 96}) {
+        Protocol.Transaction transaction = Protocol.Transaction.newBuilder()
+            .addSignature(ByteString.copyFrom(new byte[65]))
+            .addSignature(ByteString.copyFrom(new byte[length]))
+            .addSignature(ByteString.copyFrom(new byte[70]))
+            .build();
+        GrpcAPI.Return ret = wallet.broadcastTransaction(transaction);
+        assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+        assertFalse(ret.getResult());
+        assertEquals("Validate signature error: Signature size is " + length,
+            ret.getMessage().toStringUtf8());
+        rejected++;
+        assertEquals(before + rejected,
+            rejectedTransactions(MetricLabels.Counter.TX_REJECT_API), 0);
+      }
+      assertEquals(p2pBefore, rejectedTransactions(MetricLabels.Counter.TX_REJECT_P2P), 0);
+    } finally {
+      Args.getInstance().setMetricsPrometheusEnable(metricsEnabled);
+    }
+  }
+
+  @Test
+  public void testBroadcastValidLengthsDoNotIncrementRejectionMetric() throws Exception {
+    boolean metricsEnabled = Args.getInstance().isMetricsPrometheusEnable();
+    Args.getInstance().setMetricsPrometheusEnable(true);
+    try {
+      Wallet wallet = walletWithChainBaseManager();
+      TronNetDelegate delegate = mock(TronNetDelegate.class);
+      when(delegate.isBlockUnsolidified()).thenReturn(true);
+      Field field = Wallet.class.getDeclaredField("tronNetDelegate");
+      field.setAccessible(true);
+      field.set(wallet, delegate);
+      double before = rejectedTransactions(MetricLabels.Counter.TX_REJECT_API);
+      for (int signatureCount : new int[]{0, 1, 2}) {
+        for (int length = 65; length <= 68; length++) {
+          Protocol.Transaction.Builder builder = Protocol.Transaction.newBuilder();
+          for (int i = 0; i < signatureCount; i++) {
+            builder.addSignature(ByteString.copyFrom(new byte[length]));
+          }
+          GrpcAPI.Return ret = wallet.broadcastTransaction(builder.build());
+          assertEquals(GrpcAPI.Return.response_code.BLOCK_UNSOLIDIFIED, ret.getCode());
+          assertEquals(before, rejectedTransactions(MetricLabels.Counter.TX_REJECT_API), 0);
+        }
+      }
+    } finally {
+      Args.getInstance().setMetricsPrometheusEnable(metricsEnabled);
+    }
+  }
+
+  @Test
+  public void testBroadcastDisabledMetricPreservesSignatureRejection() {
+    boolean metricsEnabled = Args.getInstance().isMetricsPrometheusEnable();
+    Args.getInstance().setMetricsPrometheusEnable(false);
+    try {
+      double before = rejectedTransactions(MetricLabels.Counter.TX_REJECT_API);
+      Protocol.Transaction transaction = Protocol.Transaction.newBuilder()
+          .addSignature(ByteString.copyFrom(new byte[69]))
+          .build();
+      GrpcAPI.Return ret = walletWithChainBaseManager().broadcastTransaction(transaction);
+      assertEquals(GrpcAPI.Return.response_code.SIGERROR, ret.getCode());
+      assertFalse(ret.getResult());
+      assertEquals(before, rejectedTransactions(MetricLabels.Counter.TX_REJECT_API), 0);
+    } finally {
+      Args.getInstance().setMetricsPrometheusEnable(metricsEnabled);
+    }
+  }
+
+  private double rejectedTransactions(String source) {
+    Double value = CollectorRegistry.defaultRegistry.getSampleValue(
+        MetricKeys.Counter.TX_REJECT + "_total", new String[]{"source", "reason"},
+        new String[]{source, MetricLabels.Counter.TX_REJECT_INVALID_SIGNATURE_LENGTH});
+    return value == null ? 0 : value;
   }
 
   @Test
@@ -435,6 +534,54 @@ public class WalletMockTest {
   }
 
   @Test
+  public void testBroadcastTransactionLocallyRejected() throws Exception {
+    long now = System.currentTimeMillis();
+    BalanceContract.TransferContract transferContract =
+        BalanceContract.TransferContract.newBuilder()
+            .setAmount(10)
+            .setOwnerAddress(ByteString.copyFromUtf8("aaa"))
+            .setToAddress(ByteString.copyFromUtf8("bbb"))
+            .build();
+    Protocol.Transaction transaction = Protocol.Transaction.newBuilder()
+        .setRawData(Protocol.Transaction.raw.newBuilder()
+            .setExpiration(now + 60_000)
+            .addContract(Protocol.Transaction.Contract.newBuilder()
+                .setParameter(Any.pack(transferContract))
+                .setType(Protocol.Transaction.Contract.ContractType.TransferContract)))
+        .build();
+    Wallet wallet = new Wallet();
+    TronNetDelegate tronNetDelegate = mock(TronNetDelegate.class);
+    TronNetService tronNetService = mock(TronNetService.class);
+    Manager manager = mock(Manager.class);
+    ChainBaseManager chainBaseManager = mock(ChainBaseManager.class);
+    DynamicPropertiesStore dynamicPropertiesStore = mock(DynamicPropertiesStore.class);
+    Cache<Sha256Hash, Boolean> transactionIdCache = CacheBuilder.newBuilder().build();
+
+    when(tronNetDelegate.isBlockUnsolidified()).thenReturn(false);
+    when(manager.isTooManyPending()).thenReturn(false);
+    when(manager.getTransactionIdCache()).thenReturn(transactionIdCache);
+    when(manager.pushTransaction(any())).thenReturn(false);
+    when(chainBaseManager.getDynamicPropertiesStore()).thenReturn(dynamicPropertiesStore);
+    when(chainBaseManager.getNextBlockSlotTime()).thenReturn(now);
+    when(dynamicPropertiesStore.supportVM()).thenReturn(false);
+
+    setField(wallet, "tronNetDelegate", tronNetDelegate);
+    setField(wallet, "tronNetService", tronNetService);
+    setField(wallet, "dbManager", manager);
+    setField(wallet, "chainBaseManager", chainBaseManager);
+    setField(wallet, "trxCacheEnable", true);
+
+    GrpcAPI.Return result = wallet.broadcastTransaction(transaction);
+
+    assertFalse(result.getResult());
+    assertEquals(GrpcAPI.Return.response_code.SERVER_BUSY, result.getCode());
+    assertEquals("Transaction was rejected locally.",
+        result.getMessage().toStringUtf8());
+    Mockito.verify(manager, Mockito.times(1)).pushTransaction(any());
+    Mockito.verify(tronNetService, Mockito.never()).fastBroadcastTransaction(any());
+  }
+
+  @Test
   public void testBroadcastTransactionAlreadyExists() throws Exception {
     Wallet wallet = new Wallet();
     injectTotalSignNum(wallet, 5);
@@ -524,6 +671,7 @@ public class WalletMockTest {
         = mock(DynamicPropertiesStore.class);
     when(tronNetDelegateMock.isBlockUnsolidified()).thenReturn(false);
     when(managerMock.isTooManyPending()).thenReturn(false);
+    when(managerMock.pushTransaction(any())).thenReturn(true);
     when(chainBaseManagerMock.getDynamicPropertiesStore())
         .thenReturn(dynamicPropertiesStoreMock);
     when(dynamicPropertiesStoreMock.getTotalSignNum()).thenReturn(5);
@@ -571,6 +719,12 @@ public class WalletMockTest {
         .build();
   }
 
+  private void setField(Object target, String fieldName, Object value) throws Exception {
+    Field field = target.getClass().getDeclaredField(fieldName);
+    field.setAccessible(true);
+    field.set(target, value);
+  }
+
   private void mockEnv(Wallet wallet, TronException tronException) throws Exception {
     TronNetDelegate tronNetDelegateMock = mock(TronNetDelegate.class);
     Manager managerMock = mock(Manager.class);
@@ -588,21 +742,10 @@ public class WalletMockTest {
 
     doThrow(tronException).when(managerMock).pushTransaction(any());
 
-    Field field = wallet.getClass().getDeclaredField("tronNetDelegate");
-    field.setAccessible(true);
-    field.set(wallet, tronNetDelegateMock);
-
-    Field field2 = wallet.getClass().getDeclaredField("dbManager");
-    field2.setAccessible(true);
-    field2.set(wallet, managerMock);
-
-    Field field4 = wallet.getClass().getDeclaredField("chainBaseManager");
-    field4.setAccessible(true);
-    field4.set(wallet, chainBaseManagerMock);
-
-    Field field3 = wallet.getClass().getDeclaredField("trxCacheEnable");
-    field3.setAccessible(true);
-    field3.set(wallet, false);
+    setField(wallet, "tronNetDelegate", tronNetDelegateMock);
+    setField(wallet, "dbManager", managerMock);
+    setField(wallet, "chainBaseManager", chainBaseManagerMock);
+    setField(wallet, "trxCacheEnable", false);
   }
 
   @Test
@@ -1054,17 +1197,30 @@ public class WalletMockTest {
       throws ZksnarkException, ContractValidateException {
     Wallet wallet = new Wallet();
     ShieldContract.SpendDescription spendDescription =
-        ShieldContract.SpendDescription.newBuilder().build();
+        ShieldContract.SpendDescription.newBuilder()
+            .setNullifier(ByteString.copyFrom(new byte[32]))
+            .setAnchor(ByteString.copyFrom(new byte[32]))
+            .setValueCommitment(ByteString.copyFrom(new byte[32]))
+            .setRk(ByteString.copyFrom(new byte[32]))
+            .setZkproof(ByteString.copyFrom(new byte[192])).build();
     GrpcAPI.ShieldedTRC20TriggerContractParameters.Builder triggerParam =
         GrpcAPI.ShieldedTRC20TriggerContractParameters
             .newBuilder();
     GrpcAPI.ShieldedTRC20Parameters shieldedTRC20Parameters =
         GrpcAPI.ShieldedTRC20Parameters.newBuilder()
             .addSpendDescription(spendDescription)
+            .addReceiveDescription(ShieldContract.ReceiveDescription.newBuilder()
+                .setNoteCommitment(ByteString.copyFrom(new byte[32]))
+                .setValueCommitment(ByteString.copyFrom(new byte[32]))
+                .setEpk(ByteString.copyFrom(new byte[32]))
+                .setZkproof(ByteString.copyFrom(new byte[192]))
+                .setCEnc(ByteString.copyFrom(new byte[580]))
+                .setCOut(ByteString.copyFrom(new byte[80])))
             .setParameterType("transfer")
+            .setBindingSignature(ByteString.copyFrom(new byte[64]))
             .build();
     GrpcAPI.BytesMessage bytesMessage =
-        GrpcAPI.BytesMessage.newBuilder().build();
+        GrpcAPI.BytesMessage.newBuilder().setValue(ByteString.copyFrom(new byte[64])).build();
 
     triggerParam.setShieldedTRC20Parameters(shieldedTRC20Parameters);
     triggerParam.addSpendAuthoritySignature(bytesMessage);
@@ -1084,16 +1240,21 @@ public class WalletMockTest {
   @Test
   public void testGetShieldedContractScalingFactorException() throws Exception {
     Wallet walletMock = mock(Wallet.class);
-    byte[] contractAddress = "".getBytes(StandardCharsets.UTF_8);
-    Protocol.Transaction transaction = Protocol.Transaction.newBuilder().build();
+    byte[] contractAddress = ByteArray.fromHexString("410000000000000000000000000000000000000001");
+    SmartContractOuterClass.TriggerSmartContract contract =
+        SmartContractOuterClass.TriggerSmartContract.newBuilder()
+            .setContractAddress(ByteString.copyFrom(contractAddress)).build();
     when(walletMock.createTransactionCapsule(any(), any()))
-        .thenReturn(new TransactionCapsule(transaction));
+        .thenReturn(new TransactionCapsule(contract,
+            Protocol.Transaction.Contract.ContractType.TriggerSmartContract));
+    when(walletMock.triggerConstantContract(any(), any(), any(), any()))
+        .thenThrow(new ContractValidateException("Smart contract is not exist."));
+    when(walletMock.getShieldedContractScalingFactor(contractAddress)).thenCallRealMethod();
 
-    try {
-      when(walletMock.getShieldedContractScalingFactor(contractAddress)).thenCallRealMethod();
-    } catch (Exception e) {
-      assertNotNull(e);
-    }
+    ContractExeException error = assertThrows(ContractExeException.class,
+        () -> walletMock.getShieldedContractScalingFactor(contractAddress));
+    assertEquals("trigger contract to get scaling factor error.", error.getMessage());
+    Mockito.verify(walletMock).triggerConstantContract(any(), any(), any(), any());
   }
 
   @Test
@@ -1382,8 +1543,8 @@ public class WalletMockTest {
 
     byte[] transferTopic = Hash.sha3(ByteArray.fromString(
         "TransferNewLeaf(uint256,bytes32,bytes32,bytes32,bytes32[21])"));
-    // getNoteTxFromLogListByIvk slices bytes 0..708; only `pos` (bytes 0..32) is read here.
-    byte[] transferData = new byte[708];
+    // Supply a complete ABI-encoded note log, including the ciphertext padding.
+    byte[] transferData = new byte[800];
     Protocol.TransactionInfo.Log transferLog = Protocol.TransactionInfo.Log.newBuilder()
         .setAddress(ByteString.copyFrom(addressWithoutPrefix))
         .addTopics(ByteString.copyFrom(transferTopic))

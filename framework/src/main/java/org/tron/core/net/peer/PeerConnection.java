@@ -10,7 +10,6 @@ import com.google.protobuf.ByteString;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +23,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
+import org.tron.common.math.StrictMathWrapper;
 import org.tron.common.overlay.message.Message;
+import org.tron.common.parameter.CommonParameter;
 import org.tron.common.prometheus.MetricKeys;
 import org.tron.common.prometheus.Metrics;
 import org.tron.common.utils.Pair;
@@ -56,6 +57,10 @@ import org.tron.protos.Protocol;
 @Component
 @Scope("prototype")
 public class PeerConnection {
+
+  private static final int INV_CACHE_SIZE = 20_000;
+  private static final int SYNC_BLOCK_ID_CACHE_SIZE = 10_000;
+  private static final long BAD_PEER_BAN_TIME = 3_600_000L;
 
   private static List<InetSocketAddress> relayNodes = Args.getInstance().getFastForwardNodes();
 
@@ -94,6 +99,29 @@ public class PeerConnection {
 
   @Getter
   @Setter
+  private volatile long lastInactiveWitnessBlockTime;
+
+  /**
+   * Sliding factor of the fetch latency Exponentially Weighted Moving Average (EWMA):
+   * each new sample contributes
+   * 1 / FETCH_LATENCY_EWMA_FACTOR (alpha = 0.1), balancing smoothing against
+   * responsiveness, in the same order as TCP's SRTT gain (1/8, RFC 6298).
+   *
+   * <p>Blend-then-clamp is intentional: samples blend at their measured value and are
+   * clamped to fetchBlock.timeout only afterwards, so sustained degradation saturates
+   * within 1-3 samples (issue #6923). Accepted cost: one transient outlier (~10x a
+   * healthy estimate) can jump the estimate straight to the clamp, needing ~9 healthy
+   * samples to decay; hard-timeout fallback and the saturation gate (one secondary
+   * fetch per tick) bound the impact meanwhile.
+   */
+  private static final int FETCH_LATENCY_EWMA_FACTOR = 10;
+
+  private volatile long fetchLatency;
+
+  private volatile boolean hasFetchLatencySampled;
+
+  @Getter
+  @Setter
   private volatile TronState tronState = TronState.INIT;
 
   @Autowired
@@ -107,24 +135,20 @@ public class PeerConnection {
 
   @Setter
   @Getter
-  private HelloMessage helloMessageReceive;
+  private volatile HelloMessage helloMessageReceive;
 
   @Setter
   @Getter
   private HelloMessage helloMessageSend;
 
-  private int invCacheSize = 20_000;
-
-  private long BAD_PEER_BAN_TIME = 3_600_000;
-
   @Setter
   @Getter
-  private Cache<Item, Long> advInvReceive = CacheBuilder.newBuilder().maximumSize(invCacheSize)
+  private Cache<Item, Long> advInvReceive = CacheBuilder.newBuilder().maximumSize(INV_CACHE_SIZE)
       .expireAfterWrite(1, TimeUnit.HOURS).recordStats().build();
 
   @Setter
   @Getter
-  private Cache<Item, Long> advInvSpread = CacheBuilder.newBuilder().maximumSize(invCacheSize)
+  private Cache<Item, Long> advInvSpread = CacheBuilder.newBuilder().maximumSize(INV_CACHE_SIZE)
       .expireAfterWrite(1, TimeUnit.HOURS).recordStats().build();
 
   @Setter
@@ -146,7 +170,8 @@ public class PeerConnection {
   private volatile long remainNum;
   @Getter
   private Cache<Sha256Hash, Long> syncBlockIdCache = CacheBuilder.newBuilder()
-      .maximumSize(2 * NetConstants.SYNC_FETCH_BATCH_NUM).recordStats().build();
+      .concurrencyLevel(1)
+      .maximumSize(SYNC_BLOCK_ID_CACHE_SIZE).recordStats().build();
   @Setter
   @Getter
   private Deque<BlockId> syncBlockToFetch = new ConcurrentLinkedDeque<>();
@@ -158,7 +183,7 @@ public class PeerConnection {
   private volatile Pair<Deque<BlockId>, Long> syncChainRequested = null;
   @Setter
   @Getter
-  private Set<BlockId> syncBlockInProcess = new HashSet<>();
+  private Set<BlockId> syncBlockInProcess = ConcurrentHashMap.newKeySet();
   @Setter
   @Getter
   private volatile boolean needSyncFromPeer = true;
@@ -184,6 +209,45 @@ public class PeerConnection {
         Args.getInstance().getRateLimiterDisconnect());
   }
 
+  /**
+   * Updates the fetch latency estimator, which has an explicit unsampled state: the
+   * channel's average latency is only a read fallback and never enters the sample sequence.
+   * The first measured sample directly replaces the placeholder; subsequent samples are
+   * blended with alpha = 1 / FETCH_LATENCY_EWMA_FACTOR. A single fetch worker reads while
+   * the channel event loop writes, so volatile suffices and no lock should be added.
+   * Clamping applies only after blending, by design (see {@link #FETCH_LATENCY_EWMA_FACTOR}).
+   *
+   * @param latencyMillis measured fetch latency in milliseconds
+   */
+  public void updateFetchLatency(long latencyMillis) {
+    if (!hasFetchLatencySampled) {
+      fetchLatency = clampFetchLatency(latencyMillis);
+      hasFetchLatencySampled = true;
+    } else {
+      fetchLatency = clampFetchLatency(
+          (fetchLatency * (FETCH_LATENCY_EWMA_FACTOR - 1) + latencyMillis)
+              / FETCH_LATENCY_EWMA_FACTOR);
+    }
+  }
+
+  /**
+   * Returns the bounded fetch latency estimate. While the estimator has not observed a
+   * real fetch sample yet, the channel's average latency is returned as a read fallback
+   * (an unknown peer is treated via its transport-level estimate instead of 0).
+   */
+  public long getFetchLatency() {
+    if (!hasFetchLatencySampled) {
+      return channel.getAvgLatency();
+    }
+    return fetchLatency;
+  }
+
+  private long clampFetchLatency(long latency) {
+    // Saturation intentionally makes the >= timeout gate in FetchBlockService trigger.
+    return StrictMathWrapper.max(0,
+        StrictMathWrapper.min(CommonParameter.getInstance().fetchBlockTimeout, latency));
+  }
+
   public void setBlockBothHave(BlockId blockId) {
     this.blockBothHave = blockId;
     this.blockBothHaveUpdateTime = System.currentTimeMillis();
@@ -191,6 +255,21 @@ public class PeerConnection {
 
   public boolean isIdle() {
     return advInvRequest.isEmpty() && isSyncIdle();
+  }
+
+  public boolean isIdleForAdvBlockFetch() {
+    return advInvRequest.keySet().stream()
+        .noneMatch(item -> item.getType() == Protocol.Inventory.InventoryType.BLOCK)
+        && isSyncIdle() && syncBlockInProcess.isEmpty();
+  }
+
+  public boolean canFetchBlock(Item item, long now) {
+    if (isDisconnect() || isNeedSyncFromPeer() || isNeedSyncFromUs()) {
+      return false;
+    }
+    Long received = advInvReceive.getIfPresent(item);
+    return received != null && received >= now - NetConstants.ADV_TIME_OUT
+        && isIdleForAdvBlockFetch();
   }
 
   public boolean isSyncIdle() {
@@ -235,11 +314,15 @@ public class PeerConnection {
 
   public String log() {
     long now = System.currentTimeMillis();
-    BlockId syncBlockId = syncBlockToFetch.peek();
-    Pair<Deque<BlockId>, Long> requested = syncChainRequested;
+    BlockId currentFastForwardBlock = fastForwardBlock;
+    ActivePeerInfo peerInfo = createActivePeerInfo(now, currentFastForwardBlock);
+    String lastKnownBlock = currentFastForwardBlock != null
+        ? String.valueOf(peerInfo.getLastKnownBlockNum())
+        : String.format("%d [updated %ds ago]", peerInfo.getLastKnownBlockNum(),
+            (now - blockBothHaveUpdateTime) / Constant.ONE_THOUSAND);
     return String.format(
-        "Peer %s\n"
-            + "connect time: %ds [%sms]\n"
+        "Peer /%s\n"
+            + "connect time/avg latency: %ds [%sms]\n"
             + "last know block num: %s\n"
             + "needSyncFromPeer:%b\n"
             + "needSyncFromUs:%b\n"
@@ -250,21 +333,56 @@ public class PeerConnection {
             + "syncChainRequested:%d\n"
             + "inactiveSeconds:%d\n"
             + "blockInProcess:%d\n",
-        channel.getInetSocketAddress(),
+        peerInfo.getRemoteAddress(),
+        peerInfo.getConnectSeconds(),
+        peerInfo.getAverageLatencyMillis(),
+        lastKnownBlock,
+        peerInfo.isNeedSyncFromPeer(),
+        peerInfo.isNeedSyncFromUs(),
+        peerInfo.getSyncToFetchSize(),
+        peerInfo.getSyncToFetchSizePeekNum(),
+        peerInfo.getSyncBlockRequestedSize(),
+        peerInfo.getRemainNum(),
+        peerInfo.getSyncChainRequestedMillis() / Constant.ONE_THOUSAND,
+        peerInfo.getInactiveSeconds(),
+        peerInfo.getSyncBlockInProcessSize());
+  }
+
+  public ActivePeerInfo getActivePeerInfo() {
+    return createActivePeerInfo(System.currentTimeMillis(), fastForwardBlock);
+  }
+
+  private ActivePeerInfo createActivePeerInfo(long now, BlockId currentFastForwardBlock) {
+    BlockId syncBlockId = syncBlockToFetch.peek();
+    Pair<Deque<BlockId>, Long> requested = syncChainRequested;
+    long lastKnownBlockNum = currentFastForwardBlock != null
+        ? currentFastForwardBlock.getNum() : blockBothHave.getNum();
+    return new ActivePeerInfo(
+        formatEndpoint(channel.getInetSocketAddress()),
         (now - channel.getStartTime()) / Constant.ONE_THOUSAND,
         channel.getAvgLatency(),
-        fastForwardBlock != null ? fastForwardBlock.getNum() : String.format("%d [%ds]",
-            blockBothHave.getNum(), (now - blockBothHaveUpdateTime) / Constant.ONE_THOUSAND),
+        lastKnownBlockNum,
         isNeedSyncFromPeer(),
         isNeedSyncFromUs(),
         syncBlockToFetch.size(),
         syncBlockId != null ? syncBlockId.getNum() : -1,
         syncBlockRequested.size(),
         remainNum,
-        requested == null ? 0 : (now - requested.getValue())
-                / Constant.ONE_THOUSAND,
+        requested == null ? 0 : now - requested.getValue(),
         (now - lastInteractiveTime) / Constant.ONE_THOUSAND,
         syncBlockInProcess.size());
+  }
+
+  private static String formatEndpoint(InetSocketAddress address) {
+    String host = address.getAddress().getHostAddress();
+    int scopeIndex = host.indexOf('%');
+    if (scopeIndex >= 0) {
+      host = host.substring(0, scopeIndex);
+    }
+    if (host.indexOf(':') >= 0) {
+      return "[" + host + "]:" + address.getPort();
+    }
+    return host + ":" + address.getPort();
   }
 
   public boolean isSyncFinish() {
@@ -332,19 +450,6 @@ public class PeerConnection {
     }
     advInvRequest.put(key, value);
     return true;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (!(o instanceof PeerConnection)) {
-      return false;
-    }
-    return this.channel.equals(((PeerConnection) o).getChannel());
-  }
-
-  @Override
-  public int hashCode() {
-    return this.channel.hashCode();
   }
 
 }

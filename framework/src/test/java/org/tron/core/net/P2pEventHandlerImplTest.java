@@ -11,6 +11,7 @@ import java.util.List;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
@@ -18,11 +19,14 @@ import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.Sha256Hash;
 import org.tron.core.config.args.Args;
 import org.tron.core.exception.P2pException;
+import org.tron.core.net.message.MessageTypes;
 import org.tron.core.net.message.TronMessage;
 import org.tron.core.net.message.adv.FetchInvDataMessage;
 import org.tron.core.net.message.adv.InventoryMessage;
 import org.tron.core.net.peer.PeerConnection;
+import org.tron.core.net.peer.PeerManager;
 import org.tron.core.net.service.statistics.PeerStatistics;
+import org.tron.p2p.connection.Channel;
 import org.tron.protos.Protocol;
 import org.tron.protos.Protocol.Inventory.InventoryType;
 
@@ -32,6 +36,35 @@ public class P2pEventHandlerImplTest extends BaseTest {
   public static void init() throws Exception {
     Args.setParam(new String[] {"--output-directory", dbPath(), "--debug"},
         TestConstants.TEST_CONF);
+  }
+
+  @Test
+  public void testDisconnectedPeerIsIgnoredBeforeHandshakeValidation() {
+    Channel channel = mock(Channel.class);
+    PeerConnection peer = mock(PeerConnection.class);
+    Mockito.when(peer.isDisconnect()).thenReturn(true);
+    try (MockedStatic<PeerManager> peers = Mockito.mockStatic(PeerManager.class)) {
+      peers.when(() -> PeerManager.getPeerConnection(channel)).thenReturn(peer);
+
+      new P2pEventHandlerImpl().onMessage(channel,
+          new byte[]{MessageTypes.P2P_HELLO.asByte()});
+
+      verify(peer).isDisconnect();
+      Mockito.verifyNoMoreInteractions(peer);
+    }
+  }
+
+  @Test
+  public void testInvalidHelloRejectedBeforeLoggingAndHandshake() throws Exception {
+    PeerConnection peer = mock(PeerConnection.class);
+    P2pEventHandlerImpl handler = new P2pEventHandlerImpl();
+    Method method = handler.getClass()
+        .getDeclaredMethod("processMessage", PeerConnection.class, byte[].class);
+    method.setAccessible(true);
+    method.invoke(handler, peer, new byte[]{MessageTypes.P2P_HELLO.asByte()});
+
+    verify(peer).disconnect(Protocol.ReasonCode.BAD_PROTOCOL);
+    Mockito.verify(peer, Mockito.never()).getPeerStatistics();
   }
 
   @Test

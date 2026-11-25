@@ -181,7 +181,7 @@ public class NetMetricManager {
     // udp
     RateInfo udpInTraffic = net.getUdpInTraffic();
     Protocol.MetricsInfo.RateInfo udpInTrafficInfo = udpInTraffic.toProtoEntity();
-    netInfo.setTcpOutTraffic(udpInTrafficInfo);
+    netInfo.setUdpInTraffic(udpInTrafficInfo);
     RateInfo udpOutTraffic = net.getUdpOutTraffic();
     Protocol.MetricsInfo.RateInfo udpOutTrafficInfo = udpOutTraffic.toProtoEntity();
     netInfo.setUdpOutTraffic(udpOutTrafficInfo);
@@ -199,6 +199,7 @@ public class NetMetricManager {
     for (LatencyDetailInfo detail : net.getLatency().getDetail()) {
       Protocol.MetricsInfo.NetInfo.LatencyInfo.LatencyDetailInfo.Builder detailInfo =
           Protocol.MetricsInfo.NetInfo.LatencyInfo.LatencyDetailInfo.newBuilder();
+      detailInfo.setWitness(detail.getWitness());
       detailInfo.setTop99(detail.getTop99());
       detailInfo.setTop95(detail.getTop95());
       detailInfo.setTop75(detail.getTop75());

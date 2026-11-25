@@ -1,0 +1,103 @@
+package org.tron.p2p.base;
+
+import com.google.protobuf.ByteString;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import lombok.Data;
+import org.apache.commons.lang3.StringUtils;
+import org.tron.p2p.P2pConfig;
+import org.tron.p2p.P2pEventHandler;
+import org.tron.p2p.exception.P2pException;
+import org.tron.p2p.exception.P2pException.TypeEnum;
+import org.tron.p2p.protos.Discover;
+import org.tron.p2p.utils.ByteArray;
+
+@Data
+public class Parameter {
+
+  public static int version = 1;
+
+  public static final int TCP_NETTY_WORK_THREAD_NUM = 0;
+
+  public static final int UDP_NETTY_WORK_THREAD_NUM = 1;
+
+  public static final int CONN_MAX_QUEUE_SIZE = 10;
+
+  public static final int NODE_CONNECTION_TIMEOUT = 2000;
+
+  // Node detection timeout in milliseconds.
+  public static final int NODE_DETECT_TIMEOUT = 2000;
+
+  // Absolute limit for all inbound connections waiting for HELLO, including trusted IPs.
+  // Assumes the effective soft RLIMIT_NOFILE leaves room for these sockets in addition to
+  // peak application FD usage and operating headroom; libp2p does not change the process limit.
+  public static final int MAX_TOTAL_PENDING_INBOUND_CONNECTIONS = 1024;
+
+  // Reserve eight pending HELLO slots for trusted IPs above the ordinary admission threshold.
+  public static final int MAX_PENDING_INBOUND_CONNECTIONS =
+      MAX_TOTAL_PENDING_INBOUND_CONNECTIONS - 8;
+
+  public static final int MAX_PENDING_INBOUND_CONNECTIONS_WITH_SAME_IP = 2;
+
+  public static final int HANDSHAKE_TIMEOUT_SECONDS = 10;
+
+  /** Send-idle threshold for sending a keepalive PING, in milliseconds. */
+  public static final int PING_IDLE_THRESHOLD_MILLIS = 20_000;
+
+  /** Timeout for waiting for a keepalive PONG after sending a PING, in milliseconds. */
+  public static final int PONG_TIMEOUT_MILLIS = 20_000;
+
+  /** @deprecated Use {@link #PONG_TIMEOUT_MILLIS}. */
+  @Deprecated
+  public static final int KEEP_ALIVE_TIMEOUT = PONG_TIMEOUT_MILLIS;
+
+  /** @deprecated Use {@link #PING_IDLE_THRESHOLD_MILLIS}. */
+  @Deprecated
+  public static final int PING_TIMEOUT = PING_IDLE_THRESHOLD_MILLIS;
+
+  public static final int NETWORK_TIME_DIFF = 1000;
+
+  public static final long DEFAULT_BAN_TIME = 60_000;
+
+  public static final int MAX_MESSAGE_LENGTH = 5 * 1024 * 1024;
+
+  // Reject frames declaring 1 KiB or more until the HELLO handshake completes.
+  public static final int MAX_PRE_HANDSHAKE_LENGTH = 1024;
+
+  public static volatile P2pConfig p2pConfig;
+
+  public static volatile List<P2pEventHandler> handlerList = new ArrayList<>();
+
+  public static volatile Map<Byte, P2pEventHandler> handlerMap = new HashMap<>();
+
+  public static void addP2pEventHandle(P2pEventHandler p2PEventHandler) throws P2pException {
+    if (p2PEventHandler.getMessageTypes() != null) {
+      for (Byte type : p2PEventHandler.getMessageTypes()) {
+        if (handlerMap.get(type) != null) {
+          throw new P2pException(TypeEnum.TYPE_ALREADY_REGISTERED, "type:" + type);
+        }
+      }
+      for (Byte type : p2PEventHandler.getMessageTypes()) {
+        handlerMap.put(type, p2PEventHandler);
+      }
+    }
+    handlerList.add(p2PEventHandler);
+  }
+
+  public static Discover.Endpoint getHomeNode() {
+    Discover.Endpoint.Builder builder = Discover.Endpoint.newBuilder()
+        .setNodeId(ByteString.copyFrom(Parameter.p2pConfig.getNodeID()))
+        .setPort(Parameter.p2pConfig.getPort());
+    if (StringUtils.isNotEmpty(Parameter.p2pConfig.getIp())) {
+      builder.setAddress(ByteString.copyFrom(
+          ByteArray.fromString(Parameter.p2pConfig.getIp())));
+    }
+    if (StringUtils.isNotEmpty(Parameter.p2pConfig.getIpv6())) {
+      builder.setAddressIpv6(ByteString.copyFrom(
+          ByteArray.fromString(Parameter.p2pConfig.getIpv6())));
+    }
+    return builder.build();
+  }
+}

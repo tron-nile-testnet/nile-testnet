@@ -8,9 +8,26 @@ If you already downloaded the `FullNode.jar`, you can use `start.sh` to run it, 
 
 The script is available in the java-tron project at [github](https://github.com/tronprotocol/java-tron), or if you need a separate script: [start.sh](https://github.com/tronprotocol/java-tron/blob/develop/start.sh)
 
+The script runs on x86_64 with JDK 8 and on ARM64 with JDK 17. It picks the JVM options for the Java version it finds, and downloads the release jars built for that architecture (`FullNode-aarch64.jar` on ARM64).
+
+Downloaded release jars are verified against the GPG signature published with each release, made by the key listed under "Integrity Check" in the [README](./README.md), so `gpg` must be installed; a jar that fails verification is not used. A signature made by a revoked release key fails verification. The mainnet config is downloaded from java-tron and the Nile testnet config from [nile-testnet](https://github.com/tron-nile-testnet/nile-testnet).
+
+For each download the release key is fetched by its fingerprint from keys.openpgp.org, or from keyserver.ubuntu.com if the first server does not answer, so installing a release jar needs outbound HTTPS access (port 443) to one of these key servers. If neither can be reached, the signature cannot be checked and the downloaded jar is removed.
+
 ***
 
 # Usage
+
+## Working directory
+
+Run `start.sh` from the node directory. By default the script uses `FullNode.jar`, `config.conf` and `output-directory` in the directory it is run from (for example `/data`), not the one that contains it, and writes `start.log`, the pid file and the logs there.
+
+```
+cd /data
+sh start.sh --run
+```
+
+From another directory, `/data/start.sh --run` exits with `jar file FullNode.jar not exist`.
 
 ## Examples
 
@@ -31,6 +48,15 @@ The script is available in the java-tron project at [github](https://github.com/
   ```
   sh start.sh --stop
   ```
+
+  `--run` records the process id in `<jar name>.pid` (`FullNode.jar.pid` by default) next to `start.log`, and `--stop` reads it. Run `--stop` in the directory the node was started from, with the same `-j` name if one was given. After `--release` or `-cb` the node runs in `FullNode/`; `--stop` finds it there from the parent directory as well.
+
+  `--stop` stops only a process whose working directory is that directory (read from `/proc` on Linux or with `lsof` on macOS), so nodes with the same jar name in other directories keep running, and a pid file whose process runs elsewhere counts as a stopped node. When the working directory cannot be read or was deleted:
+
+  - with a pid file, the recorded id is trusted, so it must belong to this node (for example, written into the pid file by hand);
+  - without one (a node started by an earlier script, which left only `start.log`), `--stop` exits with an error if this user can signal the process: write its id to the pid file and run `--stop` again. A process this user cannot signal, such as another user's, only gets a warning, and `--run` still starts the node.
+
+  If the node cannot be stopped (this user cannot signal it, or it still runs after `SIGKILL`), `--stop` exits with an error and `--run` does not start another node.
 
 * Get the latest version of `FullNode.jar` and start it
 
@@ -58,17 +84,21 @@ The script is available in the java-tron project at [github](https://github.com/
 
   start the service
 
-* `--stop`
+* `--stop` or `-s`
 
-  stop the service
+  stop the service started from the current directory
+
+* `--`
+
+  Everything after it is passed to `FullNode.jar` unchanged. Options the script does not know are passed on as well, so `--` is only needed when a value of such an option looks like a script option or a jar name.
 
 * `-c`
 
-  Specify the configuration file, by default it will load the `config.conf` in the same directory as `FullNode.jar`
+  Specify the configuration file, by default it will load the `config.conf` in the current directory
 
 * `-d`
 
-  Specify the database storage path, The default path is the same directory where `FullNode.jar` is located.
+  Specify the database storage path. The default is `output-directory` in the directory the script is run from (`FullNode/` after `--release` or `-cb`).
 
 * `-j`
 
@@ -79,7 +109,7 @@ The script is available in the java-tron project at [github](https://github.com/
   Specify the maximum memory of the `FullNode.jar` service in`MB`, jvm's startup maximum memory will be adjusted according to this parameter.
   
 * `--net`
-    Select test and private networks.
+    Select test (Nile) and private networks.
 
 ### build project
 
@@ -89,7 +119,15 @@ The script is available in the java-tron project at [github](https://github.com/
 
 * `--release`
 
-  Get the latest released version of the `jar` package from github.
+  Get the latest released version of the `jar` package and the mainnet `config.conf` from github into `FullNode/`. The `config.conf` and `FullNode.jar` already there are replaced only after both are downloaded and the jar is verified; a `config.conf` that differs from the mainnet one is kept as `config.conf_bak`.
+
+* `--upgrade`
+
+  Replace the local `jar` package with the latest release; the previous one is kept as `FullNode.jar_bak`.
+
+* `--download`
+
+  Download the latest released `jar` package into the current directory without starting it.
 
 
 ### rebuild the manifest
@@ -100,7 +138,7 @@ The script is available in the java-tron project at [github](https://github.com/
 
 * `-m`
 
-  specify the minimum required manifest file size ，unit:M，default：0
+  specify the minimum required manifest file size ，unit:M，default：128
 
 * `-b`
 
@@ -152,7 +190,7 @@ sh start.sh --stop
 Format:
 
 ```
-sh start.sh <[--release | -cb]> <--run> [-m <manifest size>] | [-b <batch size>] | [-d <db database-directory> | [-dr | --disable-rewrite-manifes]]
+sh start.sh <[--release | -cb]> <--run> [-m <manifest size>] | [-b <batch size>] | [-d <db database-directory> | [-dr | --disable-rewrite-manifest]]
 ```
 
 Get the latest released version.
@@ -162,13 +200,15 @@ Get the latest released version.
 sh start.sh --release --run
 ```
 
-Following file structure will be generated after executing the above command and the `FullNode.jar` will be started. 
+Following file structure will be generated after executing the above command and the `FullNode.jar` will be started. The node runs from `FullNode/`, so later `--run` commands are executed there with the copied script; `--stop` works both there and from the parent directory.
 
 ```
 ├── ...
 ├── FullNode/
     ├── config.conf
     ├── FullNode.jar
+    ├── FullNode.jar.pid
+    ├── start.log
     ├── start.sh
 ```
 
@@ -214,12 +254,14 @@ Following file structure will be created：
 ├── FullNode/
     |── config.conf
     ├── FullNode.jar
+    ├── FullNode.jar.pid
+    ├── start.log
     ├── start.sh
 ```
 
 ### 3. rebuild manifest tool
 
-This tool provides the ability to reformat the manifest based on current database, Enabled by default.
+This tool provides the ability to reformat the manifest based on current database, Enabled by default. It applies to LevelDB only and is skipped on ARM64, which runs RocksDB.
 
 1.Local mode:
 

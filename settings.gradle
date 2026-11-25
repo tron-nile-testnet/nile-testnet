@@ -16,5 +16,6 @@ include 'example:pqc-example'
 include 'crypto'
 include 'plugins'
 include 'platform'
+include 'p2p'
 include 'errorprone'
 

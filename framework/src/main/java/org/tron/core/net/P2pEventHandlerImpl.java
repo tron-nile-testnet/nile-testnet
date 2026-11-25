@@ -111,7 +111,7 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
   }
 
   @Override
-  public synchronized void onDisconnect(Channel channel) {
+  public void onDisconnect(Channel channel) {
     PeerConnection peerConnection = PeerManager.remove(channel);
     if (peerConnection != null) {
       peerConnection.onDisconnect();
@@ -124,6 +124,16 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
     PeerConnection peerConnection = PeerManager.getPeerConnection(c);
     if (peerConnection == null) {
       logger.warn("Receive msg from unknown peer {}", c.getInetSocketAddress());
+      return;
+    }
+    if (peerConnection.isDisconnect()) {
+      return;
+    }
+
+    if (peerConnection.getHelloMessageReceive() == null
+        && data[0] != MessageTypes.P2P_HELLO.asByte()
+        && data[0] != MessageTypes.P2P_DISCONNECT.asByte()) {
+      peerConnection.disconnect(Protocol.ReasonCode.BAD_PROTOCOL);
       return;
     }
 
@@ -157,7 +167,7 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
 
       peer.getPeerStatistics().messageStatistics.addTcpInMessage(msg);
       if (PeerConnection.needToLog(msg)) {
-        logger.info("Receive message from  peer: {}, {}", peer.getInetSocketAddress(), msg);
+        logger.info("Receive message from peer: {}, {}", peer.getInetSocketAddress(), msg);
       }
 
       switch (type) {
@@ -226,9 +236,6 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
       if (count + currentSize > maxCountIn10s) {
         logger.warn("Drop TRX inv from {}, window:{}, cur:{}, max:{}",
             peer.getInetAddress(), count, currentSize, maxCountIn10s);
-        if (Args.getInstance().isOpenPrintLog()) {
-          logger.warn("[overload] Drop tx list: {}", msg.getHashList());
-        }
         return false;
       }
     } else if (invType == InventoryType.BLOCK) {
@@ -300,13 +307,8 @@ public class P2pEventHandlerImpl extends P2pEventHandler {
           code = Protocol.ReasonCode.UNKNOWN;
           break;
       }
-      if (type.equals(P2pException.TypeEnum.BAD_MESSAGE)) {
-        logger.error("Message from {} process failed, {} \n type: ({})",
-            peer.getInetSocketAddress(), msg, type, ex);
-      } else {
-        logger.warn("Message from {} process failed, {} \n type: ({}), detail: {}",
-            peer.getInetSocketAddress(), msg, type, ex.getMessage());
-      }
+      logger.warn("Message from {} process failed, {} \n type: ({}), detail: {}",
+          peer.getInetSocketAddress(), msg, type, ex.getMessage());
     } else {
       code = Protocol.ReasonCode.UNKNOWN;
       logger.warn("Message from {} process failed, {}",

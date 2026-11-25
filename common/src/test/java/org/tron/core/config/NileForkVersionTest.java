@@ -27,13 +27,20 @@ public class NileForkVersionTest {
   }
 
   @Test
-  public void newForkUsesNextNileBlockVersion() {
+  public void storageKeyForkRemainsVersion40() {
     ForkBlockVersionEnum fork = ForkBlockVersionEnum.valueOf("VERSION_4_8_2_4_PQ1");
     assertEquals(40, fork.getValue());
-    assertEquals(40, ChainConstant.BLOCK_VERSION);
-    assertSame(fork, ForkBlockVersionEnum.getForkBlockVersionEnum(ChainConstant.BLOCK_VERSION));
     assertEquals(ForkBlockVersionEnum.VERSION_4_8_2_3_PQ1.getHardForkTime(), fork.getHardForkTime());
     assertEquals(70, fork.getHardForkRate());
+  }
+
+  @Test
+  public void version483UsesNextNileBlockVersion() {
+    ForkBlockVersionEnum fork = ForkBlockVersionEnum.valueOf("VERSION_4_8_3_PQ1");
+    assertEquals(41, fork.getValue());
+    assertEquals(41, ChainConstant.BLOCK_VERSION);
+    assertSame(fork, ForkBlockVersionEnum.getForkBlockVersionEnum(ChainConstant.BLOCK_VERSION));
+    assertEquals(80, fork.getHardForkRate());
   }
 
   @Test

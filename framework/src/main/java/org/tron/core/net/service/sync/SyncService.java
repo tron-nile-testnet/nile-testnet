@@ -142,6 +142,12 @@ public class SyncService {
     synchronized (blockJustReceived) {
       UnparsedBlock unparsedBlock = new UnparsedBlock(
           blockMessage.getBlockId(), blockMessage.getData());
+      // BlockID equality may match an older UnparsedBlock containing different bytes.
+      // Remove that stored key before putting this response's bytes and peer together.
+      PeerConnection previousPeer = blockJustReceived.remove(unparsedBlock);
+      if (previousPeer != null && previousPeer != peer) {
+        previousPeer.getSyncBlockInProcess().remove(unparsedBlock.getBlockId());
+      }
       blockJustReceived.put(unparsedBlock, peer);
     }
     handleFlag = true;
@@ -156,15 +162,17 @@ public class SyncService {
   }
 
   public void onDisconnect(PeerConnection peer) {
-    if (!peer.getSyncBlockRequested().isEmpty()) {
-      peer.getSyncBlockRequested().keySet().forEach(blockId -> invalid(blockId, peer));
-    }
+    // Received and processed blocks no longer appear in the peer's outstanding requests.
+    requestBlockIds.asMap().forEach((blockId, owner) -> {
+      if (peer.equals(owner)) {
+        // Another peer may refetch an already-solid queued block after its owner is released.
+        invalid(blockId, peer);
+      }
+    });
   }
 
   private void invalid(BlockId blockId, PeerConnection peerConnection) {
-    PeerConnection p = requestBlockIds.getIfPresent(blockId);
-    if (peerConnection.equals(p)) {
-      requestBlockIds.invalidate(blockId);
+    if (requestBlockIds.asMap().remove(blockId, peerConnection)) {
       fetchFlag = true;
     }
   }
@@ -273,6 +281,11 @@ public class SyncService {
         });
 
     send.forEach((peer, blockIds) -> {
+      if (peer.isDisconnect()) {
+        // Disconnect cleanup may have finished before this pass wrote its reservations.
+        blockIds.forEach(blockId -> invalid(blockId, peer));
+        return;
+      }
       if (!blockIds.isEmpty()) {
         peer.sendMessage(new FetchInvDataMessage(new LinkedList<>(blockIds), InventoryType.BLOCK));
       }
@@ -282,11 +295,19 @@ public class SyncService {
   private synchronized void handleSyncBlock() {
 
     synchronized (blockJustReceived) {
+      // putAll retains old key objects for equal IDs; replace those keys as well.
+      blockJustReceived.forEach((block, peer) -> {
+        PeerConnection previousPeer = blockWaitToProcess.remove(block);
+        if (previousPeer != null && previousPeer != peer) {
+          previousPeer.getSyncBlockInProcess().remove(block.getBlockId());
+        }
+      });
       blockWaitToProcess.putAll(blockJustReceived);
       blockJustReceived.clear();
     }
 
     final boolean[] isProcessed = {true};
+    final boolean[] capacityReleased = {false};
     long solidNum = tronNetDelegate.getSolidBlockId().getNum();
 
     while (isProcessed[0]) {
@@ -298,11 +319,13 @@ public class SyncService {
           BlockId blockId = unparsedBlock.getBlockId();
           if (peerConnection.isDisconnect()) {
             blockWaitToProcess.remove(unparsedBlock);
+            capacityReleased[0] = true;
             invalid(blockId, peerConnection);
             return;
           }
           if (blockId.getNum() <= solidNum) {
             blockWaitToProcess.remove(unparsedBlock);
+            capacityReleased[0] = true;
             peerConnection.getSyncBlockInProcess().remove(blockId);
             return;
           }
@@ -314,12 +337,18 @@ public class SyncService {
               });
           if (isFound[0]) {
             blockWaitToProcess.remove(unparsedBlock);
+            capacityReleased[0] = true;
             isProcessed[0] = true;
             BlockCapsule block;
             try {
-              block = new BlockCapsule(unparsedBlock.getData());
+              block = new BlockMessage(unparsedBlock.getData()).getBlockCapsule();
             } catch (Exception e) {
-              logger.warn("Deserialize block {} failed", blockId.getString(), e);
+              logger.warn("Deserialize block {} from {} failed",
+                  blockId.getString(), peerConnection.getInetSocketAddress(), e);
+              // Deferred validation may fail after ingress, e.g. on ALLOW_PROTO_FILTER_NUM changes
+              // or interruption. Release sync state so this block remains eligible for retry.
+              peerConnection.getSyncBlockInProcess().remove(blockId);
+              invalid(blockId, peerConnection);
               return;
             }
             processSyncBlock(block, peerConnection);
@@ -328,29 +357,28 @@ public class SyncService {
         }
       });
     }
+    if (capacityReleased[0]) {
+      // A full window may have consumed the last fetch trigger before processing freed capacity.
+      fetchFlag = true;
+    }
   }
 
   private void processSyncBlock(BlockCapsule block, PeerConnection peerConnection) {
-    boolean flag = true;
-    boolean attackFlag = false;
     BlockId blockId = block.getBlockId();
     try {
-      tronNetDelegate.validSignature(block);
+      tronNetDelegate.validBlock(block);
       tronNetDelegate.processBlock(block, true);
       peerConnection.setBlockRcvTime(System.currentTimeMillis());
       pbftDataSyncHandler.processPBFTCommitData(block);
-    } catch (P2pException p2pException) {
-      logger.error("Process sync block {} failed, type: {}",
-              blockId.getString(), p2pException.getType());
-      attackFlag = p2pException.getType().equals(TypeEnum.BLOCK_SIGN_INVALID)
-              || p2pException.getType().equals(TypeEnum.BLOCK_MERKLE_INVALID);
-      flag = false;
     } catch (Exception e) {
-      logger.error("Process sync block {} failed", blockId.getString(), e);
-      flag = false;
-    }
-
-    if (attackFlag) {
+      if (e instanceof P2pException) {
+        logger.error("Process sync block {} from {} failed, type: {}, reason: {}",
+            blockId.getString(), peerConnection.getInetSocketAddress(),
+            ((P2pException) e).getType(), e.getMessage());
+      } else {
+        logger.error("Process sync block {} from {} failed",
+            blockId.getString(), peerConnection.getInetSocketAddress(), e);
+      }
       invalid(blockId, peerConnection);
       peerConnection.disconnect(ReasonCode.BAD_BLOCK);
       return;
@@ -361,12 +389,8 @@ public class SyncService {
       if (blockId.equals(bid)) {
         peer.setBlockBothHave(blockId);
         peer.getSyncBlockToFetch().remove(bid);
-        if (flag) {
-          if (peer.getSyncBlockToFetch().isEmpty() && peer.isFetchAble()) {
-            syncNext(peer);
-          }
-        } else {
-          peer.disconnect(ReasonCode.BAD_BLOCK);
+        if (peer.getSyncBlockToFetch().isEmpty() && peer.isFetchAble()) {
+          syncNext(peer);
         }
       }
     }

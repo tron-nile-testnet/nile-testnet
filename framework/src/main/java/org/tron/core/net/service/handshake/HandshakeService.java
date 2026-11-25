@@ -1,6 +1,7 @@
 package org.tron.core.net.service.handshake;
 
 import java.util.Arrays;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -8,7 +9,6 @@ import org.tron.common.prometheus.MetricKeys;
 import org.tron.common.prometheus.Metrics;
 import org.tron.common.utils.ByteArray;
 import org.tron.core.ChainBaseManager;
-import org.tron.core.ChainBaseManager.NodeType;
 import org.tron.core.config.args.Args;
 import org.tron.core.net.TronNetService;
 import org.tron.core.net.message.handshake.HelloMessage;
@@ -38,30 +38,21 @@ public class HandshakeService {
   }
 
   public void processHelloMessage(PeerConnection peer, HelloMessage msg) {
+    if (peer.isDisconnect()) {
+      return;
+    }
+
     if (peer.getHelloMessageReceive() != null) {
       logger.warn("Peer {} receive dup hello message", peer.getInetSocketAddress());
       peer.disconnect(ReasonCode.BAD_PROTOCOL);
       return;
     }
 
-    TronNetService.getP2pService().updateNodeId(peer.getChannel(), msg.getFrom().getHexId());
-    if (peer.isDisconnect()) {
-      logger.info("Duplicate Peer {}", peer.getInetSocketAddress());
-      peer.disconnect(ReasonCode.DUPLICATE_PEER);
-      return;
-    }
-
-    if (!msg.valid()) {
-      logger.warn("Peer {} invalid hello message parameters, GenesisBlockId: {}, SolidBlockId: {}, "
-              + "HeadBlockId: {}, address: {}, sig: {}, codeVersion: {}",
-          peer.getInetSocketAddress(),
-          ByteArray.toHexString(msg.getInstance().getGenesisBlockId().getHash().toByteArray()),
-          ByteArray.toHexString(msg.getInstance().getSolidBlockId().getHash().toByteArray()),
-          ByteArray.toHexString(msg.getInstance().getHeadBlockId().getHash().toByteArray()),
-          msg.getInstance().getAddress().toByteArray().length,
-          msg.getInstance().getSignature().toByteArray().length,
-          msg.getInstance().getCodeVersion().toByteArray().length);
-      peer.disconnect(ReasonCode.INCOMPATIBLE_PROTOCOL);
+    if (msg.getHelloMessage().hasFrom()
+        && !Objects.equals(peer.getChannel().getNodeId(), msg.getFrom().getHexId())) {
+      logger.warn("Peer {} sent an application HELLO with a different node ID",
+          peer.getInetSocketAddress());
+      peer.disconnect(ReasonCode.UNEXPECTED_IDENTITY);
       return;
     }
 

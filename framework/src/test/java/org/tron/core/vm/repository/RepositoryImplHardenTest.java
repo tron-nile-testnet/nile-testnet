@@ -277,4 +277,52 @@ public class RepositoryImplHardenTest extends BaseTest {
     Assert.assertThrows(ArithmeticException.class,
         () -> repository.calculateGlobalEnergyLimit(account));
   }
+
+  @Test
+  public void testResourceOptimizationPreservesWholeTrxEnergyWeight() {
+    long previousLimit = dbManager.getDynamicPropertiesStore().getTotalEnergyCurrentLimit();
+    long previousWeight = dbManager.getDynamicPropertiesStore().getTotalEnergyWeight();
+    try {
+      dbManager.getDynamicPropertiesStore().saveTotalEnergyCurrentLimit(50_000_000_000L);
+      dbManager.getDynamicPropertiesStore().saveTotalEnergyWeight(2_000_000_000L);
+      long[][] cases = {{0, 0}, {500_000, 0}, {999_999, 0}, {1_000_000, 25},
+          {1_500_000, 25}, {1_999_999, 25}, {2_000_000, 50}};
+      for (boolean optimization : new boolean[]{false, true}) {
+        for (boolean freezeV2 : new boolean[]{false, true}) {
+          for (boolean hardening : new boolean[]{false, true}) {
+            VMConfig.Snapshot snapshot = new VMConfig.Snapshot();
+            snapshot.allowTvmResourceOptimization = optimization;
+            snapshot.allowTvmFreezeV2 = freezeV2;
+            snapshot.allowHardenResourceCalculation = hardening;
+            VMConfig.setLocalSnapshot(snapshot);
+
+            for (long[] testCase : cases) {
+              Assert.assertEquals(testCase[1],
+                  repository.calculateGlobalEnergyLimit(energyAccount(testCase[0])));
+            }
+            AccountCapsule account = energyAccount(500_000);
+            account.addFrozenBalanceForEnergyV2(500_000);
+            Assert.assertEquals(25, repository.calculateGlobalEnergyLimit(account));
+            account.addAcquiredDelegatedFrozenBalanceForEnergy(500_000);
+            account.addAcquiredDelegatedFrozenV2BalanceForEnergy(500_000);
+            Assert.assertEquals(50, repository.calculateGlobalEnergyLimit(account));
+          }
+        }
+      }
+    } finally {
+      VMConfig.clearLocalSnapshot();
+      dbManager.getDynamicPropertiesStore().saveTotalEnergyCurrentLimit(previousLimit);
+      dbManager.getDynamicPropertiesStore().saveTotalEnergyWeight(previousWeight);
+    }
+  }
+
+  private AccountCapsule energyAccount(long frozeBalance) {
+    AccountCapsule account = new AccountCapsule(
+        ByteString.copyFromUtf8("owner"),
+        ByteString.copyFrom(ByteArray.fromHexString(
+            Wallet.getAddressPreFixString() + "548794500882809695a8a687866e76d4271a1abc")),
+        AccountType.Normal, 0L);
+    account.setFrozenForEnergy(frozeBalance, 0L);
+    return account;
+  }
 }

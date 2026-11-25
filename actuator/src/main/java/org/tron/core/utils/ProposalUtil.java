@@ -72,8 +72,15 @@ public class ProposalUtil {
         break;
       }
       case ENERGY_FEE:
-      case EXCHANGE_CREATE_FEE:
         break;
+      case EXCHANGE_CREATE_FEE: {
+        if (dynamicPropertiesStore.getCloseExchange() >= 1) {
+          // Exchange creation is locked once the close level reaches 1;
+          // at level 0 the parameter stays freely proposable.
+          throw new ContractValidateException("Bad chain parameter id [EXCHANGE_CREATE_FEE]");
+        }
+        break;
+      }
       case MAX_CPU_TIME_OF_ONE_TX:
         if (dynamicPropertiesStore.getAllowHigherLimitForMaxCpuTimeOfOneTx() == 1) {
           if (value < 10 || value > 400) {
@@ -928,6 +935,11 @@ public class ProposalUtil {
         break;
       }
       case ALLOW_HARDEN_EXCHANGE_CALCULATION: {
+        if (dynamicPropertiesStore.getCloseExchange() >= 1) {
+          // Locked once the close level reaches 1; at level 0 the parameter
+          // stays freely proposable (subject to the VERSION_4_8_2 check below).
+          throw new ContractValidateException(BAD_PARAM_ID);
+        }
         if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2)) {
           throw new ContractValidateException(
               "Bad chain parameter id [ALLOW_HARDEN_EXCHANGE_CALCULATION]");
@@ -986,6 +998,37 @@ public class ProposalUtil {
         }
         break;
       }
+      case ALLOW_STRICT_ECDSA_VALIDATION: {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_3_PQ1)) {
+          throw new ContractValidateException(
+              "Bad chain parameter id [ALLOW_STRICT_ECDSA_VALIDATION]");
+        }
+        if (dynamicPropertiesStore.allowStrictEcdsaValidation()) {
+          throw new ContractValidateException(
+              "[ALLOW_STRICT_ECDSA_VALIDATION] has been valid, no need to propose again");
+        }
+        if (value != 1) {
+          throw new ContractValidateException(
+              "This value[ALLOW_STRICT_ECDSA_VALIDATION] is only allowed to be 1");
+        }
+        break;
+      }
+      case CLOSE_EXCHANGE: {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_3_PQ1)) {
+          throw new ContractValidateException("Bad chain parameter id [CLOSE_EXCHANGE]");
+        }
+        int current = dynamicPropertiesStore.getCloseExchange();
+        // Irreversible by design: CLOSE_EXCHANGE only advances one level at a time.
+        if (value == current) {
+          throw new ContractValidateException(
+              "[CLOSE_EXCHANGE] has been set to " + value + ", no need to propose again");
+        }
+        if (value != current + 1 || value < 1 || value > 2) {
+          throw new ContractValidateException(
+              "This value[CLOSE_EXCHANGE] must be greater than the current value and within [1,2]");
+        }
+        break;
+      }
       case ALLOW_OPTIMIZE_TVM_STORAGE_KEY: {
         if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_2_4_PQ1)) {
           throw new ContractValidateException(
@@ -998,6 +1041,36 @@ public class ProposalUtil {
         if (value != 1) {
           throw new ContractValidateException(
               "This value[ALLOW_OPTIMIZE_TVM_STORAGE_KEY] is only allowed to be 1");
+        }
+        break;
+      }
+      case ALLOW_TVM_VOTE_POWER_OPTIMIZATION: {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_3_PQ1)) {
+          throw new ContractValidateException(
+              "Bad chain parameter id [ALLOW_TVM_VOTE_POWER_OPTIMIZATION]");
+        }
+        if (dynamicPropertiesStore.getAllowTvmVotePowerOptimization() == 1) {
+          throw new ContractValidateException(
+              "[ALLOW_TVM_VOTE_POWER_OPTIMIZATION] has been valid, no need to propose again");
+        }
+        if (value != 1) {
+          throw new ContractValidateException(
+              "This value[ALLOW_TVM_VOTE_POWER_OPTIMIZATION] is only allowed to be 1");
+        }
+        break;
+      }
+      case ALLOW_TVM_RESOURCE_OPTIMIZATION: {
+        if (!forkController.pass(ForkBlockVersionEnum.VERSION_4_8_3_PQ1)) {
+          throw new ContractValidateException(
+              "Bad chain parameter id [ALLOW_TVM_RESOURCE_OPTIMIZATION]");
+        }
+        if (dynamicPropertiesStore.getAllowTvmResourceOptimization() == 1) {
+          throw new ContractValidateException(
+              "[ALLOW_TVM_RESOURCE_OPTIMIZATION] has been valid, no need to propose again");
+        }
+        if (value != 1) {
+          throw new ContractValidateException(
+              "This value[ALLOW_TVM_RESOURCE_OPTIMIZATION] is only allowed to be 1");
         }
         break;
       }
@@ -1091,7 +1164,11 @@ public class ProposalUtil {
     ALLOW_HARDEN_RESOURCE_CALCULATION(97), // 0, 1
     ALLOW_HARDEN_EXCHANGE_CALCULATION(98), // 0, 1
     ALLOW_OPTIMIZE_TVM_STORAGE(99), // 0, 1
+    ALLOW_STRICT_ECDSA_VALIDATION(100), // 0, 1
+    CLOSE_EXCHANGE(101), // 0, 1, 2
     ALLOW_OPTIMIZE_TVM_STORAGE_KEY(102), // 0, 1
+    ALLOW_TVM_VOTE_POWER_OPTIMIZATION(103), // 0, 1
+    ALLOW_TVM_RESOURCE_OPTIMIZATION(104), // 0, 1
     ALLOW_FN_DSA_512(1000), // 0, 1
     ALLOW_ML_DSA_44(1001); // 0, 1
     private long code;

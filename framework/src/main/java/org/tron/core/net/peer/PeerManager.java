@@ -67,7 +67,7 @@ public class PeerManager {
     peerConnection = ctx.getBean(PeerConnection.class);
     peerConnection.setChannel(channel);
     peers.add(peerConnection);
-    if (channel.isActive()) {
+    if (channel.isOutbound()) {
       activePeersCount.incrementAndGet();
     } else {
       passivePeersCount.incrementAndGet();
@@ -84,13 +84,16 @@ public class PeerManager {
     return peerConnection;
   }
 
-  private static void remove(PeerConnection peerConnection) {
-    peers.remove(peerConnection);
-    if (peerConnection.getChannel().isActive()) {
+  private static synchronized boolean remove(PeerConnection peerConnection) {
+    if (!peers.removeIf(peer -> peer == peerConnection)) {
+      return false;
+    }
+    if (peerConnection.getChannel().isOutbound()) {
       activePeersCount.decrementAndGet();
     } else {
       passivePeersCount.decrementAndGet();
     }
+    return true;
   }
 
   public static synchronized void sortPeers() {
@@ -103,7 +106,7 @@ public class PeerManager {
 
   public static PeerConnection getPeerConnection(Channel channel) {
     for (PeerConnection peer : new ArrayList<>(peers)) {
-      if (peer.getChannel().equals(channel)) {
+      if (peer.getChannel() == channel) {
         return peer;
       }
     }
@@ -126,13 +129,9 @@ public class PeerManager {
       long disconnectTime = peer.getChannel().getDisconnectTime();
       if (disconnectTime != 0 && now - disconnectTime > DISCONNECTION_TIME_OUT) {
         logger.warn("Notify disconnect peer {}.", peer.getInetSocketAddress());
-        peers.remove(peer);
-        if (peer.getChannel().isActive()) {
-          activePeersCount.decrementAndGet();
-        } else {
-          passivePeersCount.decrementAndGet();
+        if (remove(peer)) {
+          peer.onDisconnect();
         }
-        peer.onDisconnect();
       }
     }
   }

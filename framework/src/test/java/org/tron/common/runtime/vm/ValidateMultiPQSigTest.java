@@ -116,7 +116,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
   @Test
   public void unknownAccount_returnsZero() {
     ECKey owner = new ECKey();
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
     List<String> ecdsaSigs = Collections.singletonList(
         Hex.toHexString(new ECKey().sign(toSign).toByteArray()));
@@ -135,7 +135,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Arrays.asList(1, 1), 2,
         Collections.emptyList(), Collections.emptyList());
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
     List<String> ecdsaSigs = Arrays.asList(
         Hex.toHexString(k1.sign(toSign).toByteArray()),
@@ -157,7 +157,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         2, Arrays.asList(addr1, addr2), Arrays.asList(1, 1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> pqSigs = Arrays.asList(
@@ -183,7 +183,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         2, Arrays.asList(addr1, addr2), Arrays.asList(1, 1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> pqSigs = Arrays.asList(
@@ -215,7 +215,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Collections.singletonList(k1.getAddress()), Collections.singletonList(1),
         3, Arrays.asList(falconAddr, dilithiumAddr), Arrays.asList(1, 1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> ecdsaSigs = Collections.singletonList(
@@ -248,7 +248,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Collections.singletonList(k1.getAddress()), Collections.singletonList(1),
         3, Arrays.asList(falconAddr, dilithiumAddr), Arrays.asList(1, 1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> ecdsaSigs = Collections.singletonList(
@@ -277,7 +277,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Collections.singletonList(k1.getAddress()), Collections.singletonList(1),
         2, Collections.singletonList(falconAddr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> ecdsaSigs = Collections.singletonList(
@@ -307,7 +307,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(99);  // unregistered tag
@@ -330,7 +330,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(0);
@@ -351,7 +351,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     // 2 schemes but only 1 sig / 1 pk → schemeCnt mismatch.
@@ -376,7 +376,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(TAG_FN_DSA_512);
@@ -398,7 +398,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
@@ -422,7 +422,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         2, Arrays.asList(addr1, addr2), Arrays.asList(1, 1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Arrays.asList(TAG_ML_DSA_44, TAG_ML_DSA_44);
@@ -446,7 +446,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     byte[] padded = padFalconSig(falcon.sign(toSign));
@@ -469,7 +469,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     // Trim the slot one byte short of 666 — must be rejected (slot length exact).
@@ -495,7 +495,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
 
     byte[] zeros = new byte[FNDSA512.SIGNATURE_MAX_LENGTH - 1];
     List<Integer> schemes = Collections.singletonList(TAG_FN_DSA_512);
@@ -515,7 +515,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
 
     byte[] wrongLen = new byte[MLDSA44.SIGNATURE_LENGTH - 1];
     Arrays.fill(wrongLen, (byte) 0x42);
@@ -538,7 +538,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
@@ -559,7 +559,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
     byte[] truncatedPk = Arrays.copyOf(d1.getPublicKey(), d1.getPublicKey().length - 1);
 
@@ -585,7 +585,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         2, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Arrays.asList(TAG_FN_DSA_512, TAG_FN_DSA_512);
@@ -609,7 +609,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(addr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
     byte[] forged = d1.sign(toSign);
     forged[10] ^= 0x01;
@@ -633,7 +633,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Collections.emptyList(), Collections.emptyList(),
         1, Collections.singletonList(inAddr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<Integer> schemes = Collections.singletonList(TAG_ML_DSA_44);
@@ -661,7 +661,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, ecdsaAddrs, ecdsaWeights, 6,
         Collections.emptyList(), Collections.emptyList());
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
     List<String> ecdsaSigs = new ArrayList<>();
     for (ECKey k : ecdsaKeys) {
@@ -681,7 +681,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Collections.singletonList(1), 1,
         Collections.emptyList(), Collections.emptyList());
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
 
     Assert.assertFalse(runContract(owner.getAddress(), 2, data,
         Collections.emptyList(), Collections.emptyList(),
@@ -701,7 +701,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
         Arrays.asList(k1.getAddress(), k2.getAddress()), Arrays.asList(1, 1),
         2, Collections.singletonList(pqAddr), Collections.singletonList(1));
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
 
     List<String> ecdsaSigs = Arrays.asList(
@@ -725,7 +725,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
     setupPermission(owner, Arrays.asList(k1.getAddress(), k2.getAddress()),
         Arrays.asList(1, 1), 2, Collections.emptyList(), Collections.emptyList());
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] toSign = computeHash(owner.getAddress(), 2, data);
     List<String> ecdsaSigs = Collections.singletonList(
         Hex.toHexString(k1.sign(toSign).toByteArray()));
@@ -785,7 +785,7 @@ public class ValidateMultiPQSigTest extends BaseTest {
 
   private byte[] computeHash(byte[] address, int permissionId, byte[] data) {
     byte[] combined = ByteUtil.merge(address, ByteArray.fromInt(permissionId), data);
-    return Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), combined);
+    return Sha256Hash.hash(combined);
   }
 
   private byte[] encodeInput(byte[] ownerAddr, int permissionId, byte[] data,

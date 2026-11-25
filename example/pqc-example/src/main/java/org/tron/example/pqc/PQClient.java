@@ -86,7 +86,7 @@ public class PQClient {
       byte[] headerRaw = head.getBlockHeader().getRawData().toByteArray();
       long   refNum    = head.getBlockHeader().getRawData().getNumber();
       byte[] blockHash = Sha256Hash.of(
-          CommonParameter.getInstance().isECKeyCryptoEngine(), headerRaw).getBytes();
+          headerRaw).getBytes();
 
       System.out.println("Reference block: #" + refNum
           + " hash=" + ByteArray.toHexString(Arrays.copyOfRange(blockHash, 0, 8)) + "...");
@@ -111,7 +111,6 @@ public class PQClient {
 
       // ── 5. Sign with selected PQ scheme ─────────────────────────────────
       byte[] txId   = Sha256Hash.of(
-          CommonParameter.getInstance().isECKeyCryptoEngine(),
           rawData.toByteArray()).getBytes();
       byte[] sig    = userKp.sign(txId);
 

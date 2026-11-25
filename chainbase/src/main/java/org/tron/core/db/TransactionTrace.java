@@ -18,7 +18,6 @@ import org.tron.common.runtime.vm.DataWord;
 import org.tron.common.utils.DecodeUtil;
 import org.tron.common.utils.ForkController;
 import org.tron.common.utils.Sha256Hash;
-import org.tron.common.utils.StringUtil;
 import org.tron.common.utils.WalletUtil;
 import org.tron.core.Constant;
 import org.tron.core.capsule.AccountCapsule;
@@ -141,7 +140,7 @@ public class TransactionTrace {
           .get(triggerContractFromTransaction.getContractAddress().toByteArray());
       if (contract == null) {
         throw new ContractValidateException(String.format("contract: %s is not in contract store",
-            StringUtil.encode58Check(triggerContractFromTransaction
+            WalletUtil.getAddressString(triggerContractFromTransaction
                 .getContractAddress().toByteArray())));
 
       }
@@ -277,6 +276,15 @@ public class TransactionTrace {
           receipt.getCallerEnergyMergedUsage(),
           receipt.getCallerEnergyMergedWindowSize(),
           receipt.getCallerEnergyWindowSizeV2());
+      // payEnergyBill returns before storing the account when usage is zero, which keeps the
+      // committed Stake 2.0 reservation. Same-address origin is a second unmodified load.
+      if (dynamicPropertiesStore.allowTvmResourceOptimization()
+          && receipt.getEnergyUsageTotal() <= 0) {
+        if (origin != null && !caller.getAddress().equals(origin.getAddress())) {
+          accountStore.put(origin.getAddress().toByteArray(), origin);
+        }
+        accountStore.put(caller.getAddress().toByteArray(), caller);
+      }
     }
     receipt.payEnergyBill(
         dynamicPropertiesStore, accountStore, forkController,
@@ -295,13 +303,20 @@ public class TransactionTrace {
     }
     long currentSize = accountCap.getWindowSize(ENERGY);
     long currentUsage = accountCap.getEnergyUsage();
+    boolean allowOptimization = dynamicPropertiesStore.allowTvmResourceOptimization();
     // Drop the pre consumed frozen energy
     long newArea = currentUsage * currentSize
         - (mergedUsage * mergedSize - usage * size);
     // If area merging happened during suicide, use the current window size
-    long newSize = mergedSize == currentSize ? size : currentSize;
+    boolean areaMerged = allowOptimization
+        ? currentUsage > mergedUsage || mergedSize != currentSize
+        : mergedSize != currentSize;
+    long newSize = areaMerged ? currentSize : size;
     // Calc new usage by fixed x-axes
     long newUsage = max(0, newArea / newSize, dynamicPropertiesStore.disableJavaLangMath());
+    if (allowOptimization) {
+      checkResetEnergyUsage(newUsage);
+    }
     // Reset account usage and window size
     accountCap.setEnergyUsage(newUsage);
     accountCap.setNewWindowSize(ENERGY, newUsage == 0 ? 0L : newSize);
@@ -312,16 +327,33 @@ public class TransactionTrace {
     long currentSize = accountCap.getWindowSize(ENERGY);
     long currentSize2 = accountCap.getWindowSizeV2(ENERGY);
     long currentUsage = accountCap.getEnergyUsage();
+    boolean allowOptimization = dynamicPropertiesStore.allowTvmResourceOptimization();
     // Drop the pre consumed frozen energy
     long newArea = currentUsage * currentSize - (mergedUsage * mergedSize - usage * size);
     // If area merging happened during suicide, use the current window size
-    long newSize = mergedSize == currentSize ? size : currentSize;
-    long newSize2 = mergedSize == currentSize ? size2 : currentSize2;
+    boolean areaMerged = allowOptimization
+        ? currentUsage > mergedUsage || mergedSize != currentSize
+        : mergedSize != currentSize;
+    long newSize = areaMerged ? currentSize : size;
+    long newSize2 = areaMerged ? currentSize2 : size2;
     // Calc new usage by fixed x-axes
     long newUsage = max(0, newArea / newSize, dynamicPropertiesStore.disableJavaLangMath());
+    if (allowOptimization) {
+      checkResetEnergyUsage(newUsage);
+    }
     // Reset account usage and window size
     accountCap.setEnergyUsage(newUsage);
     accountCap.setNewWindowSizeV2(ENERGY, newUsage == 0 ? 0L : newSize2);
+  }
+
+  private void checkResetEnergyUsage(long newUsage) {
+    long totalEnergyCurrentLimit = dynamicPropertiesStore.getTotalEnergyCurrentLimit();
+    long maxUsage = totalEnergyCurrentLimit <= 0 ? 0L
+        : (totalEnergyCurrentLimit > Long.MAX_VALUE / 2
+            ? Long.MAX_VALUE : totalEnergyCurrentLimit * 2);
+    if (newUsage > maxUsage) {
+      throw new ArithmeticException("Energy usage exceeds limit: " + newUsage);
+    }
   }
 
   public boolean checkNeedRetry() {

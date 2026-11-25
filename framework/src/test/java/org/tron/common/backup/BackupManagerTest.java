@@ -1,7 +1,10 @@
 package org.tron.common.backup;
 
+import io.netty.channel.Channel;
+import io.prometheus.client.CollectorRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -9,8 +12,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import org.junit.After;
 import org.junit.Assert;
@@ -18,13 +21,19 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.Mockito;
 import org.tron.common.TestConstants;
 import org.tron.common.backup.BackupManager.BackupStatusEnum;
 import org.tron.common.backup.message.KeepAliveMessage;
 import org.tron.common.backup.socket.BackupServer;
+import org.tron.common.backup.socket.MessageHandler;
 import org.tron.common.backup.socket.UdpEvent;
 import org.tron.common.parameter.CommonParameter;
+import org.tron.common.prometheus.MetricKeys;
+import org.tron.common.prometheus.SRMetrics;
 import org.tron.common.utils.PublicMethod;
+import org.tron.common.utils.ReflectUtils;
+import org.tron.consensus.base.Param;
 import org.tron.core.config.args.Args;
 import org.tron.core.config.args.InetUtil;
 
@@ -34,7 +43,8 @@ public class BackupManagerTest {
   public TemporaryFolder temporaryFolder = new TemporaryFolder();
   private BackupManager manager;
   private BackupServer backupServer;
-  private BiFunction<String, Boolean, InetAddress> savedLookup;
+  private BiFunction<String, Boolean, InetAddress> previousDnsLookup;
+  private boolean backupServerClosed;
 
   @Before
   public void setUp() throws Exception {
@@ -43,13 +53,46 @@ public class BackupManagerTest {
     CommonParameter.getInstance().setBackupPort(PublicMethod.chooseRandomPort());
     manager = new BackupManager();
     backupServer = new BackupServer(manager);
-    savedLookup = InetUtil.dnsLookup;
+    previousDnsLookup = InetUtil.dnsLookup;
   }
 
   @After
-  public void tearDown() {
-    InetUtil.dnsLookup = savedLookup;
+  public void tearDown() throws Exception {
+    List<Throwable> errors = new ArrayList<>();
+    Channel channel = null;
+    if (backupServer != null) {
+      try {
+        channel = BackupTestUtils.getChannel(backupServer);
+      } catch (Throwable t) {
+        errors.add(t);
+      }
+    }
+    if (!backupServerClosed && backupServer != null) {
+      BackupTestUtils.runQuietly(errors, backupServer::close);
+    }
+    if (manager != null) {
+      BackupTestUtils.runQuietly(errors, manager::stop);
+    }
+    Channel captured = channel;
+    BackupTestUtils.runQuietly(errors, () -> {
+      if (captured != null) {
+        Assert.assertFalse("backup channel must close", captured.isOpen());
+      }
+      BackupTestUtils.assertExecutorsTerminated(manager, backupServer);
+    });
+    InetUtil.dnsLookup = previousDnsLookup;
     Args.clearParam();
+    // the consensus miner list is a process-wide singleton: reset it so this class
+    // cannot leak state into other tests of the same JVM
+    Param.getInstance().setMiners(new ArrayList<>());
+    BackupTestUtils.throwIfAnyError(errors);
+  }
+
+  @Test
+  public void statusIsVolatileForCrossThreadVisibility() throws Exception {
+    Field status = BackupManager.class.getDeclaredField("status");
+
+    Assert.assertTrue(Modifier.isVolatile(status.getModifiers()));
   }
 
   @Test
@@ -121,7 +164,7 @@ public class BackupManagerTest {
   }
 
   @Test
-  public void testSendKeepAliveMessage() throws Exception {
+  public void testBackupServerLifecycleDuringKeepAliveInterval() throws Exception {
     CommonParameter parameter = CommonParameter.getInstance();
     parameter.setBackupPriority(8);
     List<String> members = new ArrayList<>();
@@ -134,21 +177,77 @@ public class BackupManagerTest {
 
     Assert.assertEquals(manager.getStatus(), BackupManager.BackupStatusEnum.MASTER);
     backupServer.initServer();
+    awaitBackupServerReady();
     manager.init();
-
-    Thread.sleep(parameter.getKeepAliveInterval() + 1000);//test send KeepAliveMessage
-
-    field = manager.getClass().getDeclaredField("executorService");
-    field.setAccessible(true);
-    ScheduledExecutorService executorService = (ScheduledExecutorService) field.get(manager);
-    executorService.shutdown();
-
-    Field field2 = backupServer.getClass().getDeclaredField("executor");
-    field2.setAccessible(true);
-    ExecutorService executorService2 = (ExecutorService) field2.get(backupServer);
-    executorService2.shutdown();
+    long keepAliveDeadline = System.nanoTime()
+        + TimeUnit.MILLISECONDS.toNanos(parameter.getKeepAliveInterval() + 1000L);
+    BackupTestUtils.awaitCondition("keep-alive interval",
+        () -> System.nanoTime() >= keepAliveDeadline);
 
     Assert.assertEquals(BackupManager.BackupStatusEnum.INIT, manager.getStatus());
+    Channel channel = BackupTestUtils.getChannel(backupServer);
+    backupServer.close();
+    backupServerClosed = true;
+    Assert.assertFalse("backup channel must close", channel.isOpen());
+    BackupTestUtils.assertExecutorsTerminated(manager, backupServer);
+  }
+
+  /**
+   * A backup group whose only member is this node's own address is a "single-master" group:
+   * no peer ever answers a keep-alive, so the node must leave the pre-election INIT window and
+   * self-promote to MASTER once the keep-alive timeout elapses.
+   *
+   * <p>Drives the real {@link BackupManager#init()} and its real scheduled keep-alive task. The
+   * timeout condition is made deterministic by ageing the last keep-alive time, so the first
+   * (fixed 1s) scheduler tick is guaranteed to observe an expired keep-alive; recovery is then
+   * awaited by polling, so there is no fixed sleep. The published {@code tron:node_role} must
+   * track the transition (0 = init, 1 = master) and the manager executor must terminate.
+   */
+  @Test(timeout = 30000)
+  public void singleMasterGroupRecoversFromInitToMaster() throws Exception {
+    CommonParameter parameter = CommonParameter.getInstance();
+    parameter.setBackupPriority(8);
+    // the group's only member is ourselves, so init() drops it and no peer can answer
+    parameter.setBackupMembers(
+        Collections.singletonList(InetAddress.getLocalHost().getHostAddress()));
+
+    boolean previousMetrics = Args.getInstance().isMetricsPrometheusEnable();
+    Args.getInstance().setMetricsPrometheusEnable(true);
+    BackupManager single = new BackupManager();
+    // absorb any keep-alive send in case the local IP lookup behaves differently
+    single.setMessageHandler(Mockito.mock(MessageHandler.class));
+    try {
+      // backup configured but not yet init'ed: the pre-election window reports init (0)
+      Assert.assertEquals(BackupManager.BackupStatusEnum.MASTER, single.getStatus());
+      single.recordNodeRole();
+      Assert.assertEquals(SRMetrics.NODE_ROLE_INIT, nodeRoleGauge(), 0.0);
+
+      single.init();
+      Assert.assertEquals(BackupManager.BackupStatusEnum.INIT, single.getStatus());
+      Assert.assertEquals(SRMetrics.NODE_ROLE_INIT, nodeRoleGauge(), 0.0);
+
+      // no keep-alive has ever arrived, so the next keep-alive tick must self-promote.
+      // setStatus() flips the volatile status before it republishes the gauge, so wait on
+      // the published series (the externally visible result), not on the status field alone.
+      ReflectUtils.setFieldValue(single, "lastKeepAliveTime", 0L);
+      BackupTestUtils.awaitCondition("lone master to recover from INIT",
+          () -> single.getStatus() == BackupManager.BackupStatusEnum.MASTER
+              && Double.valueOf(SRMetrics.NODE_ROLE_MASTER).equals(nodeRoleGauge()));
+      Assert.assertEquals(BackupManager.BackupStatusEnum.MASTER, single.getStatus());
+      Assert.assertEquals(SRMetrics.NODE_ROLE_MASTER, nodeRoleGauge(), 0.0);
+    } finally {
+      single.stop();
+      Args.getInstance().setMetricsPrometheusEnable(previousMetrics);
+    }
+
+    ScheduledExecutorService executorService =
+        (ScheduledExecutorService) ReflectUtils.getFieldObject(single, "executorService");
+    Assert.assertTrue("single-master executor must terminate", executorService.isTerminated());
+  }
+
+  private Double nodeRoleGauge() {
+    return CollectorRegistry.defaultRegistry.getSampleValue(
+        MetricKeys.Gauge.NODE_ROLE, new String[] {}, new String[] {});
   }
 
   // ===== domain-handling tests for init() =====
@@ -161,8 +260,8 @@ public class BackupManagerTest {
     InetUtil.dnsLookup = (host, ipv4) ->
         ("node.example.com".equals(host) && ipv4) ? resolved : null;
     manager.init();
-    Set<String> members = getField(manager, "members");
-    Map<String, String> cache = getField(manager, "domainIpCache");
+    Set<String> members = ReflectUtils.getFieldValue(manager, "members");
+    Map<String, String> cache = ReflectUtils.getFieldValue(manager, "domainIpCache");
     Assert.assertTrue(members.contains("1.2.3.4"));
     Assert.assertEquals("1.2.3.4", cache.get("node.example.com"));
     manager.stop();
@@ -174,8 +273,8 @@ public class BackupManagerTest {
         Collections.singletonList("bad.invalid.domain"));
     InetUtil.dnsLookup = (host, ipv4) -> null;
     manager.init();
-    Set<String> members = getField(manager, "members");
-    Map<String, String> cache = getField(manager, "domainIpCache");
+    Set<String> members = ReflectUtils.getFieldValue(manager, "members");
+    Map<String, String> cache = ReflectUtils.getFieldValue(manager, "domainIpCache");
     Assert.assertTrue("unresolvable domain should be silently dropped", members.isEmpty());
     Assert.assertTrue(cache.isEmpty());
     manager.stop();
@@ -190,7 +289,7 @@ public class BackupManagerTest {
     InetUtil.dnsLookup = (host, ipv4) ->
         ("self.local.host".equals(host) && ipv4) ? selfAddr : null;
     manager.init();
-    Set<String> members = getField(manager, "members");
+    Set<String> members = ReflectUtils.getFieldValue(manager, "members");
     Assert.assertFalse("domain resolving to local IP should not be in members",
         members.contains(localIp));
     manager.stop();
@@ -200,8 +299,8 @@ public class BackupManagerTest {
 
   @Test(timeout = 5000)
   public void testRefreshMemberIpsIpChanged() throws Exception {
-    Set<String> members = getField(manager, "members");
-    Map<String, String> cache = getField(manager, "domainIpCache");
+    Set<String> members = ReflectUtils.getFieldValue(manager, "members");
+    Map<String, String> cache = ReflectUtils.getFieldValue(manager, "domainIpCache");
     members.add("1.1.1.1");
     cache.put("peer.tron.network", "1.1.1.1");
 
@@ -216,8 +315,8 @@ public class BackupManagerTest {
 
   @Test(timeout = 5000)
   public void testRefreshMemberIpsIpUnchanged() throws Exception {
-    Set<String> members = getField(manager, "members");
-    Map<String, String> cache = getField(manager, "domainIpCache");
+    Set<String> members = ReflectUtils.getFieldValue(manager, "members");
+    Map<String, String> cache = ReflectUtils.getFieldValue(manager, "domainIpCache");
     members.add("1.1.1.1");
     cache.put("peer.tron.network", "1.1.1.1");
 
@@ -231,8 +330,8 @@ public class BackupManagerTest {
 
   @Test(timeout = 5000)
   public void testRefreshMemberIpsDnsFailure() throws Exception {
-    Set<String> members = getField(manager, "members");
-    Map<String, String> cache = getField(manager, "domainIpCache");
+    Set<String> members = ReflectUtils.getFieldValue(manager, "members");
+    Map<String, String> cache = ReflectUtils.getFieldValue(manager, "domainIpCache");
     members.add("1.1.1.1");
     cache.put("peer.tron.network", "1.1.1.1");
 
@@ -242,16 +341,18 @@ public class BackupManagerTest {
     Assert.assertEquals("1.1.1.1", cache.get("peer.tron.network"));
   }
 
-  @SuppressWarnings("unchecked")
-  private <T> T getField(Object obj, String name) throws Exception {
-    Field f = obj.getClass().getDeclaredField(name);
-    f.setAccessible(true);
-    return (T) f.get(obj);
-  }
-
   private void invokeRefreshMemberIps(BackupManager mgr) throws Exception {
     Method m = mgr.getClass().getDeclaredMethod("refreshMemberIps");
     m.setAccessible(true);
     m.invoke(mgr);
   }
+
+  private void awaitBackupServerReady() throws Exception {
+    BackupTestUtils.awaitCondition("backup channel to become active",
+        () -> BackupTestUtils.getChannel(backupServer) != null
+            && BackupTestUtils.getChannel(backupServer).isActive());
+    BackupTestUtils.awaitCondition("backup message handler assignment",
+        () -> ReflectUtils.getFieldObject(manager, "messageHandler") != null);
+  }
+
 }

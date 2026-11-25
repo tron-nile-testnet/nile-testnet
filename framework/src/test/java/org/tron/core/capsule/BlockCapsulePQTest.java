@@ -56,6 +56,7 @@ public class BlockCapsulePQTest extends BaseTest {
   public void resetPqFlags() {
     dbManager.getDynamicPropertiesStore().saveAllowFnDsa512(0L);
     dbManager.getDynamicPropertiesStore().saveAllowMlDsa44(0L);
+    dbManager.getDynamicPropertiesStore().saveAllowStrictEcdsaValidation(0L);
   }
 
   /**
@@ -193,6 +194,9 @@ public class BlockCapsulePQTest extends BaseTest {
     block.setPqAuthSig(buildPQAuthSig(signPQ(digest)));
     Assert.assertTrue(block.validateSignature(
         dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+    dbManager.getDynamicPropertiesStore().saveAllowStrictEcdsaValidation(1L);
+    Assert.assertTrue(block.validateSignature(
+        dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
   }
 
   @Test(expected = ValidateSignatureException.class)
@@ -295,6 +299,9 @@ public class BlockCapsulePQTest extends BaseTest {
         .setPublicKey(ByteString.copyFrom(mlKeypair.getPublicKey()))
         .setSignature(ByteString.copyFrom(sig))
         .build());
+    Assert.assertTrue(block.validateSignature(
+        dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
+    dbManager.getDynamicPropertiesStore().saveAllowStrictEcdsaValidation(1L);
     Assert.assertTrue(block.validateSignature(
         dbManager.getDynamicPropertiesStore(), dbManager.getAccountStore()));
   }

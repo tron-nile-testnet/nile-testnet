@@ -214,8 +214,7 @@ public class PQTxSender {
   }
 
   private static byte[] ecdsaTxId(Transaction tx) {
-    return Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(),
-        tx.getRawData().toByteArray());
+    return Sha256Hash.hash(tx.getRawData().toByteArray());
   }
 
   private static byte[] longToBytes(long value) {

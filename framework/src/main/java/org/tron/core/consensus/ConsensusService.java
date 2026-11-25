@@ -14,6 +14,9 @@ import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.crypto.pqc.PQSignature;
 import org.tron.common.crypto.pqc.PqKeypair;
 import org.tron.common.parameter.CommonParameter;
+import org.tron.common.prometheus.Metrics;
+import org.tron.common.prometheus.SRMetrics;
+import org.tron.common.utils.StringUtil;
 import org.tron.consensus.Consensus;
 import org.tron.consensus.base.Param;
 import org.tron.consensus.base.Param.Miner;
@@ -56,8 +59,7 @@ public class ConsensusService {
     if (privateKeys.size() > 1) {
       for (String key : privateKeys) {
         byte[] privateKey = fromHexString(key);
-        byte[] privateKeyAddress = SignUtils
-            .fromPrivate(privateKey, Args.getInstance().isECKeyCryptoEngine()).getAddress();
+        byte[] privateKeyAddress = SignUtils.fromPrivate(privateKey).getAddress();
         WitnessCapsule witnessCapsule = witnessStore.get(privateKeyAddress);
         if (null == witnessCapsule) {
           logger.warn("Witness {} is not in witnessStore.", Hex.toHexString(privateKeyAddress));
@@ -71,8 +73,7 @@ public class ConsensusService {
     } else if (privateKeys.size() == 1) {
       byte[] privateKey =
           fromHexString(Args.getLocalWitnesses().getPrivateKey());
-      byte[] privateKeyAddress = SignUtils.fromPrivate(privateKey,
-          Args.getInstance().isECKeyCryptoEngine()).getAddress();
+      byte[] privateKeyAddress = SignUtils.fromPrivate(privateKey).getAddress();
       byte[] witnessAddress = Args.getLocalWitnesses().getWitnessAccountAddress();
       if (witnessAddress == null || witnessAddress.length == 0) {
         witnessAddress = privateKeyAddress;
@@ -107,6 +108,8 @@ public class ConsensusService {
     }
 
     param.setMiners(miners);
+    recordWitnessAddresses(miners);
+    recordIsWitness();
     param.setBlockHandle(blockHandle);
     param.setPbftInterface(pbftBaseImpl);
     consensus.start(param);
@@ -143,6 +146,39 @@ public class ConsensusService {
     if (!PQSchemeRegistry.contains(scheme)) {
       throw new TronError("unsupported PQ witness scheme: " + scheme,
           TronError.ErrCode.WITNESS_INIT);
+    }
+  }
+
+  private void recordWitnessAddresses(List<Miner> miners) {
+    if (!Metrics.enabled() || miners == null) {
+      return;
+    }
+    for (Miner miner : miners) {
+      ByteString witnessAddress = miner.getEffectiveWitnessAddress();
+      try {
+        String address = StringUtil.encode58Check(witnessAddress.toByteArray());
+        SRMetrics.recordWitnessAddress(address);
+      } catch (Exception e) {
+        logger.warn("Failed to record witness address metrics.", e);
+      }
+    }
+  }
+
+  /**
+   * Publishes tron:is_witness once at consensus startup; 0 = not witness, 1 = witness. It is
+   * published independently of the witness-address publication, and even when no miner is
+   * configured, so the flag series always exists. Catches its own failure so a metrics
+   * problem can neither skip the witness publication nor abort consensus startup.
+   */
+  private void recordIsWitness() {
+    if (!Metrics.enabled()) {
+      return;
+    }
+    try {
+      SRMetrics.recordIsWitness(Args.getInstance().isWitness()
+          ? SRMetrics.WITNESS : SRMetrics.NOT_WITNESS);
+    } catch (Exception e) {
+      logger.warn("Failed to record is-witness metrics.", e);
     }
   }
 

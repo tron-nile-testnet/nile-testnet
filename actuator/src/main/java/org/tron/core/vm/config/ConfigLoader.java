@@ -52,7 +52,10 @@ public class ConfigLoader {
         snapshot.allowHardenResourceCalculation = ds.getAllowHardenResourceCalculation() == 1;
         snapshot.allowFnDsa512 = ds.getAllowFnDsa512() == 1;
         snapshot.allowMlDsa44 = ds.getAllowMlDsa44() == 1;
+        snapshot.allowStrictEcdsaValidation = ds.getAllowStrictEcdsaValidation() == 1;
         snapshot.allowOptimizeTvmStorageKey = ds.allowOptimizeTvmStorageKey();
+        snapshot.allowTvmVotePowerOptimization = ds.getAllowTvmVotePowerOptimization() == 1;
+        snapshot.allowTvmResourceOptimization = ds.getAllowTvmResourceOptimization() == 1;
         if (isolate) {
           VMConfig.setLocalSnapshot(snapshot);
         } else {

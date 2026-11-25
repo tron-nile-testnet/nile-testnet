@@ -1,5 +1,7 @@
 package org.tron.core.net.service.relay;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.ByteString;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -50,6 +52,7 @@ import org.tron.protos.Protocol.ReasonCode;
 public class RelayService {
 
   private static final int MAX_PEER_COUNT_PER_ADDRESS = 5;
+  private static final long HELLO_MESSAGE_TIMESTAMP_THRESHOLD = TimeUnit.MINUTES.toMillis(5);
 
   @Autowired
   private ChainBaseManager chainBaseManager;
@@ -90,6 +93,10 @@ public class RelayService {
           .copyFrom(Args.getLocalWitnesses().getPqWitnessAccountAddress()) : null;
 
   private final int maxFastForwardNum = Args.getInstance().getMaxFastForwardNum();
+
+  private final Cache<ByteString, Long> helloReplayCache = CacheBuilder.newBuilder()
+      .maximumSize(100)
+      .build();
 
   public void init() {
     manager = ctx.getBean(Manager.class);
@@ -138,8 +145,7 @@ public class RelayService {
     if (!isActiveWitness() || !isFastForwardPeer(channel)) {
       return;
     }
-    byte[] digest = Sha256Hash.of(CommonParameter.getInstance()
-        .isECKeyCryptoEngine(), ByteArray.fromLong(message.getTimestamp()))
+    byte[] digest = Sha256Hash.of(ByteArray.fromLong(message.getTimestamp()))
         .getBytes();
     // In a mixed-witness node (ECDSA + PQ), pick the path whose address
     // is currently in the active schedule — otherwise the receiver
@@ -152,8 +158,7 @@ public class RelayService {
         .setAddress(announceAddress);
     if (useEcdsa) {
       SignInterface cryptoEngine = SignUtils.fromPrivate(
-          ByteArray.fromHexString(Args.getLocalWitnesses().getPrivateKey()),
-          Args.getInstance().isECKeyCryptoEngine());
+          ByteArray.fromHexString(Args.getLocalWitnesses().getPrivateKey()));
       ByteString sig = ByteString.copyFrom(
           cryptoEngine.Base64toBytes(cryptoEngine.signHash(digest)));
       builder.setSignature(sig).clearPqAuthSig();
@@ -219,6 +224,22 @@ public class RelayService {
       return false;
     }
 
+    long now = System.currentTimeMillis();
+    long timestamp = msg.getTimestamp();
+    if (timestamp < now - HELLO_MESSAGE_TIMESTAMP_THRESHOLD
+        || timestamp > now + HELLO_MESSAGE_TIMESTAMP_THRESHOLD) {
+      logger.warn("HelloMessage from {}, timestamp {} is outside the window around {}",
+          channel.getInetAddress(), timestamp, now);
+      return false;
+    }
+
+    Long lastTimestamp = helloReplayCache.getIfPresent(msg.getAddress());
+    if (lastTimestamp != null && msg.getTimestamp() <= lastTimestamp) {
+      logger.warn("HelloMessage from {}, timestamp {} is not greater than last {}",
+          channel.getInetAddress(), msg.getTimestamp(), lastTimestamp);
+      return false;
+    }
+
     if (hasLegacy && !SignUtils.isValidLength(msg.getSignature().size())) {
       logger.warn("HelloMessage from {}, signature size is {}.",
           remoteAddress, msg.getSignature().size());
@@ -227,8 +248,7 @@ public class RelayService {
 
     boolean isVerified;
     try {
-      byte[] digest = Sha256Hash.of(CommonParameter.getInstance().isECKeyCryptoEngine(),
-          ByteArray.fromLong(msg.getTimestamp())).getBytes();
+      byte[] digest = Sha256Hash.of(ByteArray.fromLong(msg.getTimestamp())).getBytes();
       if (hasPq) {
         isVerified = verifyPqAuthSig(digest, msg.getPqAuthSig(), msg.getAddress(), remoteAddress);
       } else {
@@ -236,7 +256,13 @@ public class RelayService {
             verifyEcdsaSignature(digest, msg.getSignature(), msg.getAddress(), remoteAddress);
       }
       if (isVerified) {
-        TronNetService.getP2pConfig().getTrustNodes().add(remoteAddress);
+        helloReplayCache.put(msg.getAddress(), msg.getTimestamp());
+        List<InetAddress> trustNodes = TronNetService.getP2pConfig().getTrustNodes();
+        synchronized (trustNodes) {
+          if (!trustNodes.contains(remoteAddress)) {
+            trustNodes.add(remoteAddress);
+          }
+        }
         DesensitizedConverter.addSensitive(remoteAddress.toString().substring(1),
             ByteArray.toHexString(msg.getAddress().toByteArray()));
       }
@@ -250,8 +276,7 @@ public class RelayService {
   private boolean verifyEcdsaSignature(byte[] digest, ByteString signature,
       ByteString witnessAddr, InetAddress remoteAddress) throws SignatureException {
     String sig = TransactionCapsule.getBase64FromByteString(signature);
-    byte[] sigAddress = SignUtils.signatureToAddress(digest, sig,
-        Args.getInstance().isECKeyCryptoEngine());
+    byte[] sigAddress = SignUtils.signatureToAddress(digest, sig, true);
     byte[] expected = resolveExpectedSignerAddress(witnessAddr, remoteAddress);
     return expected != null && Arrays.equals(sigAddress, expected);
   }

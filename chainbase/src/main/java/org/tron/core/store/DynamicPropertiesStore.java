@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.stream.IntStream;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -20,6 +19,7 @@ import org.tron.common.crypto.pqc.PQSchemeRegistry;
 import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.Sha256Hash;
+import org.tron.common.utils.Time;
 import org.tron.core.capsule.BytesCapsule;
 import org.tron.core.config.Parameter.ChainConstant;
 import org.tron.core.db.TronStoreWithRevoking;
@@ -257,6 +257,11 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
   private static final byte[] ALLOW_HARDEN_EXCHANGE_CALCULATION =
       "ALLOW_HARDEN_EXCHANGE_CALCULATION".getBytes();
 
+  private static final byte[] ALLOW_STRICT_ECDSA_VALIDATION =
+      "ALLOW_STRICT_ECDSA_VALIDATION".getBytes();
+
+  private static final byte[] CLOSE_EXCHANGE = "CLOSE_EXCHANGE".getBytes();
+
   private static final byte[] TURKISH_KEY_MIGRATION_DONE =
       "TURKISH_KEY_MIGRATION_DONE".getBytes();
 
@@ -267,6 +272,12 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
   private static final byte[] ALLOW_OPTIMIZE_TVM_STORAGE = "ALLOW_OPTIMIZE_TVM_STORAGE".getBytes();
   private static final byte[] ALLOW_OPTIMIZE_TVM_STORAGE_KEY =
       "ALLOW_OPTIMIZE_TVM_STORAGE_KEY".getBytes();
+
+  private static final byte[] ALLOW_TVM_VOTE_POWER_OPTIMIZATION =
+      "ALLOW_TVM_VOTE_POWER_OPTIMIZATION".getBytes();
+
+  private static final byte[] ALLOW_TVM_RESOURCE_OPTIMIZATION =
+      "ALLOW_TVM_RESOURCE_OPTIMIZATION".getBytes();
 
   @Autowired
   private DynamicPropertiesStore(@Value("properties") String dbName) {
@@ -1638,6 +1649,18 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
             () -> new IllegalArgumentException("not found EXCHANGE_CREATE_FEE"));
   }
 
+  public void saveCloseExchange(int level) {
+    this.put(CLOSE_EXCHANGE, new BytesCapsule(ByteArray.fromLong(level)));
+  }
+
+  public int getCloseExchange() {
+    return Optional.ofNullable(getUnchecked(CLOSE_EXCHANGE))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(0L)
+        .intValue();
+  }
+
   public void saveExchangeBalanceLimit(long limit) {
     this.put(EXCHANGE_BALANCE_LIMIT,
         new BytesCapsule(ByteArray.fromLong(limit)));
@@ -2271,8 +2294,8 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
     logger.info(
         "Do update nextMaintenanceTime, currentMaintenanceTime: {}, blockTime: {}, "
             + "nextMaintenanceTime: {}.",
-        new DateTime(currentMaintenanceTime), new DateTime(blockTime),
-        new DateTime(nextMaintenanceTime)
+        Time.getIsoTimeString(currentMaintenanceTime), Time.getIsoTimeString(blockTime),
+        Time.getIsoTimeString(nextMaintenanceTime)
     );
   }
 
@@ -3081,6 +3104,21 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
     return getAllowHardenExchangeCalculation() == 1L;
   }
 
+  public long getAllowStrictEcdsaValidation() {
+    return Optional.ofNullable(getUnchecked(ALLOW_STRICT_ECDSA_VALIDATION))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(0L);
+  }
+
+  public void saveAllowStrictEcdsaValidation(long value) {
+    this.put(ALLOW_STRICT_ECDSA_VALIDATION, new BytesCapsule(ByteArray.fromLong(value)));
+  }
+
+  public boolean allowStrictEcdsaValidation() {
+    return getAllowStrictEcdsaValidation() == 1L;
+  }
+
   public void saveTurkishKeyMigrationDone(long num) {
     this.put(TURKISH_KEY_MIGRATION_DONE,
         new BytesCapsule(ByteArray.fromLong(num)));
@@ -3179,6 +3217,36 @@ public class DynamicPropertiesStore extends TronStoreWithRevoking<BytesCapsule> 
 
   public boolean allowOptimizeTvmStorageKey() {
     return getAllowOptimizeTvmStorageKey() == 1L;
+  }
+
+  public long getAllowTvmVotePowerOptimization() {
+    return Optional.ofNullable(getUnchecked(ALLOW_TVM_VOTE_POWER_OPTIMIZATION))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(0L);
+  }
+
+  public void saveAllowTvmVotePowerOptimization(long value) {
+    this.put(ALLOW_TVM_VOTE_POWER_OPTIMIZATION, new BytesCapsule(ByteArray.fromLong(value)));
+  }
+
+  public boolean allowTvmVotePowerOptimization() {
+    return getAllowTvmVotePowerOptimization() == 1L;
+  }
+
+  public long getAllowTvmResourceOptimization() {
+    return Optional.ofNullable(getUnchecked(ALLOW_TVM_RESOURCE_OPTIMIZATION))
+        .map(BytesCapsule::getData)
+        .map(ByteArray::toLong)
+        .orElse(0L);
+  }
+
+  public void saveAllowTvmResourceOptimization(long value) {
+    this.put(ALLOW_TVM_RESOURCE_OPTIMIZATION, new BytesCapsule(ByteArray.fromLong(value)));
+  }
+
+  public boolean allowTvmResourceOptimization() {
+    return getAllowTvmResourceOptimization() == 1L;
   }
 
   public boolean allowTvmStorageOptimization() {

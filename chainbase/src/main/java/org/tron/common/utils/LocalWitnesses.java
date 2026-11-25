@@ -87,16 +87,14 @@ public class LocalWitnesses {
    * separately by {@link #initPqWitnessAccountAddress(byte[])} so the two
    * consensus paths do not interfere on nodes hosting one SR per scheme.
    */
-  public void initWitnessAccountAddress(final byte[] witnessAddress,
-      boolean isECKeyCryptoEngine) {
+  public void initWitnessAccountAddress(final byte[] witnessAddress) {
     if (witnessAddress != null) {
       this.witnessAccountAddress = witnessAddress;
       return;
     }
     if (!CollectionUtils.isEmpty(privateKeys)) {
       byte[] privateKey = ByteArray.fromHexString(getPrivateKey());
-      final SignInterface ecKey = SignUtils.fromPrivate(privateKey,
-          isECKeyCryptoEngine);
+      final SignInterface ecKey = SignUtils.fromPrivate(privateKey);
       this.witnessAccountAddress = ecKey.getAddress();
     }
   }
@@ -162,6 +160,9 @@ public class LocalWitnesses {
     if (!StringUtil.isHexadecimal(privateKey)) {
       throw new TronError("private key must be hex string",
           TronError.ErrCode.WITNESS_INIT);
+    }
+    if (!ECKey.isValidPrivateKey(ByteArray.fromHexString(privateKey))) {
+      throw new TronError("Invalid ECDSA witness private key", TronError.ErrCode.WITNESS_INIT);
     }
   }
 

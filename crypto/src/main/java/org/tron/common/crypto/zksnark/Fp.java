@@ -20,6 +20,7 @@ package org.tron.common.crypto.zksnark;
 import static org.tron.common.crypto.zksnark.Params.P;
 
 import java.math.BigInteger;
+import java.util.Objects;
 
 /**
  * Arithmetic in F_p, p = 21888242871839275222246405745257275088696311157297823662689037894645226208583
@@ -34,12 +35,10 @@ public class Fp implements Field<Fp> {
   static final Fp NON_RESIDUE = new Fp(new BigInteger(
       "21888242871839275222246405745257275088696311157297823662689037894645226208582"));
 
-  static final Fp _2_INV = new Fp(BigInteger.valueOf(2).modInverse(P));
-
-  BigInteger v;
+  private final BigInteger v;
 
   Fp(BigInteger v) {
-    this.v = v;
+    this.v = Objects.requireNonNull(v, "v");
   }
 
   static Fp create(byte[] v) {
@@ -95,7 +94,7 @@ public class Fp implements Field<Fp> {
    */
   @Override
   public boolean isValid() {
-    return v.compareTo(P) < 0;
+    return v.signum() >= 0 && v.compareTo(P) < 0;
   }
 
   Fp2 mul(Fp2 o) {
@@ -117,7 +116,7 @@ public class Fp implements Field<Fp> {
 
     Fp fp = (Fp) o;
 
-    return !(v != null ? v.compareTo(fp.v) != 0 : fp.v != null);
+    return v.equals(fp.v);
   }
 
   @Override

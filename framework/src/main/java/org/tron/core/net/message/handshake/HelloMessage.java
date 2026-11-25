@@ -5,9 +5,8 @@ import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
 import org.tron.common.crypto.pqc.PQAuthSigValidator;
 import org.tron.common.utils.ByteArray;
-import org.tron.common.utils.DecodeUtil;
 import org.tron.common.utils.Sha256Hash;
-import org.tron.common.utils.StringUtil;
+import org.tron.common.utils.WalletUtil;
 import org.tron.core.ChainBaseManager;
 import org.tron.core.capsule.BlockCapsule;
 import org.tron.core.config.args.Args;
@@ -15,6 +14,8 @@ import org.tron.core.exception.P2pException;
 import org.tron.core.net.message.MessageTypes;
 import org.tron.core.net.message.TronMessage;
 import org.tron.p2p.discover.Node;
+import org.tron.p2p.utils.NetUtil;
+import org.tron.p2p.utils.ProtoUtil;
 import org.tron.program.Version;
 import org.tron.protos.Discover.Endpoint;
 import org.tron.protos.Protocol;
@@ -29,15 +30,24 @@ public class HelloMessage extends TronMessage {
   public static final int MAX_HELLO_MESSAGE_SIZE = 16 * 1024;
 
   public HelloMessage(byte type, byte[] rawData) throws Exception {
-    super(type, rawData);
-    checkRawSize(rawData);
-    this.helloMessage = Protocol.HelloMessage.parseFrom(rawData);
+    this(rawData);
   }
 
   public HelloMessage(byte[] data) throws Exception {
     super(MessageTypes.P2P_HELLO.asByte(), data);
     checkRawSize(data);
-    this.helloMessage = Protocol.HelloMessage.parseFrom(data);
+    // Reject nested PQ extensions before the shared parser discards unknown fields.
+    Protocol.HelloMessage rawHello = Protocol.HelloMessage.parseFrom(data);
+    if (rawHello.hasPqAuthSig()
+        && PQAuthSigValidator.hasUnknownFields(rawHello.getPqAuthSig())) {
+      throw new P2pException(P2pException.TypeEnum.BAD_MESSAGE,
+          "pq_auth_sig contains unknown fields");
+    }
+    this.helloMessage = ProtoUtil.parseFrom(Protocol.HelloMessage.parser(), data);
+    this.data = this.helloMessage.toByteArray();
+    if (!valid()) {
+      throw new P2pException(P2pException.TypeEnum.BAD_MESSAGE, "invalid hello message");
+    }
   }
 
   private static void checkRawSize(byte[] rawData) throws P2pException {
@@ -138,7 +148,6 @@ public class HelloMessage extends TronMessage {
     StringBuilder builder = new StringBuilder();
 
     builder.append(super.toString())
-            .append("from: ").append(getFrom().getPreferInetSocketAddress()).append("\n")
             .append("timestamp: ").append(getTimestamp()).append("\n")
             .append("headBlockId: ").append(getHeadBlockId().getString()).append("\n")
             .append("nodeType: ").append(helloMessage.getNodeType()).append("\n")
@@ -147,7 +156,7 @@ public class HelloMessage extends TronMessage {
     ByteString address = helloMessage.getAddress();
     if (!address.isEmpty()) {
       builder.append("address:")
-              .append(StringUtil.encode58Check(address.toByteArray())).append("\n");
+              .append(WalletUtil.getAddressString(address.toByteArray())).append("\n");
     }
 
     ByteString signature = helloMessage.getSignature();
@@ -170,6 +179,14 @@ public class HelloMessage extends TronMessage {
   }
 
   public boolean valid() {
+    if (helloMessage.hasFrom()) {
+      Endpoint from = helloMessage.getFrom();
+      if (!NetUtil.validAddressFields(from.getAddress(), from.getAddressIpv6())
+          || !NetUtil.validNode(getFrom())) {
+        return false;
+      }
+    }
+
     byte[] genesisBlockByte = this.helloMessage.getGenesisBlockId().getHash().toByteArray();
     if (genesisBlockByte.length != Sha256Hash.LENGTH) {
       return false;

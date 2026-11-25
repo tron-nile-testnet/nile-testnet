@@ -1,0 +1,551 @@
+package org.tron.p2p.dns;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.junit.Assert;
+import org.junit.Test;
+import org.tron.p2p.P2pConfig;
+import org.tron.p2p.dns.tree.Entry;
+import org.tron.p2p.dns.tree.Tree;
+import org.tron.p2p.dns.update.AwsClient;
+import org.tron.p2p.dns.update.AwsClient.RecordSet;
+import org.tron.p2p.dns.update.Publish;
+import org.tron.p2p.dns.update.PublishConfig;
+import org.tron.p2p.exception.DnsException;
+import software.amazon.awssdk.services.route53.Route53Client;
+import software.amazon.awssdk.services.route53.model.Change;
+import software.amazon.awssdk.services.route53.model.ChangeAction;
+import software.amazon.awssdk.services.route53.model.ChangeInfo;
+import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsRequest;
+import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsResponse;
+import software.amazon.awssdk.services.route53.model.ChangeStatus;
+import software.amazon.awssdk.services.route53.model.GetChangeRequest;
+import software.amazon.awssdk.services.route53.model.GetChangeResponse;
+import software.amazon.awssdk.services.route53.model.HostedZone;
+import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameResponse;
+import software.amazon.awssdk.services.route53.model.ListResourceRecordSetsRequest;
+import software.amazon.awssdk.services.route53.model.ListResourceRecordSetsResponse;
+import software.amazon.awssdk.services.route53.model.NoSuchHostedZoneException;
+import software.amazon.awssdk.services.route53.model.RRType;
+import software.amazon.awssdk.services.route53.model.ResourceRecord;
+import software.amazon.awssdk.services.route53.model.ResourceRecordSet;
+import software.amazon.awssdk.services.route53.model.Route53Exception;
+
+public class AwsRoute53Test {
+
+  private static final String DOMAIN = "nodes.example.invalid";
+  private static final String MIXED_DOMAIN = "Nodes.Example.INVALID.";
+  private static final String ZONE_ID = "ZTEST";
+
+  @Test
+  public void testConnectChecksOnlyConfiguredZoneWithOneRecord() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+    client.zoneFailure = Route53Exception.builder().statusCode(403).message("AccessDenied").build();
+    client.recordsTruncated = true;
+
+    client.testConnect();
+
+    Assert.assertEquals(0, client.zoneQueries);
+    Assert.assertEquals(1, client.recordQueries);
+    Assert.assertEquals(ZONE_ID, client.requestedZone);
+    Assert.assertEquals("1", client.requestedMaxItems);
+    Assert.assertTrue(client.changes.isEmpty());
+  }
+
+  @Test
+  public void testConnectPropagatesConfiguredZoneReadFailures() throws Exception {
+    for (RuntimeException failure : new RuntimeException[]{
+        Route53Exception.builder().statusCode(403).message("AccessDenied").build(),
+        Route53Exception.builder().statusCode(403).message("InvalidClientTokenId").build(),
+        NoSuchHostedZoneException.builder().message("NoSuchHostedZone").build()}) {
+      RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+      client.recordFailure = failure;
+
+      Assert.assertSame(failure, Assert.assertThrows(RuntimeException.class, client::testConnect));
+      Assert.assertEquals(0, client.zoneQueries);
+      Assert.assertEquals(1, client.recordQueries);
+      Assert.assertEquals(ZONE_ID, client.requestedZone);
+      Assert.assertEquals("1", client.requestedMaxItems);
+    }
+  }
+
+  @Test
+  public void testConnectListsZonesWhenZoneIdIsMissing() throws Exception {
+    for (String zoneId : new String[]{null, ""}) {
+      RecordingAwsClient client = new RecordingAwsClient(zoneId);
+
+      client.testConnect();
+
+      Assert.assertEquals(1, client.zoneQueries);
+      Assert.assertEquals(0, client.recordQueries);
+      Assert.assertTrue(client.changes.isEmpty());
+    }
+  }
+
+  @Test
+  public void testConnectPropagatesListingFailureWhenZoneIdIsMissing() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(null);
+    client.zoneFailure = Route53Exception.builder().statusCode(403).message("AccessDenied").build();
+
+    Assert.assertSame(client.zoneFailure,
+        Assert.assertThrows(Route53Exception.class, client::testConnect));
+    Assert.assertEquals(1, client.zoneQueries);
+    Assert.assertEquals(0, client.recordQueries);
+  }
+
+  @Test
+  public void rootFollowsDependenciesAndPrecedesDeletesAcrossBatches() throws Exception {
+    List<DnsNode> nodes = new ArrayList<>();
+    for (int i = 1; i <= 1025; i++) {
+      nodes.add(new DnsNode(null, "10.0." + (i >> 8) + "." + (i & 255), null, 18888));
+    }
+    Tree tree = new Tree();
+    tree.makeTree(1, Tree.merge(nodes, 5), Collections.emptyList(), AlgorithmTest.privateKey);
+    Map<String, String> records = tree.toTXT(DOMAIN);
+
+    for (boolean rootExists : new boolean[]{false, true}) {
+      RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+      Map<String, RecordSet> existing = new HashMap<>();
+      if (rootExists) {
+        Tree old = TreeTest.signedTree(new Tree(), "192.0.2.1");
+        existing.put(DOMAIN, new RecordSet(new String[]{"\"verification=abc\"",
+            "\"" + old.getRootEntry().toFormat() + "\""}, Publish.rootTTL));
+        String dependency = records.keySet().stream().filter(name -> name.compareTo(DOMAIN) > 0)
+            .findFirst().get();
+        existing.put(dependency, new RecordSet(new String[]{records.get(dependency)}, 0));
+        existing.put("stale." + DOMAIN,
+            new RecordSet(new String[]{"old TXT"}, Publish.treeNodeTTL));
+      }
+      List<Change> changes = client.computeChanges(DOMAIN, records, existing);
+
+      boolean rootSeen = false;
+      for (Change change : changes) {
+        if (change.resourceRecordSet().name().equals(DOMAIN)) {
+          rootSeen = true;
+          Assert.assertEquals(rootExists ? ChangeAction.UPSERT : ChangeAction.CREATE,
+              change.action());
+        } else if (change.action() == ChangeAction.DELETE) {
+          Assert.assertTrue("Old records must be deleted after the root changes", rootSeen);
+        } else {
+          Assert.assertFalse("Dependencies must be published before the root", rootSeen);
+        }
+      }
+      Assert.assertTrue(rootSeen);
+
+      client.failBatch = 2;
+      client.submitBatches = true;
+      Assert.assertThrows(Route53Exception.class, () -> client.submitChanges(changes, "test"));
+      Assert.assertEquals(1, client.batches.size());
+      Assert.assertTrue(client.batches.get(0).stream().noneMatch(change ->
+          change.resourceRecordSet().name().equals(DOMAIN)
+              || change.action() == ChangeAction.DELETE));
+    }
+  }
+
+  @Test
+  public void batchesAreSubmittedBeforeWaitingForInsync() throws Exception {
+    for (ChangeAction rootAction : new ChangeAction[]{ChangeAction.CREATE, ChangeAction.UPSERT}) {
+      RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+      client.submitBatches = true;
+      client.pendingPolls = 1;
+
+      client.submitChanges(changesAcrossBatches(client, rootAction), "test");
+
+      Assert.assertEquals(Arrays.asList("submit /change/CTEST1", "submit /change/CTEST2",
+          "PENDING /change/CTEST1", "INSYNC /change/CTEST1", "INSYNC /change/CTEST2"),
+          client.events);
+      Assert.assertEquals(2, client.batches.size());
+      Assert.assertTrue(client.batches.get(0).stream().noneMatch(change ->
+          change.resourceRecordSet().name().equals(DOMAIN)
+              || change.action() == ChangeAction.DELETE));
+      Assert.assertTrue(client.batches.get(1).stream().anyMatch(change ->
+          change.resourceRecordSet().name().equals(DOMAIN) && change.action() == rootAction));
+      Assert.assertTrue(client.batches.get(1).stream().anyMatch(change ->
+          change.action() == ChangeAction.DELETE));
+    }
+  }
+
+  @Test
+  public void pendingAtRetryLimitFailsPublication() throws Exception {
+    for (int pendingBatch : new int[]{1, 2}) {
+      RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+      client.submitBatches = true;
+      client.pendingBatch = pendingBatch;
+      client.pendingPolls = AwsClient.maxRetryLimit;
+
+      IllegalStateException failure = Assert.assertThrows(IllegalStateException.class,
+          () -> client.submitChanges(changesAcrossBatches(client, ChangeAction.CREATE), "test"));
+
+      Assert.assertTrue(failure.getMessage().contains("Timed out"));
+      Assert.assertTrue(failure.getMessage().contains("/change/CTEST" + pendingBatch));
+      Assert.assertEquals(2, client.batches.size());
+      Assert.assertEquals(AwsClient.maxRetryLimit, client.events.stream()
+          .filter(event -> event.equals("PENDING /change/CTEST" + pendingBatch)).count());
+    }
+  }
+
+  @Test
+  public void interruptedWaitPreservesInterruptAndStopsPolling() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+    client.submitBatches = true;
+    client.pendingPolls = 1;
+    List<Change> changes = changesAcrossBatches(client, ChangeAction.CREATE);
+    try {
+      Thread.currentThread().interrupt();
+      IllegalStateException failure = Assert.assertThrows(IllegalStateException.class,
+          () -> client.submitChanges(changes, "test"));
+
+      Assert.assertTrue(failure.getCause() instanceof InterruptedException);
+      Assert.assertTrue(failure.getMessage().contains("/change/CTEST1"));
+      Assert.assertTrue(Thread.currentThread().isInterrupted());
+      Assert.assertEquals(Arrays.asList("submit /change/CTEST1", "submit /change/CTEST2",
+          "PENDING /change/CTEST1"), client.events);
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
+  private static List<Change> changesAcrossBatches(AwsClient client, ChangeAction rootAction)
+      throws Exception {
+    List<Change> changes = new ArrayList<>();
+    for (int i = 0; i < AwsClient.route53ChangeCountLimit; i++) {
+      changes.add(client.newTXTChange(ChangeAction.CREATE, "dep" + i + "." + DOMAIN,
+          Publish.treeNodeTTL, "\"tree-branch:\""));
+    }
+    Tree tree = TreeTest.signedTree(new Tree(), "192.0.2.1");
+    changes.add(client.newTXTChange(rootAction, DOMAIN, Publish.rootTTL,
+        "\"" + tree.getRootEntry().toFormat() + "\""));
+    changes.add(client.newTXTChange(ChangeAction.DELETE, "stale." + DOMAIN,
+        Publish.treeNodeTTL, "\"old TXT\""));
+    AwsClient.sortChanges(changes);
+    return changes;
+  }
+
+  @Test
+  public void testChangeSort() {
+
+    Map<String, RecordSet> existing = new HashMap<>();
+    existing.put("n", new RecordSet(new String[] {
+        "tree-root-v1:CjoKGlVKQU9JQlMyUFlZMjJYUU1WRlNXT1RZSlhVEhpGRFhOM1NONjdOQTVES0E0SjJHT0s3QlZ"
+            + "RSRgIEldBTE5aWHEyRkk5Ui1ubjdHQk9HdWJBRFVPakZ2MWp5TjZiUHJtSWNTNks0ZE0wc1dKMUwzT2paW"
+            + "FRGei1KcldDenZZVHJId2RMSTlUczRPZ2Q4TXlJUnM"},
+        AwsClient.rootTTL));
+    existing.put("2kfjogvxdqtxxugbh7gs7naaai.n", new RecordSet(new String[] {
+        "nodes:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-",
+        "vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"},
+        3333));
+    existing.put("fdxn3sn67na5dka4j2gok7bvqi.n",
+        new RecordSet(new String[] {"tree-branch:"}, AwsClient.treeNodeTTL));
+
+    Map<String, String> newRecords = new HashMap<>();
+    newRecords.put("n",
+        "tree-root-v1:CjoKGkZEWE4zU042N05BNURLQTRKMkdPSzdCVlFJEhpGRFhOM1NONjdOQTVES0E0SjJHT0s3QlZ"
+            + "RSRgJElc5aDU4d1cyajUzdlBMeHNBSGN1cDMtV0ZEM2lvZUk4SkJrZkdYSk93dmI0R0lHR01pQVAxRkJVV"
+            + "Gc4bHlORERleXJkck9uSDdSbUNUUnJRVGxqUm9UaHM");
+    newRecords.put("c7hrfpf3blgf3yr4dy5kx3smbe.n",
+        "tree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org");
+    newRecords.put("jwxydbpxywg6fx3gmdibfa6cj4.n",
+        "tree-branch:2XS2367YHAXJFGLZHVAWLQD4ZY,H4FHT4B454P6UXFD7JCYQ5PWDY,MHTDO6TMUBRIA2XWG5LUDA"
+            + "CK24");
+    newRecords.put("2xs2367yhaxjfglzhvawlqd4zy.n",
+        "nodes:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgT"
+            + "iE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA");
+    newRecords.put("h4fht4b454p6uxfd7jcyq5pwdy.n",
+        "nodes:-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLtr7e6vw"
+            + "7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfrnacNI");
+    newRecords.put("mhtdo6tmubria2xwg5ludack24.n",
+        "nodes:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSE"
+            + "lSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o");
+
+    AwsClient publish;
+    try {
+      publish = new AwsClient("random1", "random2", "random3",
+          "us-east-1", new P2pConfig().getPublishConfig().getChangeThreshold());
+    } catch (DnsException e) {
+      Assert.fail();
+      return;
+    }
+    List<Change> changes = publish.computeChanges("n", newRecords, existing);
+
+    Change[] wantChanges = new Change[] {
+        publish.newTXTChange(ChangeAction.CREATE, "2xs2367yhaxjfglzhvawlqd4zy.n",
+            AwsClient.treeNodeTTL,
+            "\"nodes:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3"
+                + "snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJx"
+                + "bAFvA\""),
+        publish.newTXTChange(ChangeAction.CREATE, "c7hrfpf3blgf3yr4dy5kx3smbe.n",
+            AwsClient.treeNodeTTL,
+            "\"tree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org"
+                + "\""),
+        publish.newTXTChange(ChangeAction.CREATE, "h4fht4b454p6uxfd7jcyq5pwdy.n",
+            AwsClient.treeNodeTTL,
+            "\"nodes:-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLt"
+                + "r7e6vw7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfr"
+                + "nacNI\""),
+        publish.newTXTChange(ChangeAction.CREATE, "jwxydbpxywg6fx3gmdibfa6cj4.n",
+            AwsClient.treeNodeTTL,
+            "\"tree-branch:2XS2367YHAXJFGLZHVAWLQD4ZY,H4FHT4B454P6UXFD7JCYQ5PWDY,MHTDO6TMUBRIA2XW"
+                + "G5LUDACK24\""),
+        publish.newTXTChange(ChangeAction.CREATE, "mhtdo6tmubria2xwg5ludack24.n",
+            AwsClient.treeNodeTTL,
+            "\"nodes:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfh"
+                + "cGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwduf"
+                + "n1S1o\""),
+
+        publish.newTXTChange(ChangeAction.UPSERT, "n",
+            AwsClient.rootTTL,
+            "\"tree-root-v1:CjoKGkZEWE4zU042N05BNURLQTRKMkdPSzdCVlFJEhpGRFhOM1NONjdOQTVES0E0SjJHT"
+                + "0s3QlZRSRgJElc5aDU4d1cyajUzdlBMeHNBSGN1cDMtV0ZEM2lvZUk4SkJrZkdYSk93dmI0R0lHR01"
+                + "pQVAxRkJVVGc4bHlORERleXJkck9uSDdSbUNUUnJRVGxqUm9UaHM\""),
+
+        publish.newTXTChange(ChangeAction.DELETE, "2kfjogvxdqtxxugbh7gs7naaai.n",
+            3333,
+            "nodes:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-",
+            "vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"),
+        publish.newTXTChange(ChangeAction.DELETE, "fdxn3sn67na5dka4j2gok7bvqi.n",
+            AwsClient.treeNodeTTL,
+            "tree-branch:")
+    };
+
+    Assert.assertEquals(wantChanges.length, changes.size());
+    for (int i = 0; i < changes.size(); i++) {
+      Assert.assertTrue(wantChanges[i].equalsBySdkFields(changes.get(i)));
+      Assert.assertTrue(AwsClient.isSameChange(wantChanges[i], changes.get(i)));
+    }
+  }
+
+  @Test
+  public void testPublish() throws UnknownHostException {
+
+    DnsNode[] nodes = TreeTest.sampleNode();
+    List<DnsNode> nodeList = Arrays.asList(nodes);
+    List<String> enrList = Tree.merge(nodeList, new PublishConfig().getMaxMergeSize());
+
+    String[] links = new String[] {
+        "tree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@example1.org",
+        "tree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@example2.org"};
+    List<String> linkList = Arrays.asList(links);
+
+    Tree tree = new Tree();
+    try {
+      tree.makeTree(1, enrList, linkList, AlgorithmTest.privateKey);
+    } catch (DnsException e) {
+      Assert.fail();
+    }
+
+    //    //warning: replace your key in the following section, or this test will fail
+    //    AwsClient awsClient;
+    //    try {
+    //      awsClient = new AwsClient("replace your access key",
+    //          "replace your access key secret",
+    //          "replace your host zone id",
+    //          Region.US_EAST_1);
+    //    } catch (DnsException e) {
+    //      Assert.fail();
+    //      return;
+    //    }
+    //    String domain = "replace with your domain";
+    //    try {
+    //      awsClient.deploy(domain, tree);
+    //    } catch (Exception e) {
+    //      Assert.fail();
+    //      return;
+    //    }
+    //
+    //    BigInteger publicKeyInt =
+    //        Algorithm.generateKeyPair(AlgorithmTest.privateKey).getPublicKey();
+    //    String puKeyCompress = Algorithm.compressPubKey(publicKeyInt);
+    //    String base32Pubkey = Algorithm.encode32(ByteArray.fromHexString(puKeyCompress));
+    //    Client client = new Client();
+    //
+    //    Tree route53Tree = new Tree();
+    //    try {
+    //      client.syncTree(Entry.linkPrefix + base32Pubkey + "@" + domain, null,
+    //          route53Tree);
+    //    } catch (Exception e) {
+    //      Assert.fail();
+    //      return;
+    //    }
+    //    Assert.assertEquals(links.length, route53Tree.getLinksEntry().size());
+    //    Assert.assertEquals(nodes.length, route53Tree.getDnsNodes().size());
+  }
+
+  @Test
+  public void subdomainComparisonIgnoresCaseButKeepsLabelBoundaries() {
+    Assert.assertTrue(AwsClient.isSubdomain("Leaf.Nodes.Example.INVALID.", DOMAIN));
+    Assert.assertTrue(AwsClient.isSubdomain(DOMAIN, "EXAMPLE.INVALID."));
+    Assert.assertTrue(AwsClient.isSubdomain(DOMAIN, MIXED_DOMAIN));
+    Assert.assertFalse(AwsClient.isSubdomain("othernodes.example.invalid", DOMAIN));
+    Assert.assertFalse(AwsClient.isSubdomain("nodes.example.invalid.other", DOMAIN));
+  }
+
+  @Test
+  public void collectedRecordKeysMatchCanonicalTreeNames() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+    Tree tree = TreeTest.signedTree(new Tree(), "192.0.2.1");
+    client.records = sdkRecords(tree);
+
+    Map<String, RecordSet> existing = client.collectRecords(MIXED_DOMAIN);
+
+    Assert.assertEquals(tree.toTXT(DOMAIN).keySet(), existing.keySet());
+    Assert.assertTrue(client.computeChanges(MIXED_DOMAIN, tree.toTXT(MIXED_DOMAIN), existing)
+        .isEmpty());
+  }
+
+  @Test
+  public void mixedCaseDomainCanPublishTwiceWithoutDuplicateCreates() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+    Tree first = TreeTest.signedTree(new Tree(), "192.0.2.1");
+    client.deploy(MIXED_DOMAIN, first);
+    client.records = sdkRecords(first);
+    Tree updated = TreeTest.signedTree(new Tree(), "192.0.2.2");
+
+    client.deploy(MIXED_DOMAIN, updated);
+
+    Assert.assertEquals(2, updated.getSeq());
+    Assert.assertEquals(3, client.changes.size());
+    Assert.assertTrue(client.changes.stream().anyMatch(change ->
+        change.action() == ChangeAction.UPSERT
+            && change.resourceRecordSet().name().equals(DOMAIN)));
+    for (Change change : client.changes) {
+      String name = change.resourceRecordSet().name();
+      if (change.action() == ChangeAction.CREATE) {
+        Assert.assertFalse(first.toTXT(DOMAIN).containsKey(name));
+      } else if (change.action() == ChangeAction.DELETE) {
+        Assert.assertFalse(updated.toTXT(DOMAIN).containsKey(name));
+      }
+    }
+  }
+
+  @Test
+  public void hostedZoneLookupIgnoresCaseAndTrailingDot() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(null);
+
+    client.deploy(MIXED_DOMAIN, TreeTest.signedTree(new Tree(), "192.0.2.1"));
+
+    Assert.assertEquals(1, client.zoneQueries);
+    Assert.assertEquals(ZONE_ID, client.requestedZone);
+    Assert.assertTrue(client.changes.stream().anyMatch(change ->
+        change.action() == ChangeAction.CREATE
+            && change.resourceRecordSet().name().equals(DOMAIN)));
+  }
+
+  @Test
+  public void deleteDomainFindsMixedCaseRecordsWithoutMatchingOtherDomains() throws Exception {
+    RecordingAwsClient client = new RecordingAwsClient(ZONE_ID);
+    Tree tree = TreeTest.signedTree(new Tree(), "192.0.2.1");
+    client.records = sdkRecords(tree);
+    client.records.add(txt("other.invalid.", "unrelated TXT"));
+
+    Assert.assertTrue(client.deleteDomain(MIXED_DOMAIN));
+
+    Assert.assertEquals(tree.toTXT(DOMAIN).keySet(), client.changes.stream()
+        .map(change -> change.resourceRecordSet().name()).collect(Collectors.toSet()));
+    Assert.assertTrue(client.changes.stream().allMatch(change ->
+        change.action() == ChangeAction.DELETE));
+  }
+
+  private static List<ResourceRecordSet> sdkRecords(Tree tree) {
+    List<ResourceRecordSet> records = new ArrayList<>();
+    tree.toTXT(DOMAIN).forEach((name, value) ->
+        records.add(txt(name.toUpperCase(Locale.ROOT) + ".", value)));
+    return records;
+  }
+
+  private static ResourceRecordSet txt(String name, String value) {
+    return ResourceRecordSet.builder().name(name).type(RRType.TXT)
+        .ttl(name.equalsIgnoreCase(DOMAIN + ".")
+            ? (long) Publish.rootTTL : Publish.treeNodeTTL)
+        .resourceRecords(ResourceRecord.builder().value("\"" + value + "\"").build()).build();
+  }
+
+  private static class RecordingAwsClient extends AwsClient {
+    private List<ResourceRecordSet> records = Collections.emptyList();
+    private List<Change> changes = new ArrayList<>();
+    private int zoneQueries;
+    private int recordQueries;
+    private String requestedZone;
+    private String requestedMaxItems;
+    private RuntimeException zoneFailure;
+    private RuntimeException recordFailure;
+    private boolean recordsTruncated;
+    private int failBatch;
+    private boolean submitBatches;
+    private int pendingBatch = 1;
+    private int pendingPolls;
+    private final List<String> events = new ArrayList<>();
+    private final List<List<Change>> batches = new ArrayList<>();
+
+    private RecordingAwsClient(String zoneId) throws Exception {
+      super("test-key", "test-secret", zoneId, "us-east-1", 0.1);
+      Field interval = AwsClient.class.getDeclaredField("changePollIntervalMillis");
+      interval.setAccessible(true);
+      interval.setLong(this, 0);
+      Field field = AwsClient.class.getDeclaredField("route53Client");
+      field.setAccessible(true);
+      ((Route53Client) field.get(this)).close();
+      field.set(this, Proxy.newProxyInstance(Route53Client.class.getClassLoader(),
+          new Class<?>[]{Route53Client.class}, (proxy, method, args) -> {
+            if (method.getName().equals("listHostedZonesByName")) {
+              zoneQueries++;
+              if (zoneFailure != null) {
+                throw zoneFailure;
+              }
+              return ListHostedZonesByNameResponse.builder().isTruncated(false)
+                  .hostedZones(HostedZone.builder().id("/hostedzone/" + ZONE_ID)
+                      .name("EXAMPLE.INVALID.").build()).build();
+            }
+            if (method.getName().equals("listResourceRecordSets")) {
+              recordQueries++;
+              ListResourceRecordSetsRequest request = (ListResourceRecordSetsRequest) args[0];
+              requestedZone = request.hostedZoneId();
+              requestedMaxItems = request.maxItems();
+              Assert.assertEquals(ZONE_ID, requestedZone);
+              if (recordFailure != null) {
+                throw recordFailure;
+              }
+              return ListResourceRecordSetsResponse.builder().isTruncated(recordsTruncated)
+                  .resourceRecordSets(records).build();
+            }
+            if (method.getName().equals("changeResourceRecordSets")) {
+              if (batches.size() + 1 == failBatch) {
+                throw Route53Exception.builder().statusCode(503)
+                    .message("Injected batch failure").build();
+              }
+              batches.add(new ArrayList<>(((ChangeResourceRecordSetsRequest) args[0])
+                  .changeBatch().changes()));
+              String id = "/change/CTEST" + batches.size();
+              events.add("submit " + id);
+              return ChangeResourceRecordSetsResponse.builder().changeInfo(ChangeInfo.builder()
+                  .id(id).status(ChangeStatus.PENDING).build()).build();
+            }
+            if (method.getName().equals("getChange")) {
+              String id = ((GetChangeRequest) args[0]).id();
+              ChangeStatus status = id.equals("/change/CTEST" + pendingBatch) && pendingPolls-- > 0
+                  ? ChangeStatus.PENDING : ChangeStatus.INSYNC;
+              events.add(status + " " + id);
+              return GetChangeResponse.builder().changeInfo(ChangeInfo.builder()
+                  .id(id).status(status).build()).build();
+            }
+            throw new AssertionError("Unexpected Route53 call: " + method.getName());
+          }));
+    }
+
+    @Override
+    public void submitChanges(List<Change> changes, String comment) {
+      this.changes = new ArrayList<>(changes);
+      if (submitBatches) {
+        super.submitChanges(changes, comment);
+      }
+    }
+  }
+}

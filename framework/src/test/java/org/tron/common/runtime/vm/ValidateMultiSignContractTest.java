@@ -1,6 +1,7 @@
 package org.tron.common.runtime.vm;
 
 import com.google.protobuf.ByteString;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -15,7 +16,6 @@ import org.tron.common.BaseTest;
 import org.tron.common.TestConstants;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.Hash;
-import org.tron.common.parameter.CommonParameter;
 import org.tron.common.utils.ByteArray;
 import org.tron.common.utils.ByteUtil;
 import org.tron.common.utils.Sha256Hash;
@@ -66,6 +66,51 @@ public class ValidateMultiSignContractTest extends BaseTest {
   }
 
   @Test
+  public void testStrictValidationRejectsInfinityPermissionSigner() {
+    boolean previousStrict = VMConfig.allowStrictEcdsaValidation();
+    try {
+      ECKey key = ECKey.fromPrivate(BigInteger.TEN);
+      byte[] address = key.getAddress();
+      byte[] data = DataWord.ONE().getData();
+      byte[] hash = Sha256Hash.hash(ByteUtil.merge(address, ByteArray.fromInt(0), data));
+      // R = G and s = hash mod n make sR - hash*G the point at infinity.
+      ECKey.ECDSASignature infinity = new ECKey.ECDSASignature(
+          ECKey.CURVE.getG().getAffineXCoord().toBigInteger(),
+          new BigInteger(1, hash).mod(ECKey.CURVE.getN()));
+      infinity.v = 27;
+      byte[] infinityAddress = Hash.sha3omit12(new byte[0]);
+      Assert.assertTrue(infinity.validateComponents());
+      Assert.assertArrayEquals(infinityAddress,
+          ECKey.recoverAddressFromSignature(0, infinity, hash));
+
+      Protocol.Permission permission = Protocol.Permission.newBuilder()
+          .setType(Protocol.Permission.PermissionType.Owner).setId(0).setThreshold(1)
+          .addKeys(Protocol.Key.newBuilder().setAddress(ByteString.copyFrom(infinityAddress))
+              .setWeight(1))
+          .addKeys(Protocol.Key.newBuilder().setAddress(ByteString.copyFrom(address)).setWeight(1))
+          .build();
+      AccountCapsule account = new AccountCapsule(Protocol.Account.newBuilder()
+          .setAddress(ByteString.copyFrom(address)).setOwnerPermission(permission).build());
+      dbManager.getAccountStore().put(address, account);
+
+      for (int strict : new int[] {0, 1}) {
+        VMConfig.initAllowStrictEcdsaValidation(strict);
+        Pair<Boolean, byte[]> result = validateMultiSign(StringUtil.encode58Check(address), 0,
+            data, Collections.singletonList(Hex.toHexString(infinity.toByteArray())));
+        Assert.assertTrue(result.getLeft());
+        Assert.assertArrayEquals(new DataWord(strict == 0 ? 1 : 0).getData(), result.getRight());
+
+        Pair<Boolean, byte[]> valid = validateMultiSign(StringUtil.encode58Check(address), 0,
+            data, Collections.singletonList(Hex.toHexString(key.sign(hash).toByteArray())));
+        Assert.assertTrue(valid.getLeft());
+        Assert.assertArrayEquals(DataWord.ONE().getData(), valid.getRight());
+      }
+    } finally {
+      VMConfig.initAllowStrictEcdsaValidation(previousStrict ? 1 : 0);
+    }
+  }
+
+  @Test
   public void testDifferentCase() {
     //Create an account with permission
 
@@ -103,14 +148,12 @@ public class ValidateMultiSignContractTest extends BaseTest {
 
     byte[] address = key.getAddress();
     int permissionId = 2;
-    byte[] data = Sha256Hash.hash(CommonParameter
-        .getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
 
     //combine data
     byte[] merged = ByteUtil.merge(address, ByteArray.fromInt(permissionId), data);
     //sha256 of it
-    byte[] toSign = Sha256Hash.hash(CommonParameter
-        .getInstance().isECKeyCryptoEngine(), merged);
+    byte[] toSign = Sha256Hash.hash(merged);
 
     //sign data
 
@@ -219,9 +262,9 @@ public class ValidateMultiSignContractTest extends BaseTest {
         Collections.singletonList(activePermission));
     dbManager.getAccountStore().put(key.getAddress(), toAccount);
 
-    byte[] data = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), longData);
+    byte[] data = Sha256Hash.hash(longData);
     byte[] merged = ByteUtil.merge(key.getAddress(), ByteArray.fromInt(2), data);
-    byte[] toSign = Sha256Hash.hash(CommonParameter.getInstance().isECKeyCryptoEngine(), merged);
+    byte[] toSign = Sha256Hash.hash(merged);
     List<Object> signs = new ArrayList<>();
     signs.add(Hex.toHexString(key1.sign(toSign).toByteArray()));
     signs.add(Hex.toHexString(key2.sign(toSign).toByteArray()));
@@ -241,21 +284,18 @@ public class ValidateMultiSignContractTest extends BaseTest {
     }
   }
 
-  // TIP-854: before activation, malformed calldata reaches the legacy decoder.
-  // Assert the guard is not taken — this precompile has no outer catch, so a
-  // too-short input raises inside the decoder; that is the documented
-  // pre-activation failure mode the TIP explicitly preserves.
+  // Before TIP-854, the legacy decoder reads zero signatures from this input.
   @Test
   public void testTip854PreActivationNoOp() {
-    VMConfig.initAllowTvmOsaka(0);
-    contract.setRepository(RepositoryImpl.createRoot(StoreFactory.getInstance()));
+    boolean originalOsaka = VMConfig.allowTvmOsaka();
     try {
+      VMConfig.initAllowTvmOsaka(0);
+      contract.setRepository(RepositoryImpl.createRoot(StoreFactory.getInstance()));
       Pair<Boolean, byte[]> ret = contract.execute(new byte[(5 + 1) * 32]);
-      // If the decoder happened to handle it without raising, we must not have
-      // taken the post-activation reject path (false, empty).
-      Assert.assertNotSame(ByteUtil.EMPTY_BYTE_ARRAY, ret.getRight());
-    } catch (RuntimeException expectedLegacyBehaviour) {
-      // Pre-activation: decoder may throw — this is the existing behaviour.
+      Assert.assertTrue(ret.getLeft());
+      Assert.assertArrayEquals(DataWord.ZERO().getData(), ret.getRight());
+    } finally {
+      VMConfig.initAllowTvmOsaka(originalOsaka ? 1 : 0);
     }
   }
 

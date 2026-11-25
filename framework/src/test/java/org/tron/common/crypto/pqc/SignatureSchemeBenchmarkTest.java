@@ -43,7 +43,7 @@ public class SignatureSchemeBenchmarkTest {
       ECKey k = new ECKey();
       ECDSASignature s = k.sign(MESSAGE_HASH);
       try {
-        ECKey.signatureToAddress(MESSAGE_HASH, s);
+        ECKey.signatureToAddress(MESSAGE_HASH, s, true);
       } catch (SignatureException e) {
         throw new AssertionError(e);
       }
@@ -69,7 +69,7 @@ public class SignatureSchemeBenchmarkTest {
     for (int i = 0; i < ITERATIONS; i++) {
       long t0 = System.nanoTime();
       try {
-        ECKey.signatureToAddress(MESSAGE_HASH, sigs[i]);
+        ECKey.signatureToAddress(MESSAGE_HASH, sigs[i], true);
       } catch (SignatureException e) {
         throw new AssertionError(e);
       }

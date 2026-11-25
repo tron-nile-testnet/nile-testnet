@@ -31,6 +31,9 @@ public class MetricLabels {
     public static final String TXS_FAIL_SIG = "sig";
     public static final String TXS_FAIL_TAPOS = "tapos";
     public static final String TXS_FAIL_DUP = "dup";
+    public static final String TX_REJECT_P2P = "p2p";
+    public static final String TX_REJECT_API = "api";
+    public static final String TX_REJECT_INVALID_SIGNATURE_LENGTH = "invalid_signature_length";
     public static final String SR_ADD = "add";
     public static final String SR_REMOVE = "remove";
 
@@ -59,6 +62,9 @@ public class MetricLabels {
 
     public static final String PEERS_VALID = "valid";
 
+    // ADDRESS is the label of tron:witness_address (node_role and is_witness carry no label)
+    public static final String ADDRESS = "address";
+
     private Gauge() {
       throw new IllegalStateException("Gauge");
     }
@@ -74,6 +80,19 @@ public class MetricLabels {
 
     private Histogram() {
       throw new IllegalStateException("Histogram");
+    }
+
+  }
+
+  // Info
+  public static class Info {
+    public static final String VERSION = "version";
+    // identifies the genesis block: the label value is the chain id derived from the
+    // genesis block hash, so the label is named genesis_block_id
+    public static final String CHAIN_ID = "genesis_block_id";
+
+    private Info() {
+      throw new IllegalStateException("Info");
     }
 
   }

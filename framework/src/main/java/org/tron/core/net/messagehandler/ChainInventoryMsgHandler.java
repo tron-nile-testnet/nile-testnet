@@ -5,11 +5,11 @@ import static org.tron.core.config.Parameter.ChainConstant.BLOCK_PRODUCED_INTERV
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.tron.common.utils.Pair;
 import org.tron.core.capsule.BlockCapsule.BlockId;
 import org.tron.core.config.Parameter.ChainConstant;
 import org.tron.core.config.Parameter.NetConstants;
@@ -18,10 +18,12 @@ import org.tron.core.exception.P2pException;
 import org.tron.core.exception.P2pException.TypeEnum;
 import org.tron.core.net.TronNetDelegate;
 import org.tron.core.net.message.TronMessage;
+import org.tron.core.net.message.handshake.HelloMessage;
 import org.tron.core.net.message.sync.ChainInventoryMessage;
 import org.tron.core.net.peer.PeerConnection;
 import org.tron.core.net.peer.TronState;
 import org.tron.core.net.service.sync.SyncService;
+import org.tron.protos.Protocol.Inventory.InventoryType;
 
 @Slf4j(topic = "net")
 @Component
@@ -51,13 +53,14 @@ public class ChainInventoryMsgHandler implements TronMsgHandler {
     Deque<BlockId> blockIdWeGet = new LinkedList<>(chainInventoryMessage.getBlockIds());
 
     if (blockIdWeGet.size() == 1 && tronNetDelegate.containBlock(blockIdWeGet.peek())) {
+      peer.setRemainNum(0);
       peer.setTronState(TronState.SYNC_COMPLETED);
       peer.setNeedSyncFromPeer(false);
       return;
     }
 
     while (!peer.getSyncBlockToFetch().isEmpty()) {
-      if (peer.getSyncBlockToFetch().peekLast().equals(blockIdWeGet.peekFirst())) {
+      if (blockIdWeGet.peekFirst().equals(peer.getSyncBlockToFetch().peekLast())) {
         break;
       }
       peer.getSyncBlockToFetch().pollLast();
@@ -69,43 +72,45 @@ public class ChainInventoryMsgHandler implements TronMsgHandler {
     peer.getSyncBlockToFetch().addAll(blockIdWeGet);
 
     synchronized (tronNetDelegate.getBlockLock()) {
-      try {
-        BlockId blockId = null;
-        while (!peer.getSyncBlockToFetch().isEmpty() && tronNetDelegate
-                .containBlock(peer.getSyncBlockToFetch().peek())) {
-          blockId = peer.getSyncBlockToFetch().pop();
+      Deque<BlockId> toFetch = peer.getSyncBlockToFetch();
+      BlockId blockId = null;
+      BlockId next;
+      while ((next = toFetch.peek()) != null && tronNetDelegate.containBlock(next)) {
+        if (toFetch.remove(next)) {
+          blockId = next;
           peer.setBlockBothHave(blockId);
         }
-        if (blockId != null) {
-          logger.info("Block {} from {} is processed",
-              blockId.getString(), peer.getInetAddress());
-        }
-      } catch (NoSuchElementException e) {
-        logger.warn("Process ChainInventoryMessage failed, peer {}, isDisconnect:{}",
-                peer.getInetAddress(), peer.isDisconnect());
-        peer.setFetchAble(true);
-        return;
       }
-    }
+      if (blockId != null) {
+        logger.info("Block {} from {} is processed", blockId.getString(), peer.getInetAddress());
+      }
 
-    peer.setFetchAble(true);
-    if ((chainInventoryMessage.getRemainNum() == 0 && !peer.getSyncBlockToFetch().isEmpty())
-        || (chainInventoryMessage.getRemainNum() != 0
-        && peer.getSyncBlockToFetch().size() > syncFetchBatchNum)) {
-      syncService.setFetchFlag(true);
-    } else {
-      syncService.syncNext(peer);
+      peer.setFetchAble(true);
+      if ((chainInventoryMessage.getRemainNum() == 0 && !peer.getSyncBlockToFetch().isEmpty())
+          || (chainInventoryMessage.getRemainNum() != 0
+          && peer.getSyncBlockToFetch().size() > syncFetchBatchNum)) {
+        syncService.setFetchFlag(true);
+      } else {
+        syncService.syncNext(peer);
+      }
     }
   }
 
   private void check(PeerConnection peer, ChainInventoryMessage msg) throws P2pException {
-    if (peer.getSyncChainRequested() == null) {
+    HelloMessage hello = peer.getHelloMessageReceive();
+    Pair<Deque<BlockId>, Long> requested = peer.getSyncChainRequested();
+    if (requested == null) {
       throw new P2pException(TypeEnum.BAD_MESSAGE, "not send syncBlockChainMsg");
     }
 
     List<BlockId> blockIds = msg.getBlockIds();
     if (CollectionUtils.isEmpty(blockIds)) {
       throw new P2pException(TypeEnum.BAD_MESSAGE, "blockIds is empty");
+    }
+
+    if (msg.getRemainNum() < 0) {
+      throw new P2pException(TypeEnum.BAD_MESSAGE,
+          "remainNum is negative: " + msg.getRemainNum());
     }
 
     if (blockIds.size() > NetConstants.SYNC_FETCH_BATCH_NUM + 1) {
@@ -124,9 +129,9 @@ public class ChainInventoryMsgHandler implements TronMsgHandler {
       }
     }
 
-    if (!peer.getSyncChainRequested().getKey().contains(blockIds.get(0))) {
+    if (!requested.getKey().contains(blockIds.get(0))) {
       throw new P2pException(TypeEnum.BAD_MESSAGE, "unlinked block, my head: "
-          + peer.getSyncChainRequested().getKey().getLast().getString()
+          + requested.getKey().getLast().getString()
           + ", peer: " + blockIds.get(0).getString());
     }
 
@@ -137,9 +142,47 @@ public class ChainInventoryMsgHandler implements TronMsgHandler {
       long maxFutureNum =
           maxRemainTime / BLOCK_PRODUCED_INTERVAL + tronNetDelegate.getSolidBlockId().getNum();
       long lastNum = blockIds.get(blockIds.size() - 1).getNum();
-      if (lastNum + msg.getRemainNum() > maxFutureNum) {
-        throw new P2pException(TypeEnum.BAD_MESSAGE, "lastNum: " + lastNum + " + remainNum: "
-            + msg.getRemainNum() + " > futureMaxNum: " + maxFutureNum);
+      long declaredHighestNum = lastNum + msg.getRemainNum();
+      if (declaredHighestNum < 0 || lastNum > maxFutureNum || declaredHighestNum > maxFutureNum) {
+        throw new P2pException(TypeEnum.BAD_MESSAGE,
+            "Invalid declared highest block number: " + declaredHighestNum
+                + ", lastNum: " + lastNum + ", remainNum: " + msg.getRemainNum()
+                + ", futureMaxNum: " + maxFutureNum);
+      }
+    }
+
+    if (msg.getRemainNum() == 0) {
+      BlockId lastBlockId = blockIds.get(blockIds.size() - 1);
+      long lastNum = lastBlockId.getNum();
+      long helloHeadNum = hello.getHeadBlockId().getNum();
+      if (lastNum < helloHeadNum) {
+        // A fork rollback can temporarily lower the head; allow a fresh HELLO on reconnect.
+        throw new P2pException(TypeEnum.SYNC_FAILED,
+            "lastNum " + lastNum + " (remainNum=0) is below hello head " + helloHeadNum);
+      }
+
+      // A peer that has the terminal block in our summary should reply with that block alone.
+      if (blockIds.size() > 1 && requested.getKey().contains(lastBlockId)) {
+        // A concurrent fork switch can also produce this response; use a sync failure.
+        throw new P2pException(TypeEnum.SYNC_FAILED,
+            "terminal block already in summary: " + lastBlockId.getString());
+      }
+
+      long requestedAt = requested.getValue();
+      // Only use recent announcements received before this request, not a newer head
+      // announced while the peer was preparing its response. A concurrent fork switch also cause it
+      long maxAdvInvNum = peer.getAdvInvReceive().asMap().entrySet().stream()
+          .filter(entry -> entry.getKey().getType() == InventoryType.BLOCK)
+          .filter(entry -> entry.getValue() <= requestedAt
+              && entry.getValue() >= requestedAt - NetConstants.ADV_TIME_OUT)
+          .mapToLong(entry -> new BlockId(entry.getKey().getHash()).getNum())
+          .filter(height -> height >= 0)
+          .max()
+          .orElse(lastNum);
+      // Tolerate one block awaiting application, and allow fetching unknown terminal blocks.
+      if (lastNum < maxAdvInvNum - 1 && tronNetDelegate.containBlock(lastBlockId)) {
+        throw new P2pException(TypeEnum.SYNC_FAILED,
+            "lastNum " + lastNum + " (remainNum=0) is below advertised block " + maxAdvInvNum);
       }
     }
   }

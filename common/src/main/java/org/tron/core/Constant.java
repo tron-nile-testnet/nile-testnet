@@ -13,6 +13,8 @@ public class Constant {
   public static final int NODE_TYPE_LIGHT_NODE = 1;
 
   // Transaction
+  // Keep Merkle leaf encodings larger than the 64-byte internal-node input.
+  public static final int MIN_TRANSACTION_SIZE = 80;
   public static final long TRANSACTION_MAX_BYTE_SIZE = 500 * 1_024L;
   public static final int CREATE_ACCOUNT_TRANSACTION_MIN_BYTE_SIZE = 500;
   public static final int CREATE_ACCOUNT_TRANSACTION_MAX_BYTE_SIZE = 10000;
@@ -57,9 +59,6 @@ public class Constant {
   public static final String SPLIT_BLOCK_NUM = "split_block_num";
   public static final String MARKET_PAIR_PRICE_TO_ORDER = "market_pair_price_to_order";
   public static final String ROCKSDB = "ROCKSDB";
-
-  // Crypto engine
-  public static final String ECKey_ENGINE = "ECKey";
 
   // Account permission
   // 0=owner, 1=witness, 2-9=active (up to 8 active permissions)

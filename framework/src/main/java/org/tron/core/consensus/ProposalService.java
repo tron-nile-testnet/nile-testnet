@@ -92,6 +92,10 @@ public class ProposalService extends ProposalUtil {
           manager.getDynamicPropertiesStore().saveExchangeCreateFee(entry.getValue());
           break;
         }
+        case CLOSE_EXCHANGE: {
+          manager.getDynamicPropertiesStore().saveCloseExchange(entry.getValue().intValue());
+          break;
+        }
         case MAX_CPU_TIME_OF_ONE_TX: {
           manager.getDynamicPropertiesStore().saveMaxCpuTimeOfOneTx(entry.getValue());
           break;
@@ -422,9 +426,24 @@ public class ProposalService extends ProposalUtil {
           manager.getDynamicPropertiesStore().saveAllowOptimizeTvmStorage(entry.getValue());
           break;
         }
+        case ALLOW_STRICT_ECDSA_VALIDATION: {
+          manager.getDynamicPropertiesStore()
+              .saveAllowStrictEcdsaValidation(entry.getValue());
+          break;
+        }
         case ALLOW_OPTIMIZE_TVM_STORAGE_KEY: {
           manager.getDynamicPropertiesStore()
               .saveAllowOptimizeTvmStorageKey(entry.getValue());
+          break;
+        }
+        case ALLOW_TVM_VOTE_POWER_OPTIMIZATION: {
+          manager.getDynamicPropertiesStore()
+              .saveAllowTvmVotePowerOptimization(entry.getValue());
+          break;
+        }
+        case ALLOW_TVM_RESOURCE_OPTIMIZATION: {
+          manager.getDynamicPropertiesStore()
+              .saveAllowTvmResourceOptimization(entry.getValue());
           break;
         }
         default:

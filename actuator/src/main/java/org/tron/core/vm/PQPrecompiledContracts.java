@@ -732,8 +732,7 @@ public class PQPrecompiledContracts {
 
         byte[] combine = ByteUtil.merge(address, ByteArray.fromInt(permissionId),
             data);
-        byte[] hash = Sha256Hash.hash(CommonParameter
-            .getInstance().isECKeyCryptoEngine(), combine);
+        byte[] hash = Sha256Hash.hash(combine);
 
         int ecdsaArrayWord = words[3].intValueSafe() / WORD_SIZE;
         int schemeArrayWord = words[4].intValueSafe() / WORD_SIZE;

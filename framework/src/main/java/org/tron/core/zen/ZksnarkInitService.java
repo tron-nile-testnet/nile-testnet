@@ -3,6 +3,7 @@ package org.tron.core.zen;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -57,14 +58,24 @@ public class ZksnarkInitService {
   }
 
   private static String getParamsFile(String fileName) {
-    InputStream in = Thread.currentThread().getContextClassLoader()
-        .getResourceAsStream("params" + File.separator + fileName);
+    String resourcePath = "params" + File.separator + fileName;
     File fileOut = new File(System.getProperty("java.io.tmpdir")
         + File.separator + fileName + "." + System.currentTimeMillis());
-    try {
+    try (InputStream in = Thread.currentThread().getContextClassLoader()
+        .getResourceAsStream(resourcePath)) {
+      if (in == null) {
+        throw new TronError("Resource not found: " + resourcePath, TronError.ErrCode.ZCASH_INIT);
+      }
       FileUtils.copyToFile(in, fileOut);
     } catch (IOException e) {
-      logger.error(e.getMessage(), e);
+      try {
+        Files.deleteIfExists(fileOut.toPath());
+      } catch (IOException cleanupFailure) {
+        e.addSuppressed(cleanupFailure);
+        fileOut.deleteOnExit();
+      }
+      throw new TronError("Failed to copy ZK-SNARK parameter file: " + resourcePath,
+          e, TronError.ErrCode.ZCASH_INIT);
     }
     if (fileOut.exists()) {
       fileOut.deleteOnExit();
