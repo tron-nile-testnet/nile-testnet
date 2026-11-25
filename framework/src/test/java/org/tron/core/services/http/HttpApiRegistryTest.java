@@ -38,6 +38,10 @@ public class HttpApiRegistryTest {
 
   private static final String BASELINE = "/http/pre-refactor-routes.txt";
 
+  private static final Set<String> NILE_SHIELDED_READS = new TreeSet<>(Arrays.asList(
+      "getmerkletreevoucherinfo", "isspend", "scanandmarknotebyivk", "scannotebyivk",
+      "scannotebyovk"));
+
   /**
    * Endpoints the registry adds to a surface relative to {@link #BASELINE}. Together with
    * {@link #INTENTIONAL_REMOVED} this is the reviewed difference from the pre-refactor
@@ -53,10 +57,27 @@ public class HttpApiRegistryTest {
     // exposed on FULL, SOLIDITY and SOLIDITY_NODE, but missing from the PBFT list
     INTENTIONAL_ADDED.put(Surface.PBFT, new TreeSet<>(Arrays.asList(
         "getpaginatednowwitnesslist", "gettransactioninfobyblocknum")));
-    // shielded endpoints disabled on FULL, SOLIDITY and SOLIDITY_NODE, but left on the PBFT list
+    // Nile exposed these reads on both Solidity services before the registry migration.
+    INTENTIONAL_ADDED.put(Surface.SOLIDITY, NILE_SHIELDED_READS);
+    INTENTIONAL_ADDED.put(Surface.SOLIDITY_NODE, NILE_SHIELDED_READS);
+    // Keep the upstream removal of these legacy PBFT routes; Nile restores Solidity access only.
     INTENTIONAL_REMOVED.put(Surface.PBFT, new TreeSet<>(Arrays.asList(
         "getmerkletreevoucherinfo", "isspend", "scanandmarknotebyivk", "scannotebyivk",
         "scannotebyovk")));
+  }
+
+  @Test
+  public void testNileShieldedReadsStayOnSolidityServicesOnly() throws Exception {
+    Set<String> solidity = mountedPaths(HttpApiOnSolidityService.class);
+    Set<String> standalone = mountedPaths(SolidityNodeHttpApiService.class);
+    Set<String> full = mountedPaths(FullNodeHttpApiService.class);
+    Set<String> pbft = mountedPaths(HttpApiOnPBFTService.class);
+    for (String suffix : NILE_SHIELDED_READS) {
+      Assert.assertTrue(suffix, solidity.contains("/walletsolidity/" + suffix));
+      Assert.assertTrue(suffix, standalone.contains("/walletsolidity/" + suffix));
+      Assert.assertFalse(suffix, full.contains("/wallet/" + suffix));
+      Assert.assertFalse(suffix, pbft.contains("/" + suffix));
+    }
   }
 
   @Test

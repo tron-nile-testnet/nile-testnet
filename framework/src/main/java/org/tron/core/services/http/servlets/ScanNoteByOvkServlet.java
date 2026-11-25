@@ -9,11 +9,14 @@ import org.tron.api.GrpcAPI;
 import org.tron.api.GrpcAPI.OvkDecryptParameters;
 import org.tron.common.utils.ByteArray;
 import org.tron.core.Wallet;
-import org.tron.core.services.http.HttpApiExcluded;
+import org.tron.core.services.http.HttpApi;
+import org.tron.core.services.http.HttpApi.Access;
+import org.tron.core.services.http.HttpApi.Surface;
 
 @Component
 @Slf4j(topic = "API")
-@HttpApiExcluded("sapling shielded note-scan API, disabled on every surface")
+@HttpApi(value = "scannotebyovk", access = Access.READ,
+    surfaces = {Surface.SOLIDITY, Surface.SOLIDITY_NODE})
 public class ScanNoteByOvkServlet extends RateLimiterServlet {
 
   @Autowired
